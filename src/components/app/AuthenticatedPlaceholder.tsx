@@ -3,11 +3,16 @@ import { motion } from "motion/react";
 import { brand } from "../../config/branding";
 import { useAuth } from "../../lib/authContext";
 import { Button } from "../ui/Button";
-import { LogOut, User as UserIcon, CheckCircle2 } from "lucide-react";
+import { LogOut, User as UserIcon, CheckCircle2, MapPin, Briefcase, Sparkles } from "lucide-react";
 
 export const AuthenticatedPlaceholder: React.FC = () => {
-  const { user, signOutUser, status } = useAuth();
+  const { user, userAccount, signOutUser, status } = useAuth();
   const isSigningOut = status === "unauthenticated";
+
+  const effectiveDisplayName = userAccount?.displayName || user?.displayName || "Creator";
+  const effectiveProfession = userAccount?.customProfession || userAccount?.profession;
+  const effectivePortfolioType = userAccount?.portfolioType;
+  const effectiveLocation = userAccount?.location;
 
   return (
     <div
@@ -26,25 +31,25 @@ export const AuthenticatedPlaceholder: React.FC = () => {
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#6DAEAD]" />
             <span className="font-support text-[11px] uppercase tracking-[0.15em] text-[#708595]">
-              Session Active
+              Account Ready
             </span>
           </div>
         </div>
       </header>
 
-      {/* Main Authenticated State Confirmation */}
+      {/* Main Authenticated Confirmation */}
       <motion.main
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full max-w-[540px] flex flex-col items-center text-center my-auto py-10 sm:py-14"
+        className="w-full max-w-[560px] flex flex-col items-center text-center my-auto py-10 sm:py-14"
       >
-        {/* User Avatar / Status Badge */}
+        {/* User Avatar / Status Mark */}
         <div className="relative mb-6">
           {user?.photoURL ? (
             <img
               src={user.photoURL}
-              alt={user.displayName || "User avatar"}
+              alt={effectiveDisplayName}
               referrerPolicy="no-referrer"
               className="w-16 h-16 rounded-[2px] border border-[#E5E5E1] shadow-[0_1px_3px_rgba(0,0,0,0.03)] object-cover"
             />
@@ -59,22 +64,50 @@ export const AuthenticatedPlaceholder: React.FC = () => {
         </div>
 
         {/* Primary Message */}
-        <h1 className="text-3xl sm:text-4xl md:text-[44px] font-light md:font-[300] leading-[1.15] tracking-[-0.035em] text-[#1A1A1B] mb-3">
-          You&apos;re signed in.
+        <h1 className="text-3xl sm:text-4xl md:text-[44px] font-light md:font-[300] leading-[1.15] tracking-[-0.035em] text-[#1A1A1B] mb-2">
+          Welcome, {effectiveDisplayName}.
         </h1>
-        <p className="text-base font-normal text-[#708595] mb-5">
-          Welcome to {brand.name}.
+        <p className="text-base font-normal text-[#708595] mb-2">
+          Your Custom Portfolio account is ready.
+        </p>
+        <p className="text-sm text-[#849693] mb-8 font-light">
+          Your portfolio starts here.
         </p>
 
-        {user?.email && (
-          <div className="px-4 py-2 rounded-[2px] bg-white border border-[#E5E5E1] text-xs text-[#1A1A1B] font-mono mb-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-            {user.email}
+        {/* Account Details Card */}
+        <div className="w-full bg-white border border-[#E5E5E1] rounded-[2px] p-5 mb-8 text-left shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col gap-3.5">
+          <div className="flex items-center justify-between border-b border-[#E5E5E1]/60 pb-3">
+            <span className="font-support text-[11px] uppercase tracking-[0.12em] text-[#708595]">
+              Verified Account
+            </span>
+            <span className="text-xs font-mono text-[#1A1A1B]">
+              {user?.email || "Authenticated"}
+            </span>
           </div>
-        )}
 
-        <p className="text-sm text-[#849693] max-w-sm mb-8 leading-relaxed">
-          Your portfolio workspace will be ready in the next step.
-        </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            {effectiveProfession && (
+              <div className="flex items-center gap-2 text-[#708595]">
+                <Briefcase className="w-3.5 h-3.5 text-[#6DAEAD] flex-shrink-0" />
+                <span className="text-[#1A1A1B] font-medium">{effectiveProfession}</span>
+              </div>
+            )}
+
+            {effectivePortfolioType && (
+              <div className="flex items-center gap-2 text-[#708595]">
+                <Sparkles className="w-3.5 h-3.5 text-[#6DAEAD] flex-shrink-0" />
+                <span className="text-[#1A1A1B] font-medium">{effectivePortfolioType}</span>
+              </div>
+            )}
+
+            {effectiveLocation && (
+              <div className="flex items-center gap-2 text-[#708595]">
+                <MapPin className="w-3.5 h-3.5 text-[#6DAEAD] flex-shrink-0" />
+                <span className="text-[#1A1A1B] font-medium">{effectiveLocation}</span>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Sign Out Action */}
         <Button

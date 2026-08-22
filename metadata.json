@@ -1,6 +1,6 @@
 {
   "name": "Custom Portfolio",
-  "description": "Custom Portfolio by BroadBrand - Premium digital presence platform entry and authentication.",
+  "description": "Custom Portfolio by BroadBrand - Premium digital presence platform, portfolio creation foundation and creator workspace.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

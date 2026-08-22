@@ -1,4 +1,157 @@
 {
-  "entities": {},
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account information and onboarding completion status.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The unique Firebase Auth identifier matching document ID."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The primary email address of the user."
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "The user's preferred display name."
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Optional URL to user avatar photo."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the account was initialized."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the last profile update."
+        },
+        "onboardingCompleted": {
+          "type": "boolean",
+          "description": "Whether the user has completed onboarding."
+        },
+        "profession": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Core profession or discipline chosen during onboarding."
+        },
+        "customProfession": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Custom profession entered if Other was chosen."
+        },
+        "portfolioType": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "The strategic type of portfolio being created."
+        },
+        "location": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Optional city, region, or country."
+        }
+      },
+      "required": ["uid", "email", "displayName", "onboardingCompleted"]
+    },
+    "Portfolio": {
+      "title": "Portfolio",
+      "description": "The digital portfolio entity belonging to an authenticated creator.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique portfolio document ID."
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title or display identity of the portfolio."
+        },
+        "slug": {
+          "type": "string",
+          "description": "URL slug generated for the portfolio."
+        },
+        "profession": {
+          "type": "string",
+          "description": "Creator's primary discipline."
+        },
+        "headline": {
+          "type": "string",
+          "description": "Primary introduction headline."
+        },
+        "bio": {
+          "type": "string",
+          "description": "Brief creator bio / mission."
+        },
+        "location": {
+          "type": "string",
+          "description": "Geographical location."
+        },
+        "profileImage": {
+          "type": "string",
+          "description": "Profile image URL."
+        },
+        "availability": {
+          "type": "string",
+          "enum": ["Available for work", "Open to opportunities", "Currently unavailable"]
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Contact email address."
+        },
+        "socialLinks": {
+          "type": "object",
+          "description": "Key-value mapping of social / professional profiles."
+        },
+        "stylePreset": {
+          "type": "string",
+          "enum": ["MINIMAL", "CREATIVE", "EDITORIAL", "BOLD"],
+          "description": "Visual presentation archetype."
+        },
+        "theme": {
+          "type": "object",
+          "description": "Theme configuration."
+        },
+        "enabledSections": {
+          "type": "object",
+          "description": "Active portfolio sections map."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "published": {
+          "type": "boolean",
+          "description": "Whether portfolio is published."
+        }
+      },
+      "required": ["id", "ownerId", "title", "slug", "profession", "headline", "bio", "email", "stylePreset", "published"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Private user account profile and onboarding state."
+    },
+    "/portfolios/{portfolioId}": {
+      "schema": "Portfolio",
+      "description": "User digital portfolio document."
+    }
+  },
   "version": "1.0.0"
 }

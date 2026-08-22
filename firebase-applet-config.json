@@ -1,12 +1,12 @@
 {
-  "projectId": "capable-skill-bwjkk",
+  "projectId": "custom-portfolio-2026",
   "appId": "1:1033128340535:web:85c25767f2dc51ccafa3b2",
   "apiKey": "AIzaSyDncdAi6AXPCOTjE2a7BH_PETaT_ZtFjJY",
-  "authDomain": "capable-skill-bwjkk.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-customportfolio-6cf281ea-cdd4-4f31-9e1b-74f347375ef2",
-  "storageBucket": "capable-skill-bwjkk.firebasestorage.app",
+  "authDomain": "custom-portfolio-2026.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "custom-portfolio-2026.firebasestorage.app",
   "messagingSenderId": "1033128340535",
   "measurementId": "",
-  "oAuthClientId": "1033128340535-pm7jvgcncajk5hcda7d9i7hs4h6qntuv.apps.googleusercontent.com",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }

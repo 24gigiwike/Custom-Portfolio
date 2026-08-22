@@ -3,24 +3,27 @@ import { AnimatePresence, motion } from "motion/react";
 import { AuthProvider, useAuth } from "./lib/authContext";
 import { SplashScreen } from "./components/splash/SplashScreen";
 import { AuthScreen } from "./components/auth/AuthScreen";
-import { AuthenticatedPlaceholder } from "./components/app/AuthenticatedPlaceholder";
+import { OnboardingScreen } from "./components/onboarding/OnboardingScreen";
+import { PortfolioAppView } from "./components/portfolio/PortfolioAppView";
 import type { AppRoute } from "./types";
 
 function AppContent() {
-  const { user, isLoading: isAuthLoading, status } = useAuth();
+  const { user, userAccount, isLoading: isAuthLoading, authPhase } = useAuth();
   const [hasCompletedSplash, setHasCompletedSplash] = useState(false);
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
     const path = window.location.pathname;
     if (path === "/auth") return "/auth";
+    if (path === "/onboarding") return "/onboarding";
     if (path === "/app") return "/app";
     return "/";
   });
 
-  // Sync browser back/forward buttons
+  // Sync browser back/forward history navigation
   useEffect(() => {
     const handlePopState = () => {
       const path = window.location.pathname;
       if (path === "/app") setCurrentRoute("/app");
+      else if (path === "/onboarding") setCurrentRoute("/onboarding");
       else if (path === "/auth") setCurrentRoute("/auth");
       else setCurrentRoute("/");
     };
@@ -29,7 +32,6 @@ function AppContent() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  // Update browser history URL smoothly
   const navigateTo = (route: AppRoute) => {
     setCurrentRoute(route);
     try {
@@ -44,31 +46,38 @@ function AppContent() {
   // Handle splash completion
   const handleSplashComplete = () => {
     setHasCompletedSplash(true);
-    if (user) {
+    if (!user) {
+      navigateTo("/auth");
+    } else if (userAccount?.onboardingCompleted) {
       navigateTo("/app");
     } else {
-      navigateTo("/auth");
+      navigateTo("/onboarding");
     }
   };
 
-  // Route protection & state sync
+  // Route protection & state synchronization
   useEffect(() => {
-    if (!hasCompletedSplash || isAuthLoading) return;
+    if (!hasCompletedSplash || isAuthLoading || authPhase === "AUTH_LOADING") return;
 
-    if (user && status === "authenticated") {
-      // User is authenticated - send to /app
-      if (currentRoute !== "/app") {
-        navigateTo("/app");
-      }
-    } else if (!user && (status === "unauthenticated" || status === "error" || status === "idle")) {
-      // User is not authenticated - protect /app and route to /auth
-      if (currentRoute === "/app" || currentRoute === "/") {
+    if (authPhase === "SIGNED_OUT" || !user) {
+      // Unauthenticated user -> redirect to /auth
+      if (currentRoute === "/app" || currentRoute === "/onboarding" || currentRoute === "/") {
         navigateTo("/auth");
       }
+    } else if (authPhase === "ONBOARDING_REQUIRED") {
+      // Authenticated but onboarding incomplete -> redirect to /onboarding
+      if (currentRoute === "/app" || currentRoute === "/auth" || currentRoute === "/") {
+        navigateTo("/onboarding");
+      }
+    } else if (authPhase === "READY") {
+      // Authenticated and onboarding complete -> redirect to /app
+      if (currentRoute === "/auth" || currentRoute === "/onboarding" || currentRoute === "/") {
+        navigateTo("/app");
+      }
     }
-  }, [user, status, hasCompletedSplash, isAuthLoading, currentRoute]);
+  }, [user, userAccount, authPhase, hasCompletedSplash, isAuthLoading, currentRoute]);
 
-  // If splash is not yet completed, show SplashScreen
+  // If splash is not yet completed, show original SplashScreen
   if (!hasCompletedSplash) {
     return <SplashScreen onComplete={handleSplashComplete} minDuration={2000} />;
   }
@@ -76,7 +85,7 @@ function AppContent() {
   return (
     <div className="w-full min-h-screen bg-[#F8F8F7]">
       <AnimatePresence mode="wait">
-        {currentRoute === "/app" && user ? (
+        {currentRoute === "/app" && user && authPhase === "READY" ? (
           <motion.div
             key="app-route"
             initial={{ opacity: 0, y: 8 }}
@@ -85,7 +94,18 @@ function AppContent() {
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
             className="w-full min-h-screen"
           >
-            <AuthenticatedPlaceholder />
+            <PortfolioAppView />
+          </motion.div>
+        ) : currentRoute === "/onboarding" && user ? (
+          <motion.div
+            key="onboarding-route"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full min-h-screen"
+          >
+            <OnboardingScreen onCompleted={() => navigateTo("/app")} />
           </motion.div>
         ) : (
           <motion.div
