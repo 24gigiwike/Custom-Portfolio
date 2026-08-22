@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-support: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Custom Brand Core Palette (Bold Typography Design Theme) */
+  --color-custom-slate: #708595;
+  --color-custom-mineral: #689AA1;
+  --color-custom-teal: #6DAEAD;
+  --color-custom-sage: #849693;
+  --color-custom-mint: #94CEBB;
+
+  /* Semantic Design Tokens */
+  --color-background: #F8F8F7;
+  --color-foreground: #1A1A1B;
+  --color-paper: #F8F8F7;
+  --color-ink: #1A1A1B;
+  --color-surface: #FFFFFF;
+  --color-surface-subtle: #F0F0EE;
+  --color-muted-foreground: #708595;
+  --color-muted-border: #E5E5E1;
+  --color-border: #E5E5E1;
+  --color-border-strong: #D1D1CB;
+  --color-primary: #1A1A1B;
+  --color-primary-foreground: #FFFFFF;
+  --color-accent: #6DAEAD;
+  --color-accent-soft: #EDF5F5;
+  --color-accent-hover: #5A9998;
+  --color-accent-mint: #94CEBB;
+  --color-accent-sage: #849693;
+  --color-accent-slate: #708595;
+  --color-accent-teal: #6DAEAD;
+  --color-success: #388E6D;
+  --color-warning: #C78229;
+  --color-error: #B93838;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  
+  html {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+}
+
