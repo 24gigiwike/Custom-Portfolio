@@ -13,6 +13,7 @@ export interface PortfolioSocialLinks {
   github?: string;
   instagram?: string;
   twitter?: string;
+  x?: string;
   other?: string;
 }
 
@@ -69,3 +70,16 @@ export interface CreatePortfolioInput {
   socialLinks: PortfolioSocialLinks;
   stylePreset?: PortfolioStylePreset;
 }
+
+export interface UpdatePortfolioProfileInput {
+  title: string;
+  profession: string;
+  headline: string;
+  bio: string;
+  location?: string;
+  profileImage?: string | null;
+  availability?: PortfolioAvailability;
+  email: string;
+  socialLinks: PortfolioSocialLinks;
+}
+

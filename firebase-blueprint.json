@@ -141,6 +141,97 @@
         }
       },
       "required": ["id", "ownerId", "title", "slug", "profession", "headline", "bio", "email", "stylePreset", "published"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A creative or professional project within a user's portfolio.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique project document ID."
+        },
+        "portfolioId": {
+          "type": "string",
+          "description": "Parent portfolio ID."
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the creator."
+        },
+        "title": {
+          "type": "string",
+          "description": "Project title."
+        },
+        "slug": {
+          "type": "string",
+          "description": "URL-safe project slug."
+        },
+        "shortDescription": {
+          "type": "string",
+          "description": "Concise summary for project cards and previews."
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed project narrative or case study text."
+        },
+        "coverImage": {
+          "type": "string",
+          "description": "Cover image URL."
+        },
+        "images": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Gallery image URLs."
+        },
+        "role": {
+          "type": "string",
+          "description": "Creator's role on this project."
+        },
+        "client": {
+          "type": "string",
+          "description": "Client or company name."
+        },
+        "year": {
+          "type": "string",
+          "description": "Year of completion."
+        },
+        "services": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Disciplines or services provided."
+        },
+        "tools": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tools and technologies used."
+        },
+        "projectUrl": {
+          "type": "string",
+          "description": "Live website or project URL."
+        },
+        "caseStudyUrl": {
+          "type": "string",
+          "description": "Optional external case study URL."
+        },
+        "featured": {
+          "type": "boolean",
+          "description": "Whether this is the primary featured project."
+        },
+        "order": {
+          "type": "number",
+          "description": "Sort order index."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "portfolioId", "title", "slug", "shortDescription", "featured", "order"]
     }
   },
   "firestore": {
@@ -151,6 +242,10 @@
     "/portfolios/{portfolioId}": {
       "schema": "Portfolio",
       "description": "User digital portfolio document."
+    },
+    "/portfolios/{portfolioId}/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Projects belonging to a specific portfolio."
     }
   },
   "version": "1.0.0"

@@ -1,7 +1,9 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { brand } from "../../config/branding";
 import { useAuth } from "../../lib/authContext";
+import { isProfileComplete } from "../../lib/portfolio";
+import { getPortfolioProjects } from "../../lib/projects";
 import { Button } from "../ui/Button";
 import {
   LogOut,
@@ -13,13 +15,21 @@ import {
   ArrowRight,
   ShieldCheck,
   CheckCircle2,
+  AlertCircle,
   Clock,
   ExternalLink,
+  Edit3,
+  Plus,
+  Star,
 } from "lucide-react";
 import type { Portfolio } from "../../types/portfolio";
+import type { Project } from "../../types/project";
 
 interface PortfolioWorkspaceProps {
   portfolio: Portfolio;
+  onOpenProfileEditor: () => void;
+  onOpenProjects: () => void;
+  onAddProject: () => void;
 }
 
 interface StageStep {
@@ -40,7 +50,7 @@ const PORTFOLIO_STAGES: StageStep[] = [
     id: "work",
     name: "Work",
     desc: "Curated case studies & featured projects",
-    status: "upcoming",
+    status: "active",
   },
   {
     id: "experience",
@@ -64,9 +74,42 @@ const PORTFOLIO_STAGES: StageStep[] = [
 
 export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
   portfolio,
+  onOpenProfileEditor,
+  onOpenProjects,
+  onAddProject,
 }) => {
   const { signOutUser, status } = useAuth();
   const isSigningOut = status === "unauthenticated";
+  const profileComplete = isProfileComplete(portfolio);
+
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadStats() {
+      try {
+        const data = await getPortfolioProjects(portfolio.id);
+        if (isMounted) {
+          setProjects(data);
+        }
+      } catch {
+        // silent fallback
+      } finally {
+        if (isMounted) {
+          setLoadingProjects(false);
+        }
+      }
+    }
+    loadStats();
+    return () => {
+      isMounted = false;
+    };
+  }, [portfolio.id]);
+
+  const hasProjects = projects.length > 0;
+  const featuredProject = projects.find((p) => p.featured);
+  const readyStagesCount = (profileComplete ? 1 : 0) + (hasProjects ? 1 : 0);
 
   return (
     <div
@@ -168,10 +211,11 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
               id="continue-building-button"
               variant="primary"
               size="lg"
+              onClick={hasProjects ? onOpenProjects : onAddProject}
               rightIcon={<ArrowRight className="w-4 h-4 ml-1" />}
               className="min-w-[180px]"
             >
-              Continue building
+              {hasProjects ? "Manage projects" : "Add first project"}
             </Button>
           </div>
         </motion.div>
@@ -188,20 +232,31 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
               Portfolio Pipeline
             </span>
             <span className="text-xs font-mono text-[#849693]">
-              1 of 5 Stages Ready
+              {readyStagesCount} of 5 Stages Ready
             </span>
           </div>
 
           <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             {PORTFOLIO_STAGES.map((stage, idx) => {
               const isActive = stage.status === "active";
+              const isProfileStage = stage.id === "profile";
+              const isWorkStage = stage.id === "work";
+
+              const handleClick = () => {
+                if (isProfileStage) onOpenProfileEditor();
+                if (isWorkStage) onOpenProjects();
+              };
+
               return (
                 <div
                   key={stage.id}
                   id={`stage-card-${stage.id}`}
+                  onClick={isActive ? handleClick : undefined}
+                  role={isActive ? "button" : undefined}
+                  tabIndex={isActive ? 0 : undefined}
                   className={`p-4 border rounded-[2px] flex flex-col justify-between transition-all duration-200 ${
                     isActive
-                      ? "bg-white border-[#6DAEAD] ring-1 ring-[#6DAEAD]/50 shadow-[0_1px_3px_rgba(109,174,173,0.1)]"
+                      ? "bg-white border-[#6DAEAD] ring-1 ring-[#6DAEAD]/50 shadow-[0_1px_3px_rgba(109,174,173,0.1)] cursor-pointer hover:shadow-[0_4px_12px_rgba(109,174,173,0.15)]"
                       : "bg-white/60 border-[#E5E5E1] opacity-75"
                   }`}
                 >
@@ -210,12 +265,33 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
                       <span className="font-mono text-[11px] text-[#849693]">
                         0{idx + 1}
                       </span>
-                      {isActive ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] uppercase font-support tracking-[0.1em] text-[#388E6D] bg-[#F0FDF4] px-1.5 py-0.5 rounded-[2px] border border-[#DCFCE7]">
-                          <CheckCircle2 className="w-2.5 h-2.5" />
-                          Ready
-                        </span>
-                      ) : (
+                      {isProfileStage && (
+                        profileComplete ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] uppercase font-support tracking-[0.1em] text-[#388E6D] bg-[#F0FDF4] px-1.5 py-0.5 rounded-[2px] border border-[#DCFCE7]">
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                            Complete
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] uppercase font-support tracking-[0.1em] text-[#708595] bg-[#F0F2F2] px-1.5 py-0.5 rounded-[2px] border border-[#E5E5E1]">
+                            Needs attention
+                          </span>
+                        )
+                      )}
+
+                      {isWorkStage && (
+                        hasProjects ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] uppercase font-support tracking-[0.1em] text-[#388E6D] bg-[#F0FDF4] px-1.5 py-0.5 rounded-[2px] border border-[#DCFCE7]">
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                            {projects.length} {projects.length === 1 ? "Project" : "Projects"}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] uppercase font-support tracking-[0.1em] text-[#708595] bg-[#F0F2F2] px-1.5 py-0.5 rounded-[2px] border border-[#E5E5E1]">
+                            0 Projects
+                          </span>
+                        )
+                      )}
+
+                      {!isProfileStage && !isWorkStage && (
                         <span className="inline-flex items-center gap-1 text-[10px] uppercase font-support tracking-[0.1em] text-[#849693] bg-[#F8F8F7] px-1.5 py-0.5 rounded-[2px] border border-[#E5E5E1]">
                           <Clock className="w-2.5 h-2.5" />
                           Upcoming
@@ -223,8 +299,9 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
                       )}
                     </div>
 
-                    <div className="text-sm font-medium text-[#1A1A1B] mb-1">
-                      {stage.name}
+                    <div className="text-sm font-medium text-[#1A1A1B] mb-1 flex items-center justify-between">
+                      <span>{stage.name}</span>
+                      {isActive && <Edit3 className="w-3 h-3 text-[#6DAEAD]" />}
                     </div>
 
                     <p className="text-xs text-[#708595] font-light leading-snug">
@@ -237,7 +314,7 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
           </div>
         </motion.div>
 
-        {/* Identity Details Foundation */}
+        {/* Modular Content Foundations */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -245,22 +322,27 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
           className="w-full grid grid-cols-1 md:grid-cols-3 gap-4"
         >
           {/* Identity & Bio */}
-          <div className="md:col-span-2 bg-white border border-[#E5E5E1] rounded-[2px] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+          <div className="bg-white border border-[#E5E5E1] rounded-[2px] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E5E5E1]/60">
                 <span className="font-support text-[11px] uppercase tracking-[0.12em] text-[#708595]">
-                  Introduction & Narrative
+                  Profile & Identity
                 </span>
-                <span className="text-xs text-[#849693] font-mono">
-                  slug: /{portfolio.slug}
-                </span>
+                <button
+                  type="button"
+                  onClick={onOpenProfileEditor}
+                  className="text-xs text-[#6DAEAD] hover:text-[#1A1A1B] font-medium flex items-center gap-1 transition-colors"
+                >
+                  <Edit3 className="w-3 h-3" />
+                  <span>Edit</span>
+                </button>
               </div>
 
               <div className="text-sm font-medium text-[#1A1A1B] mb-2">
                 {portfolio.headline}
               </div>
 
-              <p className="text-xs sm:text-sm text-[#708595] font-light leading-relaxed mb-4">
+              <p className="text-xs sm:text-sm text-[#708595] font-light leading-relaxed mb-4 line-clamp-3">
                 {portfolio.bio}
               </p>
             </div>
@@ -273,6 +355,70 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
               <span className="font-mono text-[11px] text-[#849693]">
                 {portfolio.email}
               </span>
+            </div>
+          </div>
+
+          {/* Work / Projects Card */}
+          <div className="bg-white border border-[#E5E5E1] rounded-[2px] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E5E5E1]/60">
+                <span className="font-support text-[11px] uppercase tracking-[0.12em] text-[#708595]">
+                  Work & Projects
+                </span>
+                <button
+                  type="button"
+                  onClick={onOpenProjects}
+                  className="text-xs text-[#6DAEAD] hover:text-[#1A1A1B] font-medium flex items-center gap-1 transition-colors"
+                >
+                  <span>Manage</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
+
+              {hasProjects ? (
+                <div>
+                  <div className="text-base font-medium text-[#1A1A1B] mb-1">
+                    {projects.length} {projects.length === 1 ? "Project Entry" : "Projects Saved"}
+                  </div>
+                  {featuredProject ? (
+                    <div className="inline-flex items-center gap-1 text-xs text-[#689AA1] font-medium mt-1 mb-3">
+                      <Star className="w-3 h-3 fill-current" />
+                      <span>Featured: {featuredProject.title}</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#708595] font-light leading-relaxed mb-3">
+                      All projects active in collection order.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <div className="text-sm font-medium text-[#1A1A1B] mb-1">
+                    Show your work.
+                  </div>
+                  <p className="text-xs text-[#708595] font-light leading-relaxed mb-3">
+                    Add the projects, experiences and work you're proud of.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-[#E5E5E1]/60 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={onAddProject}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-[#1A1A1B] hover:text-[#6DAEAD] transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5 text-[#6DAEAD]" />
+                <span>Add project</span>
+              </button>
+              <button
+                type="button"
+                onClick={onOpenProjects}
+                className="text-xs font-mono text-[#849693] hover:text-[#1A1A1B] transition-colors"
+              >
+                View collection →
+              </button>
             </div>
           </div>
 
@@ -292,7 +438,7 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
 
               <p className="text-xs text-[#708595] font-light leading-relaxed mb-4">
                 Theme: Light mode with Custom Portfolio brand accent. Typography and layout
-                architecture will render around this preset.
+                architecture render around this preset.
               </p>
             </div>
 
@@ -300,7 +446,7 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
               <span className="font-support text-[10px] uppercase tracking-[0.1em]">
                 Engine Status
               </span>
-              <span className="text-[#6DAEAD] font-medium">Foundation Ready</span>
+              <span className="text-[#6DAEAD] font-medium">Phase 6 Ready</span>
             </div>
           </div>
         </motion.div>
@@ -314,3 +460,4 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
     </div>
   );
 };
+

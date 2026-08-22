@@ -5,14 +5,22 @@ import { getUserPortfolio } from "../../lib/portfolio";
 import { PortfolioEmptyState } from "./PortfolioEmptyState";
 import { PortfolioSetup } from "./PortfolioSetup";
 import { PortfolioWorkspace } from "./PortfolioWorkspace";
+import { ProfileEditor } from "./ProfileEditor/ProfileEditor";
+import { ProjectList } from "./projects/ProjectList";
+import { ProjectEditor } from "./projects/ProjectEditor";
 import { brand } from "../../config/branding";
 import type { Portfolio } from "../../types/portfolio";
+import type { Project } from "../../types/project";
+
+type AppSubView = "workspace" | "profile-editor" | "projects-list" | "project-editor";
 
 export const PortfolioAppView: React.FC = () => {
   const { user } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSettingUp, setIsSettingUp] = useState<boolean>(false);
+  const [currentView, setCurrentView] = useState<AppSubView>("workspace");
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -99,6 +107,7 @@ export const PortfolioAppView: React.FC = () => {
             onSuccess={(createdPortfolio) => {
               setPortfolio(createdPortfolio);
               setIsSettingUp(false);
+              setCurrentView("workspace");
             }}
             onCancel={() => setIsSettingUp(false)}
           />
@@ -107,8 +116,86 @@ export const PortfolioAppView: React.FC = () => {
     );
   }
 
-  // If portfolio exists, show workspace
+  // If portfolio exists, render current view
   if (portfolio) {
+    if (currentView === "profile-editor") {
+      return (
+        <AnimatePresence mode="wait">
+          <motion.div
+            key="profile-editor-view"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="w-full min-h-screen"
+          >
+            <ProfileEditor
+              portfolio={portfolio}
+              onBackToWorkspace={() => setCurrentView("workspace")}
+              onSaveSuccess={(updatedPortfolio) => {
+                setPortfolio(updatedPortfolio);
+              }}
+            />
+          </motion.div>
+        </AnimatePresence>
+      );
+    }
+
+    if (currentView === "projects-list") {
+      return (
+        <AnimatePresence mode="wait">
+          <motion.div
+            key="projects-list-view"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="w-full min-h-screen"
+          >
+            <ProjectList
+              portfolio={portfolio}
+              onBackToWorkspace={() => setCurrentView("workspace")}
+              onAddProject={() => {
+                setSelectedProject(null);
+                setCurrentView("project-editor");
+              }}
+              onEditProject={(project) => {
+                setSelectedProject(project);
+                setCurrentView("project-editor");
+              }}
+            />
+          </motion.div>
+        </AnimatePresence>
+      );
+    }
+
+    if (currentView === "project-editor") {
+      return (
+        <AnimatePresence mode="wait">
+          <motion.div
+            key="project-editor-view"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="w-full min-h-screen"
+          >
+            <ProjectEditor
+              portfolio={portfolio}
+              projectToEdit={selectedProject}
+              onBack={() => setCurrentView("projects-list")}
+              onSaved={() => {
+                setCurrentView("projects-list");
+              }}
+              onDeleted={() => {
+                setCurrentView("projects-list");
+              }}
+            />
+          </motion.div>
+        </AnimatePresence>
+      );
+    }
+
     return (
       <AnimatePresence mode="wait">
         <motion.div
@@ -116,10 +203,18 @@ export const PortfolioAppView: React.FC = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.25 }}
           className="w-full min-h-screen"
         >
-          <PortfolioWorkspace portfolio={portfolio} />
+          <PortfolioWorkspace
+            portfolio={portfolio}
+            onOpenProfileEditor={() => setCurrentView("profile-editor")}
+            onOpenProjects={() => setCurrentView("projects-list")}
+            onAddProject={() => {
+              setSelectedProject(null);
+              setCurrentView("project-editor");
+            }}
+          />
         </motion.div>
       </AnimatePresence>
     );
@@ -141,3 +236,4 @@ export const PortfolioAppView: React.FC = () => {
     </AnimatePresence>
   );
 };
+

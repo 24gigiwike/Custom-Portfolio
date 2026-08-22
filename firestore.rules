@@ -25,6 +25,22 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       allow update: if isSignedIn() && resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == request.auth.uid;
       allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      // Projects subcollection rules
+      match /projects/{projectId} {
+        allow read: if isSignedIn() && (
+          request.auth.uid == get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.ownerId ||
+          (resource != null && resource.data.ownerId == request.auth.uid)
+        );
+        allow create: if isSignedIn() && (
+          request.auth.uid == get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.ownerId ||
+          request.resource.data.ownerId == request.auth.uid
+        );
+        allow update, delete: if isSignedIn() && (
+          request.auth.uid == get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.ownerId ||
+          (resource != null && resource.data.ownerId == request.auth.uid)
+        );
+      }
     }
 
     // Default deny all other collections
@@ -33,3 +49,4 @@ service cloud.firestore {
     }
   }
 }
+

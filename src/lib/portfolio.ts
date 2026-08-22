@@ -6,6 +6,7 @@ import {
   query,
   where,
   setDoc,
+  updateDoc,
   serverTimestamp,
   limit,
 } from "firebase/firestore";
@@ -13,6 +14,7 @@ import { db, auth } from "./firebase";
 import type {
   Portfolio,
   CreatePortfolioInput,
+  UpdatePortfolioProfileInput,
   PortfolioStylePreset,
   PortfolioEnabledSections,
   PortfolioTheme,
@@ -189,3 +191,71 @@ export async function createPortfolio(input: CreatePortfolioInput): Promise<Port
     handleFirestoreError(error, OperationType.CREATE, path);
   }
 }
+
+/**
+ * Lightweight URL helper to ensure valid protocol
+ */
+export function normalizeUrl(url: string | undefined): string {
+  if (!url) return "";
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
+
+/**
+ * Calculate if standard profile essentials are fulfilled
+ */
+export function isProfileComplete(portfolio: Partial<Portfolio> | null | undefined): boolean {
+  if (!portfolio) return false;
+  const hasTitle = Boolean(portfolio.title && portfolio.title.trim().length > 0);
+  const hasProfession = Boolean(portfolio.profession && portfolio.profession.trim().length > 0);
+  const hasHeadline = Boolean(portfolio.headline && portfolio.headline.trim().length > 0);
+  const hasBio = Boolean(portfolio.bio && portfolio.bio.trim().length > 0);
+  const hasEmail = Boolean(portfolio.email && portfolio.email.trim().length > 0);
+
+  return hasTitle && hasProfession && hasHeadline && hasBio && hasEmail;
+}
+
+/**
+ * Update the profile and hero information for an existing portfolio
+ */
+export async function updatePortfolioProfile(
+  portfolioId: string,
+  input: UpdatePortfolioProfileInput
+): Promise<void> {
+  const portfolioDocRef = doc(db, "portfolios", portfolioId);
+  const path = `portfolios/${portfolioId}`;
+
+  // Clean and filter social links to only store non-empty strings
+  const cleanedSocialLinks: Record<string, string> = {};
+  if (input.socialLinks) {
+    Object.entries(input.socialLinks).forEach(([key, val]) => {
+      if (val && typeof val === "string" && val.trim().length > 0) {
+        cleanedSocialLinks[key] = normalizeUrl(val);
+      }
+    });
+  }
+
+  const updates: Record<string, unknown> = {
+    title: input.title.trim(),
+    profession: input.profession.trim(),
+    headline: input.headline.trim(),
+    bio: input.bio.trim(),
+    location: input.location ? input.location.trim() : "",
+    profileImage: input.profileImage || null,
+    availability: input.availability || "Available for work",
+    email: input.email.trim(),
+    socialLinks: cleanedSocialLinks,
+    updatedAt: serverTimestamp(),
+  };
+
+  try {
+    await updateDoc(portfolioDocRef, updates);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
