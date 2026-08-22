@@ -12,20 +12,14 @@ function AppContent() {
   const [hasCompletedSplash, setHasCompletedSplash] = useState(false);
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
     const path = window.location.pathname;
-    if (path === "/auth") return "/auth";
-    if (path === "/onboarding") return "/onboarding";
-    if (path === "/app") return "/app";
-    return "/";
+    return path || "/";
   });
 
   // Sync browser back/forward history navigation
   useEffect(() => {
     const handlePopState = () => {
       const path = window.location.pathname;
-      if (path === "/app") setCurrentRoute("/app");
-      else if (path === "/onboarding") setCurrentRoute("/onboarding");
-      else if (path === "/auth") setCurrentRoute("/auth");
-      else setCurrentRoute("/");
+      setCurrentRoute(path || "/");
     };
 
     window.addEventListener("popstate", handlePopState);
@@ -46,10 +40,21 @@ function AppContent() {
   // Handle splash completion
   const handleSplashComplete = () => {
     setHasCompletedSplash(true);
+    const initialPath = window.location.pathname || "/";
     if (!user) {
-      navigateTo("/auth");
+      if (initialPath === "/auth") {
+        navigateTo("/auth");
+      } else if (initialPath === "/app" || initialPath === "/onboarding" || initialPath === "/") {
+        navigateTo("/auth");
+      } else {
+        navigateTo(initialPath);
+      }
     } else if (userAccount?.onboardingCompleted) {
-      navigateTo("/app");
+      if (initialPath === "/" || initialPath === "/auth") {
+        navigateTo("/app");
+      } else {
+        navigateTo(initialPath);
+      }
     } else {
       navigateTo("/onboarding");
     }

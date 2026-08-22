@@ -34,5 +34,5 @@ export interface AuthContextType {
   refreshAccount: () => Promise<UserProfile | null>;
 }
 
-export type AppRoute = "/" | "/auth" | "/onboarding" | "/app";
+export type AppRoute = "/" | "/auth" | "/onboarding" | "/app" | (string & {});
 
