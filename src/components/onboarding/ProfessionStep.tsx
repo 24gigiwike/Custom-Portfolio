@@ -62,15 +62,15 @@ export const ProfessionStep: React.FC<ProfessionStepProps> = ({
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       className="w-full flex flex-col items-start text-left"
     >
-      <span className="font-support text-[11px] uppercase tracking-[0.18em] text-[#708595] mb-2.5">
-        Step 02 &mdash; Craft
+      <span className="mb-2.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">
+        Step 02 — Craft
       </span>
 
-      <h1 className="text-3xl sm:text-4xl md:text-[46px] font-light md:font-[300] leading-[1.12] tracking-[-0.04em] text-[#1A1A1B] mb-3">
+      <h2 className="mb-3 text-3xl font-bold leading-[1.1] tracking-[-0.04em] text-[#243838] sm:text-4xl">
         What do you do?
-      </h1>
+      </h2>
 
-      <p className="text-base text-[#708595] mb-8 font-normal">
+      <p className="mb-8 text-base text-[#5C7372]">
         Select what best describes your core discipline.
       </p>
 
@@ -87,14 +87,14 @@ export const ProfessionStep: React.FC<ProfessionStepProps> = ({
                 setSelectedProfession(prof);
                 if (validationError) setValidationError(null);
               }}
-              className={`relative flex items-center justify-between px-3.5 py-3 text-left border rounded-[2px] transition-all duration-200 text-sm font-medium select-none ${
+              className={`relative flex min-h-12 items-center justify-between rounded-xl border px-3.5 py-3 text-left text-sm font-bold select-none transition-all duration-200 ${
                 isSelected
-                  ? "bg-white border-[#6DAEAD] text-[#1A1A1B] ring-1 ring-[#6DAEAD] shadow-[0_2px_8px_rgba(109,174,173,0.12)]"
-                  : "bg-white/80 border-[#E5E5E1] text-[#708595] hover:border-[#708595]/50 hover:text-[#1A1A1B] hover:bg-white"
+                  ? "border-[#6DAEAD] bg-[#E7F4F3] text-[#243838] shadow-[0_8px_20px_rgba(109,174,173,0.16)]"
+                  : "border-[#D5E6E5] bg-[#F7FBFA] text-[#5C7372] hover:border-[#6DAEAD] hover:bg-white hover:text-[#243838]"
               }`}
             >
               <span className="truncate">{prof}</span>
-              {isSelected && <Check className="w-3.5 h-3.5 text-[#6DAEAD] flex-shrink-0 ml-1.5" />}
+              {isSelected && <Check className="ml-1.5 h-3.5 w-3.5 flex-shrink-0 text-[#3E7574]" />}
             </button>
           );
         })}
@@ -110,7 +110,7 @@ export const ProfessionStep: React.FC<ProfessionStepProps> = ({
         >
           <label
             htmlFor="custom-profession-input"
-            className="block text-xs uppercase tracking-[0.1em] font-medium text-[#708595] mb-2 font-support"
+            className="mb-2 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#3E7574]"
           >
             Specify your discipline / craft
           </label>
@@ -124,25 +124,25 @@ export const ProfessionStep: React.FC<ProfessionStepProps> = ({
             }}
             placeholder="e.g. Sound Architect, 3D Typographer"
             autoFocus
-            className="w-full text-base sm:text-lg font-light text-[#1A1A1B] bg-white border border-[#E5E5E1] rounded-[2px] px-4 py-3 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD] transition-all duration-200 placeholder:text-[#849693]/40 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+            className="w-full rounded-xl border border-[#D5E6E5] bg-[#F7FBFA] px-4 py-3 text-base font-semibold text-[#243838] transition-all duration-200 placeholder:text-[#8AADAC] focus:border-[#6DAEAD] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#6DAEAD]/30 sm:text-lg"
           />
         </motion.div>
       )}
 
       {validationError && (
-        <div className="flex items-center gap-1.5 mb-6 text-xs text-[#B93838]">
+        <div className="mb-6 flex items-center gap-1.5 text-xs font-medium text-[#B93838]">
           <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
           <span>{validationError}</span>
         </div>
       )}
 
-      <div className="w-full flex items-center justify-between pt-4 border-t border-[#E5E5E1]/60 gap-3">
+      <div className="flex w-full items-center justify-between gap-3 border-t border-[#E7F4F3] pt-5">
         <Button
           id="profession-step-back-button"
           type="button"
           variant="outline"
           onClick={onBack}
-          leftIcon={<ArrowLeft className="w-4 h-4 mr-1 text-[#708595]" />}
+          leftIcon={<ArrowLeft className="w-4 h-4 mr-1 text-[#5C7372]" />}
         >
           Back
         </Button>

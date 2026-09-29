@@ -1,23 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { brand } from "../../config/branding";
-import { useAuth } from "../../lib/authContext";
 import { isProfileComplete } from "../../lib/portfolio";
 import { getPortfolioProjects } from "../../lib/projects";
 import { Button } from "../ui/Button";
 import {
-  LogOut,
   User as UserIcon,
-  Sparkles,
   MapPin,
   Briefcase,
-  Layers,
   ArrowRight,
-  ShieldCheck,
   CheckCircle2,
-  AlertCircle,
   Clock,
-  ExternalLink,
   Edit3,
   Plus,
   Star,
@@ -43,31 +35,31 @@ const PORTFOLIO_STAGES: StageStep[] = [
   {
     id: "profile",
     name: "Profile",
-    desc: "Identity, narrative, channels & presence",
+    desc: "Identity, narrative, channels and presence",
     status: "active",
   },
   {
     id: "work",
     name: "Work",
-    desc: "Curated case studies & featured projects",
+    desc: "Curated case studies and featured projects",
     status: "active",
   },
   {
     id: "experience",
     name: "Experience",
-    desc: "Career chronology & leadership milestones",
+    desc: "Career chronology and leadership milestones",
     status: "upcoming",
   },
   {
     id: "details",
     name: "Details",
-    desc: "Capabilities, disciplines & testimonials",
+    desc: "Capabilities, disciplines and testimonials",
     status: "upcoming",
   },
   {
     id: "publish",
     name: "Publish",
-    desc: "Final review & public domain distribution",
+    desc: "Final review and public distribution",
     status: "upcoming",
   },
 ];
@@ -78,8 +70,6 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
   onOpenProjects,
   onAddProject,
 }) => {
-  const { signOutUser, status } = useAuth();
-  const isSigningOut = status === "unauthenticated";
   const profileComplete = isProfileComplete(portfolio);
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -108,145 +98,203 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
   }, [portfolio.id]);
 
   const hasProjects = projects.length > 0;
-  const featuredProject = projects.find((p) => p.featured);
+  const featuredProject = projects.find((p) => p.featured) || projects[0];
   const readyStagesCount = (profileComplete ? 1 : 0) + (hasProjects ? 1 : 0);
 
   return (
-    <div
-      id="portfolio-workspace-screen"
-      className="relative min-h-screen w-full flex flex-col justify-between items-center px-6 sm:px-12 py-10 sm:py-12 bg-[#F8F8F7] text-[#1A1A1B] selection:bg-[#6DAEAD]/20 overflow-x-hidden"
-    >
-      {/* Foundation Accent Bar */}
-      <div className="fixed left-0 top-0 w-1 h-full bg-gradient-to-b from-[#708595] to-[#6DAEAD] z-30 pointer-events-none" />
-
-      {/* Top Header */}
-      <header className="w-full max-w-5xl flex items-baseline justify-between pt-2 pb-6 border-b border-[#E5E5E1]">
-        <div className="flex items-baseline gap-3">
-          <div className="text-[20px] font-medium tracking-[-0.03em] text-[#1A1A1B]">
-            {brand.name}
-          </div>
-          <div className="font-support text-[11px] uppercase tracking-[0.15em] text-[#708595] hidden sm:block">
-            {brand.endorsement}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#6DAEAD]" />
-            <span className="font-support text-[11px] uppercase tracking-[0.15em] text-[#708595]">
-              {portfolio.title}
+    <div id="portfolio-workspace-screen" className="text-[#243838]">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        className="grid grid-cols-1 gap-4 lg:grid-cols-12"
+      >
+        <section className="flex flex-col justify-between rounded-[28px] bg-[#6DAEAD] p-6 text-white sm:p-8 lg:col-span-7">
+          <div className="flex items-start justify-between gap-4">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/75">
+              {portfolio.published ? "Live presence" : "Draft presence"}
+            </p>
+            <span className="rounded-lg bg-white/15 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em]">
+              {portfolio.stylePreset}
             </span>
           </div>
-          <span className="text-[#E5E5E1] font-light">|</span>
-          <button
-            type="button"
-            id="workspace-signout-button"
-            onClick={signOutUser}
-            disabled={isSigningOut}
-            className="flex items-center gap-1.5 text-xs text-[#708595] hover:text-[#1A1A1B] transition-colors duration-150"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Sign out</span>
-          </button>
-        </div>
-      </header>
 
-      {/* Main Content Area */}
-      <main className="w-full max-w-5xl flex-1 flex flex-col my-8 sm:my-10">
-        {/* Workspace Hero */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full bg-white border border-[#E5E5E1] rounded-[2px] p-6 sm:p-8 mb-8 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col md:flex-row items-start md:items-center justify-between gap-6"
-        >
-          <div className="flex items-start gap-4 sm:gap-5 flex-1">
+          <div className="flex items-end gap-5 py-8">
             {portfolio.profileImage ? (
               <img
                 src={portfolio.profileImage}
                 alt={portfolio.title}
                 referrerPolicy="no-referrer"
-                className="w-16 h-16 sm:w-20 sm:h-20 rounded-[2px] border border-[#E5E5E1] object-cover shadow-[0_1px_2px_rgba(0,0,0,0.03)] flex-shrink-0"
+                className="h-20 w-20 rounded-2xl object-cover ring-2 ring-white/40 sm:h-24 sm:w-24"
               />
             ) : (
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-[2px] bg-[#F8F8F7] border border-[#E5E5E1] flex items-center justify-center text-[#6DAEAD] flex-shrink-0">
-                <UserIcon className="w-8 h-8" />
+              <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-white/15 sm:h-24 sm:w-24">
+                <UserIcon className="h-8 w-8" />
               </div>
             )}
-
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
-                <h1 className="text-2xl sm:text-3xl font-light text-[#1A1A1B] tracking-[-0.03em] truncate">
-                  {portfolio.title}
-                </h1>
-                <span className="font-support text-[10px] uppercase tracking-[0.12em] bg-[#F0F2F2] text-[#708595] px-2 py-0.5 rounded-[2px] border border-[#E5E5E1]">
-                  Draft
-                </span>
-                <span className="font-support text-[10px] uppercase tracking-[0.12em] bg-[#F0F7F6] text-[#6DAEAD] px-2 py-0.5 rounded-[2px] border border-[#6DAEAD]/30">
-                  {portfolio.stylePreset}
-                </span>
-              </div>
-
-              <div className="text-sm font-medium text-[#708595] mb-2 flex items-center gap-3 flex-wrap">
-                <span className="flex items-center gap-1.5 text-[#1A1A1B]">
-                  <Briefcase className="w-3.5 h-3.5 text-[#6DAEAD]" />
-                  {portfolio.profession}
-                </span>
-                {portfolio.location && (
-                  <span className="flex items-center gap-1.5 text-[#708595]">
-                    <MapPin className="w-3.5 h-3.5 text-[#849693]" />
-                    {portfolio.location}
-                  </span>
-                )}
-              </div>
-
-              <p className="text-xs sm:text-sm text-[#708595] font-light leading-relaxed line-clamp-2">
+            <div className="min-w-0">
+              <h1 className="text-3xl font-bold tracking-[-0.045em] sm:text-5xl">
+                {portfolio.title}
+              </h1>
+              <p className="mt-2 text-base font-medium text-white/85 sm:text-lg">
                 {portfolio.headline}
               </p>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex flex-wrap gap-3 text-sm font-semibold text-white/90">
+              <span className="inline-flex items-center gap-1.5">
+                <Briefcase className="h-4 w-4" />
+                {portfolio.profession}
+              </span>
+              {portfolio.location && (
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="h-4 w-4" />
+                  {portfolio.location}
+                </span>
+              )}
+            </div>
             <Button
               id="continue-building-button"
-              variant="primary"
+              variant="secondary"
               size="lg"
               onClick={hasProjects ? onOpenProjects : onAddProject}
-              rightIcon={<ArrowRight className="w-4 h-4 ml-1" />}
-              className="min-w-[180px]"
+              rightIcon={<ArrowRight className="ml-1 h-4 w-4" />}
+              className="bg-white text-[#2F6463] hover:bg-[#F4FBFA]"
             >
               {hasProjects ? "Manage projects" : "Add first project"}
             </Button>
           </div>
-        </motion.div>
+        </section>
 
-        {/* Portfolio Pipeline Progress */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full mb-8"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="font-support text-[11px] uppercase tracking-[0.15em] text-[#708595]">
-              Portfolio Pipeline
-            </span>
-            <span className="text-xs font-mono text-[#849693]">
-              {readyStagesCount} of 5 Stages Ready
-            </span>
+        <section className="grid gap-4 lg:col-span-5">
+          <button
+            type="button"
+            onClick={onOpenProfileEditor}
+            className="rounded-[28px] border border-[#D5E6E5] bg-white p-6 text-left transition-shadow hover:shadow-[0_12px_32px_rgba(109,174,173,0.12)]"
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#3E7574]">
+                Profile
+              </p>
+              <Edit3 className="h-4 w-4 text-[#6DAEAD]" />
+            </div>
+            <p className="mt-4 text-2xl font-bold tracking-[-0.04em]">
+              {profileComplete ? "Ready to read" : "Needs a pass"}
+            </p>
+            <p className="mt-2 line-clamp-3 text-sm font-medium leading-relaxed text-[#5C7372]">
+              {portfolio.bio}
+            </p>
+            <div className="mt-5 flex items-center justify-between text-xs font-semibold text-[#5C7372]">
+              <span>{portfolio.availability || "Available for work"}</span>
+              <span>{portfolio.email}</span>
+            </div>
+          </button>
+
+          <div className="rounded-[28px] bg-[#E7F4F3] p-6">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#3E7574]">
+              Style direction
+            </p>
+            <p className="mt-3 text-3xl font-bold tracking-[-0.04em] text-[#243838]">
+              {portfolio.stylePreset}
+            </p>
+            <p className="mt-2 text-sm font-medium leading-relaxed text-[#5C7372]">
+              Light presentation with the Custom Portfolio teal. This direction was chosen when the portfolio was created.
+            </p>
+            <p className="mt-4 text-xs font-bold uppercase tracking-[0.14em] text-[#3E7574]">
+              {portfolio.published ? "Published" : "Still a draft"}
+            </p>
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-[28px] border border-[#D5E6E5] bg-white lg:col-span-8">
+          <div className="flex items-center justify-between px-6 pt-6">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#3E7574]">
+                Work
+              </p>
+              <h2 className="mt-1 text-2xl font-bold tracking-[-0.04em]">
+                {hasProjects
+                  ? `${projects.length} ${projects.length === 1 ? "project" : "projects"}`
+                  : "Show your work."}
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={onOpenProjects}
+              className="text-sm font-bold text-[#3E7574] hover:text-[#243838]"
+            >
+              Open collection
+            </button>
           </div>
 
-          <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {featuredProject && featuredProject.coverImage ? (
+            <button
+              type="button"
+              onClick={onOpenProjects}
+              className="mt-5 block w-full text-left"
+            >
+              <img
+                src={featuredProject.coverImage}
+                alt={featuredProject.title}
+                referrerPolicy="no-referrer"
+                className="h-56 w-full object-cover sm:h-72"
+              />
+              <div className="flex items-center justify-between px-6 py-5">
+                <div>
+                  <p className="text-lg font-bold tracking-[-0.03em]">{featuredProject.title}</p>
+                  <p className="mt-1 line-clamp-2 text-sm font-medium text-[#5C7372]">
+                    {featuredProject.shortDescription}
+                  </p>
+                </div>
+                {featuredProject.featured && (
+                  <span className="inline-flex items-center gap-1 rounded-lg bg-[#E7F4F3] px-2 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[#3E7574]">
+                    <Star className="h-3 w-3 fill-current" />
+                    Featured
+                  </span>
+                )}
+              </div>
+            </button>
+          ) : (
+            <div className="px-6 py-8">
+              <p className="max-w-md text-sm font-medium leading-relaxed text-[#5C7372]">
+                {hasProjects
+                  ? featuredProject
+                    ? featuredProject.title
+                    : "Projects are saved in collection order."
+                  : "Add the projects, experiences and work you're proud of."}
+              </p>
+              <button
+                type="button"
+                onClick={onAddProject}
+                className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#3E7574]"
+              >
+                <Plus className="h-4 w-4" />
+                Add project
+              </button>
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-[28px] border border-[#D5E6E5] bg-white p-6 lg:col-span-4">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#3E7574]">
+              Portfolio path
+            </p>
+            <span className="text-xs font-bold text-[#6E8887]">
+              {loadingProjects ? "…" : `${readyStagesCount} of 5`}
+            </span>
+          </div>
+          <div className="mt-4 space-y-2">
             {PORTFOLIO_STAGES.map((stage, idx) => {
               const isActive = stage.status === "active";
               const isProfileStage = stage.id === "profile";
               const isWorkStage = stage.id === "work";
-
               const handleClick = () => {
                 if (isProfileStage) onOpenProfileEditor();
                 if (isWorkStage) onOpenProjects();
               };
-
               return (
                 <div
                   key={stage.id}
@@ -254,210 +302,52 @@ export const PortfolioWorkspace: React.FC<PortfolioWorkspaceProps> = ({
                   onClick={isActive ? handleClick : undefined}
                   role={isActive ? "button" : undefined}
                   tabIndex={isActive ? 0 : undefined}
-                  className={`p-4 border rounded-[2px] flex flex-col justify-between transition-all duration-200 ${
+                  onKeyDown={
                     isActive
-                      ? "bg-white border-[#6DAEAD] ring-1 ring-[#6DAEAD]/50 shadow-[0_1px_3px_rgba(109,174,173,0.1)] cursor-pointer hover:shadow-[0_4px_12px_rgba(109,174,173,0.15)]"
-                      : "bg-white/60 border-[#E5E5E1] opacity-75"
+                      ? (event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            handleClick();
+                          }
+                        }
+                      : undefined
+                  }
+                  className={`rounded-2xl px-3 py-3 ${
+                    isActive
+                      ? "cursor-pointer bg-[#F4FBFA] hover:bg-[#E7F4F3]"
+                      : "opacity-70"
                   }`}
                 >
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-mono text-[11px] text-[#849693]">
-                        0{idx + 1}
-                      </span>
-                      {isProfileStage && (
-                        profileComplete ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] uppercase font-support tracking-[0.1em] text-[#388E6D] bg-[#F0FDF4] px-1.5 py-0.5 rounded-[2px] border border-[#DCFCE7]">
-                            <CheckCircle2 className="w-2.5 h-2.5" />
-                            Complete
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] uppercase font-support tracking-[0.1em] text-[#708595] bg-[#F0F2F2] px-1.5 py-0.5 rounded-[2px] border border-[#E5E5E1]">
-                            Needs attention
-                          </span>
-                        )
-                      )}
-
-                      {isWorkStage && (
-                        hasProjects ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] uppercase font-support tracking-[0.1em] text-[#388E6D] bg-[#F0FDF4] px-1.5 py-0.5 rounded-[2px] border border-[#DCFCE7]">
-                            <CheckCircle2 className="w-2.5 h-2.5" />
-                            {projects.length} {projects.length === 1 ? "Project" : "Projects"}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] uppercase font-support tracking-[0.1em] text-[#708595] bg-[#F0F2F2] px-1.5 py-0.5 rounded-[2px] border border-[#E5E5E1]">
-                            0 Projects
-                          </span>
-                        )
-                      )}
-
-                      {!isProfileStage && !isWorkStage && (
-                        <span className="inline-flex items-center gap-1 text-[10px] uppercase font-support tracking-[0.1em] text-[#849693] bg-[#F8F8F7] px-1.5 py-0.5 rounded-[2px] border border-[#E5E5E1]">
-                          <Clock className="w-2.5 h-2.5" />
-                          Upcoming
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-[#243838]">
+                        0{idx + 1} {stage.name}
+                      </p>
+                      <p className="text-xs font-medium text-[#5C7372]">{stage.desc}</p>
+                    </div>
+                    {isProfileStage &&
+                      (profileComplete ? (
+                        <CheckCircle2 className="h-4 w-4 text-[#2F7D62]" />
+                      ) : (
+                        <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#5C7372]">
+                          Open
                         </span>
-                      )}
-                    </div>
-
-                    <div className="text-sm font-medium text-[#1A1A1B] mb-1 flex items-center justify-between">
-                      <span>{stage.name}</span>
-                      {isActive && <Edit3 className="w-3 h-3 text-[#6DAEAD]" />}
-                    </div>
-
-                    <p className="text-xs text-[#708595] font-light leading-snug">
-                      {stage.desc}
-                    </p>
+                      ))}
+                    {isWorkStage && (
+                      <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#3E7574]">
+                        {hasProjects ? projects.length : 0}
+                      </span>
+                    )}
+                    {!isProfileStage && !isWorkStage && (
+                      <Clock className="h-4 w-4 text-[#8AADAC]" />
+                    )}
                   </div>
                 </div>
               );
             })}
           </div>
-        </motion.div>
-
-        {/* Modular Content Foundations */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full grid grid-cols-1 md:grid-cols-3 gap-4"
-        >
-          {/* Identity & Bio */}
-          <div className="bg-white border border-[#E5E5E1] rounded-[2px] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E5E5E1]/60">
-                <span className="font-support text-[11px] uppercase tracking-[0.12em] text-[#708595]">
-                  Profile & Identity
-                </span>
-                <button
-                  type="button"
-                  onClick={onOpenProfileEditor}
-                  className="text-xs text-[#6DAEAD] hover:text-[#1A1A1B] font-medium flex items-center gap-1 transition-colors"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Edit</span>
-                </button>
-              </div>
-
-              <div className="text-sm font-medium text-[#1A1A1B] mb-2">
-                {portfolio.headline}
-              </div>
-
-              <p className="text-xs sm:text-sm text-[#708595] font-light leading-relaxed mb-4 line-clamp-3">
-                {portfolio.bio}
-              </p>
-            </div>
-
-            <div className="pt-3 border-t border-[#E5E5E1]/60 flex items-center justify-between text-xs text-[#708595]">
-              <span className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#388E6D]" />
-                <span>{portfolio.availability || "Available for work"}</span>
-              </span>
-              <span className="font-mono text-[11px] text-[#849693]">
-                {portfolio.email}
-              </span>
-            </div>
-          </div>
-
-          {/* Work / Projects Card */}
-          <div className="bg-white border border-[#E5E5E1] rounded-[2px] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E5E5E1]/60">
-                <span className="font-support text-[11px] uppercase tracking-[0.12em] text-[#708595]">
-                  Work & Projects
-                </span>
-                <button
-                  type="button"
-                  onClick={onOpenProjects}
-                  className="text-xs text-[#6DAEAD] hover:text-[#1A1A1B] font-medium flex items-center gap-1 transition-colors"
-                >
-                  <span>Manage</span>
-                  <ArrowRight className="w-3 h-3" />
-                </button>
-              </div>
-
-              {hasProjects ? (
-                <div>
-                  <div className="text-base font-medium text-[#1A1A1B] mb-1">
-                    {projects.length} {projects.length === 1 ? "Project Entry" : "Projects Saved"}
-                  </div>
-                  {featuredProject ? (
-                    <div className="inline-flex items-center gap-1 text-xs text-[#689AA1] font-medium mt-1 mb-3">
-                      <Star className="w-3 h-3 fill-current" />
-                      <span>Featured: {featuredProject.title}</span>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-[#708595] font-light leading-relaxed mb-3">
-                      All projects active in collection order.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <div className="text-sm font-medium text-[#1A1A1B] mb-1">
-                    Show your work.
-                  </div>
-                  <p className="text-xs text-[#708595] font-light leading-relaxed mb-3">
-                    Add the projects, experiences and work you're proud of.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="pt-3 border-t border-[#E5E5E1]/60 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={onAddProject}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-[#1A1A1B] hover:text-[#6DAEAD] transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5 text-[#6DAEAD]" />
-                <span>Add project</span>
-              </button>
-              <button
-                type="button"
-                onClick={onOpenProjects}
-                className="text-xs font-mono text-[#849693] hover:text-[#1A1A1B] transition-colors"
-              >
-                View collection →
-              </button>
-            </div>
-          </div>
-
-          {/* Style & System Archetype */}
-          <div className="bg-white border border-[#E5E5E1] rounded-[2px] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E5E5E1]/60">
-                <span className="font-support text-[11px] uppercase tracking-[0.12em] text-[#708595]">
-                  Style Archetype
-                </span>
-                <Sparkles className="w-3.5 h-3.5 text-[#6DAEAD]" />
-              </div>
-
-              <div className="text-base font-medium text-[#1A1A1B] mb-1">
-                {portfolio.stylePreset}
-              </div>
-
-              <p className="text-xs text-[#708595] font-light leading-relaxed mb-4">
-                Theme: Light mode with Custom Portfolio brand accent. Typography and layout
-                architecture render around this preset.
-              </p>
-            </div>
-
-            <div className="pt-3 border-t border-[#E5E5E1]/60 flex items-center justify-between text-xs text-[#849693]">
-              <span className="font-support text-[10px] uppercase tracking-[0.1em]">
-                Engine Status
-              </span>
-              <span className="text-[#6DAEAD] font-medium">Phase 6 Ready</span>
-            </div>
-          </div>
-        </motion.div>
-      </main>
-
-      {/* Legal Footer */}
-      <footer className="w-full max-w-5xl flex flex-col sm:flex-row items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-[0.12em] text-[#849693] pt-6 border-t border-[#E5E5E1] gap-3">
-        <div>&copy; 2024 BroadBrand. All Rights Reserved.</div>
-        <div className="font-support">{brand.endorsement}</div>
-      </footer>
+        </section>
+      </motion.div>
     </div>
   );
 };
-

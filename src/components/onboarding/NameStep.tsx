@@ -33,22 +33,22 @@ export const NameStep: React.FC<NameStepProps> = ({ initialValue, onNext }) => {
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       className="w-full flex flex-col items-start text-left"
     >
-      <span className="font-support text-[11px] uppercase tracking-[0.18em] text-[#708595] mb-2.5">
-        Step 01 &mdash; Identity
+      <span className="mb-2.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">
+        Step 01 — Identity
       </span>
 
-      <h1 className="text-3xl sm:text-4xl md:text-[46px] font-light md:font-[300] leading-[1.12] tracking-[-0.04em] text-[#1A1A1B] mb-3">
+      <h2 className="mb-3 text-3xl font-bold leading-[1.1] tracking-[-0.04em] text-[#243838] sm:text-4xl">
         Let&apos;s start with you.
-      </h1>
+      </h2>
 
-      <p className="text-base text-[#708595] mb-8 font-normal">
+      <p className="mb-8 text-base text-[#5C7372]">
         What should we call you?
       </p>
 
       <div className="w-full mb-6">
         <label
           htmlFor="name-input"
-          className="block text-xs uppercase tracking-[0.1em] font-medium text-[#708595] mb-2 font-support"
+          className="mb-2 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#3E7574]"
         >
           Your preferred name
         </label>
@@ -62,17 +62,17 @@ export const NameStep: React.FC<NameStepProps> = ({ initialValue, onNext }) => {
           }}
           placeholder="e.g. Maya Chen"
           autoFocus
-          className="w-full text-xl sm:text-2xl font-light text-[#1A1A1B] bg-white border border-[#E5E5E1] rounded-[2px] px-4 py-3.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD] transition-all duration-200 placeholder:text-[#849693]/40 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+          className="w-full rounded-xl border border-[#D5E6E5] bg-[#F7FBFA] px-4 py-3.5 text-xl font-semibold text-[#243838] shadow-none transition-all duration-200 placeholder:text-[#8AADAC] focus:border-[#6DAEAD] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#6DAEAD]/30 sm:text-2xl"
         />
         {validationError && (
-          <div className="flex items-center gap-1.5 mt-2.5 text-xs text-[#B93838]">
+          <div className="mt-2.5 flex items-center gap-1.5 text-xs font-medium text-[#B93838]">
             <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
             <span>{validationError}</span>
           </div>
         )}
       </div>
 
-      <div className="w-full flex items-center justify-end pt-4 border-t border-[#E5E5E1]/60">
+      <div className="flex w-full items-center justify-end border-t border-[#E7F4F3] pt-5">
         <Button
           id="name-step-continue-button"
           type="submit"

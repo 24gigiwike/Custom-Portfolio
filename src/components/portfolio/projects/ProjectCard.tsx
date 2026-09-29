@@ -34,147 +34,132 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   onToggleFeatured,
 }) => {
   return (
-    <div
+    <article
       id={`project-card-${project.id}`}
-      className="group bg-white border border-[#E5E5E1] hover:border-[#6DAEAD]/50 rounded-[2px] p-4 sm:p-5 transition-all shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col md:flex-row items-start md:items-center gap-4 sm:gap-6"
+      className="group flex flex-col overflow-hidden rounded-[28px] border border-[#D5E6E5] bg-white shadow-[0_10px_30px_rgba(109,174,173,0.06)]"
     >
-      {/* Left: Reorder Indices & Move Buttons */}
-      <div className="flex md:flex-col items-center justify-between md:justify-center gap-1.5 w-full md:w-auto text-[#708595] pb-2 md:pb-0 border-b md:border-b-0 md:border-r border-[#E5E5E1]/60 md:pr-4">
-        <span className="font-mono text-xs text-[#849693] font-medium tracking-wider">
-          0{index + 1}
-        </span>
-        <div className="flex md:flex-col items-center gap-1">
-          <button
-            type="button"
-            aria-label="Move project up in list"
-            disabled={index === 0}
-            onClick={() => onMoveUp(index)}
-            className="p-1 text-[#849693] hover:text-[#1A1A1B] hover:bg-[#F8F8F7] rounded-[2px] disabled:opacity-20 disabled:pointer-events-none transition-colors"
-          >
-            <ArrowUp className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            aria-label="Move project down in list"
-            disabled={index === totalProjects - 1}
-            onClick={() => onMoveDown(index)}
-            className="p-1 text-[#849693] hover:text-[#1A1A1B] hover:bg-[#F8F8F7] rounded-[2px] disabled:opacity-20 disabled:pointer-events-none transition-colors"
-          >
-            <ArrowDown className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {/* Thumbnail */}
-      <div className="w-24 sm:w-28 h-20 sm:h-20 flex-shrink-0 bg-[#F8F8F7] border border-[#E5E5E1] rounded-[2px] overflow-hidden flex items-center justify-center">
+      <button
+        type="button"
+        onClick={() => onEdit(project)}
+        className="relative block aspect-[16/10] w-full overflow-hidden bg-[#E7F4F3] text-left"
+      >
         {project.coverImage ? (
           <img
             src={project.coverImage}
             alt={project.title}
             referrerPolicy="no-referrer"
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
           />
         ) : (
-          <div className="flex flex-col items-center justify-center p-2 text-center text-[#849693]/70">
-            <ImageIcon className="w-5 h-5 mb-0.5" />
-            <span className="text-[9px] font-support uppercase tracking-wider">No image</span>
+          <div className="flex h-full flex-col items-center justify-center text-[#6E8887]">
+            <ImageIcon className="mb-2 h-6 w-6" />
+            <span className="text-[11px] font-bold uppercase tracking-[0.14em]">No image</span>
           </div>
         )}
-      </div>
+        <span className="absolute left-3 top-3 rounded-lg bg-white/85 px-2 py-1 text-[11px] font-bold text-[#3E7574] backdrop-blur-sm">
+          0{index + 1}
+        </span>
+        {project.featured && (
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-lg bg-[#6DAEAD] px-2 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-white">
+            <Star className="h-3 w-3 fill-current" />
+            Featured
+          </span>
+        )}
+      </button>
 
-      {/* Main Content Info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex flex-wrap items-center gap-2 mb-1">
-          <h3
-            onClick={() => onEdit(project)}
-            className="text-base font-medium text-[#1A1A1B] hover:text-[#6DAEAD] cursor-pointer transition-colors truncate tracking-[-0.01em]"
-          >
-            {project.title}
-          </h3>
-
-          {project.featured && (
-            <span className="inline-flex items-center gap-1 font-support text-[10px] uppercase tracking-[0.1em] px-2 py-0.5 bg-[#6DAEAD]/15 text-[#689AA1] border border-[#6DAEAD]/30 rounded-[2px] font-medium">
-              <Star className="w-2.5 h-2.5 fill-current text-[#689AA1]" />
-              Featured
-            </span>
-          )}
-        </div>
-
-        <p className="text-xs text-[#708595] font-light line-clamp-2 leading-relaxed mb-2.5">
+      <div className="flex flex-1 flex-col p-5">
+        <h3
+          onClick={() => onEdit(project)}
+          className="cursor-pointer text-xl font-bold tracking-[-0.03em] text-[#243838] hover:text-[#3E7574]"
+        >
+          {project.title}
+        </h3>
+        <p className="mt-2 line-clamp-3 text-sm font-medium leading-relaxed text-[#5C7372]">
           {project.shortDescription || "No short description provided."}
         </p>
 
-        {/* Metadata Line */}
-        <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-[11px] text-[#849693]">
+        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-[#6E8887]">
           {project.role && (
             <span className="inline-flex items-center gap-1">
-              <UserCheck className="w-3 h-3 text-[#708595]" />
-              <span>{project.role}</span>
+              <UserCheck className="h-3.5 w-3.5 text-[#6DAEAD]" />
+              {project.role}
             </span>
           )}
-
-          {project.client && (
-            <span className="inline-flex items-center gap-1 font-light">
-              <span className="text-[#708595] font-medium">Client:</span> {project.client}
-            </span>
-          )}
-
+          {project.client && <span>Client: {project.client}</span>}
           {project.year && (
             <span className="inline-flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-[#708595]" />
-              <span className="font-mono">{project.year}</span>
+              <Calendar className="h-3.5 w-3.5 text-[#6DAEAD]" />
+              {project.year}
             </span>
           )}
-
           {project.projectUrl && (
             <a
               href={project.projectUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[#6DAEAD] hover:underline"
+              className="inline-flex items-center gap-1 text-[#3E7574] hover:underline"
             >
-              <span>Live Site</span>
-              <ExternalLink className="w-2.5 h-2.5" />
+              Live site
+              <ExternalLink className="h-3 w-3" />
             </a>
           )}
         </div>
+
+        <div className="mt-5 flex items-center justify-between gap-2 border-t border-[#E7F4F3] pt-4">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label="Move project up in list"
+              disabled={index === 0}
+              onClick={() => onMoveUp(index)}
+              className="rounded-lg p-2 text-[#5C7372] hover:bg-[#E7F4F3] disabled:pointer-events-none disabled:opacity-30"
+            >
+              <ArrowUp className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Move project down in list"
+              disabled={index === totalProjects - 1}
+              onClick={() => onMoveDown(index)}
+              className="rounded-lg p-2 text-[#5C7372] hover:bg-[#E7F4F3] disabled:pointer-events-none disabled:opacity-30"
+            >
+              <ArrowDown className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label={project.featured ? "Unset featured project" : "Mark as featured project"}
+              title={project.featured ? "Unset featured" : "Mark as featured"}
+              onClick={() => onToggleFeatured(project)}
+              className={`rounded-lg p-2 ${
+                project.featured
+                  ? "bg-[#E7F4F3] text-[#3E7574]"
+                  : "text-[#6E8887] hover:bg-[#F4FBFA]"
+              }`}
+            >
+              <Star className={`h-4 w-4 ${project.featured ? "fill-current" : ""}`} />
+            </button>
+            <button
+              type="button"
+              aria-label="Edit project"
+              onClick={() => onEdit(project)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#E7F4F3] px-3 py-2 text-xs font-bold text-[#2F6463]"
+            >
+              <Edit3 className="h-3.5 w-3.5" />
+              Edit
+            </button>
+            <button
+              type="button"
+              aria-label="Delete project"
+              onClick={() => onDelete(project)}
+              className="rounded-lg p-2 text-[#6E8887] hover:bg-[#FFF6F6] hover:text-[#B93838]"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       </div>
-
-      {/* Action Controls */}
-      <div className="flex items-center gap-2 w-full md:w-auto justify-end pt-2 md:pt-0 border-t md:border-t-0 border-[#E5E5E1]/60">
-        <button
-          type="button"
-          aria-label={project.featured ? "Unset featured project" : "Mark as featured project"}
-          title={project.featured ? "Unset featured" : "Mark as featured"}
-          onClick={() => onToggleFeatured(project)}
-          className={`p-2 rounded-[2px] border transition-colors ${
-            project.featured
-              ? "bg-[#6DAEAD]/10 text-[#689AA1] border-[#6DAEAD]/30"
-              : "bg-white text-[#849693] border-[#E5E5E1] hover:text-[#689AA1] hover:border-[#6DAEAD]"
-          }`}
-        >
-          <Star className={`w-3.5 h-3.5 ${project.featured ? "fill-current" : ""}`} />
-        </button>
-
-        <button
-          type="button"
-          aria-label="Edit project"
-          onClick={() => onEdit(project)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#1A1A1B] bg-[#F8F8F7] hover:bg-[#E5E5E1] border border-[#E5E5E1] rounded-[2px] transition-colors"
-        >
-          <Edit3 className="w-3 h-3 text-[#708595]" />
-          <span>Edit</span>
-        </button>
-
-        <button
-          type="button"
-          aria-label="Delete project"
-          onClick={() => onDelete(project)}
-          className="p-2 text-[#849693] hover:text-[#B91C1C] hover:bg-[#FEF2F2] border border-transparent hover:border-[#FEE2E2] rounded-[2px] transition-colors"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      </div>
-    </div>
+    </article>
   );
 };

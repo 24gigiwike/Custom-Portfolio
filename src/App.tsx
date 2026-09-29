@@ -88,7 +88,7 @@ function AppContent() {
   }
 
   return (
-    <div className="w-full min-h-screen bg-[#F8F8F7]">
+    <div className="w-full min-h-screen bg-[#F3FAF9]">
       <AnimatePresence mode="wait">
         {currentRoute === "/app" && user && authPhase === "READY" ? (
           <motion.div

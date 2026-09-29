@@ -65,15 +65,15 @@ export const PortfolioTypeStep: React.FC<PortfolioTypeStepProps> = ({
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       className="w-full flex flex-col items-start text-left"
     >
-      <span className="font-support text-[11px] uppercase tracking-[0.18em] text-[#708595] mb-2.5">
-        Step 03 &mdash; Purpose
+      <span className="mb-2.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">
+        Step 03 — Purpose
       </span>
 
-      <h1 className="text-3xl sm:text-4xl md:text-[46px] font-light md:font-[300] leading-[1.12] tracking-[-0.04em] text-[#1A1A1B] mb-3">
+      <h2 className="mb-3 text-3xl font-bold leading-[1.1] tracking-[-0.04em] text-[#243838] sm:text-4xl">
         What are you creating?
-      </h1>
+      </h2>
 
-      <p className="text-base text-[#708595] mb-8 font-normal">
+      <p className="mb-8 text-base text-[#5C7372]">
         This sets the strategic context for your presence.
       </p>
 
@@ -90,25 +90,25 @@ export const PortfolioTypeStep: React.FC<PortfolioTypeStepProps> = ({
                 setSelectedType(type.id);
                 if (validationError) setValidationError(null);
               }}
-              className={`w-full p-4 text-left border rounded-[2px] transition-all duration-200 select-none flex items-start justify-between gap-4 ${
+              className={`flex w-full items-start justify-between gap-4 rounded-2xl border p-4 text-left transition-all duration-200 select-none ${
                 isSelected
-                  ? "bg-white border-[#6DAEAD] ring-1 ring-[#6DAEAD] shadow-[0_2px_10px_rgba(109,174,173,0.12)]"
-                  : "bg-white/80 border-[#E5E5E1] hover:border-[#708595]/50 hover:bg-white"
+                  ? "border-[#6DAEAD] bg-[#E7F4F3] shadow-[0_10px_24px_rgba(109,174,173,0.14)]"
+                  : "border-[#D5E6E5] bg-[#F7FBFA] hover:border-[#6DAEAD] hover:bg-white"
               }`}
             >
               <div className="flex-1">
-                <div className="text-base font-medium text-[#1A1A1B] mb-0.5">
+                <div className="mb-0.5 text-base font-bold text-[#243838]">
                   {type.title}
                 </div>
-                <div className="text-xs text-[#708595] font-normal leading-relaxed">
+                <div className="text-xs font-medium leading-relaxed text-[#5C7372]">
                   {type.description}
                 </div>
               </div>
               <div
-                className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors duration-150 ${
+                className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border transition-colors duration-150 ${
                   isSelected
-                    ? "bg-[#6DAEAD] border-[#6DAEAD] text-white"
-                    : "border-[#E5E5E1] bg-white text-transparent"
+                    ? "border-[#6DAEAD] bg-[#6DAEAD] text-white"
+                    : "border-[#D5E6E5] bg-white text-transparent"
                 }`}
               >
                 <Check className="w-3 h-3 stroke-[3]" />
@@ -119,19 +119,19 @@ export const PortfolioTypeStep: React.FC<PortfolioTypeStepProps> = ({
       </div>
 
       {validationError && (
-        <div className="flex items-center gap-1.5 mb-6 text-xs text-[#B93838]">
+        <div className="mb-6 flex items-center gap-1.5 text-xs font-medium text-[#B93838]">
           <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
           <span>{validationError}</span>
         </div>
       )}
 
-      <div className="w-full flex items-center justify-between pt-4 border-t border-[#E5E5E1]/60 gap-3">
+      <div className="flex w-full items-center justify-between gap-3 border-t border-[#E7F4F3] pt-5">
         <Button
           id="type-step-back-button"
           type="button"
           variant="outline"
           onClick={onBack}
-          leftIcon={<ArrowLeft className="w-4 h-4 mr-1 text-[#708595]" />}
+          leftIcon={<ArrowLeft className="w-4 h-4 mr-1 text-[#5C7372]" />}
         >
           Back
         </Button>

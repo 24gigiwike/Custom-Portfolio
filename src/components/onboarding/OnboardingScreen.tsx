@@ -13,6 +13,13 @@ interface OnboardingScreenProps {
   onCompleted: () => void;
 }
 
+const STEP_COPY = [
+  { kicker: "Identity", title: "Start with the name people should remember." },
+  { kicker: "Craft", title: "Name the work you actually do." },
+  { kicker: "Purpose", title: "Choose the presence you are building." },
+  { kicker: "Origin", title: "Place yourself, if you want to." },
+];
+
 export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onCompleted }) => {
   const { user, userAccount, saveOnboarding } = useAuth();
 
@@ -67,89 +74,74 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onCompleted 
     }
   };
 
+  const stepCopy = STEP_COPY[currentStep - 1];
+
   return (
     <div
       id="onboarding-screen"
-      className="relative min-h-screen w-full flex flex-col justify-between items-center px-6 sm:px-12 py-10 sm:py-12 bg-[#F8F8F7] text-[#1A1A1B] selection:bg-[#6DAEAD]/20 overflow-x-hidden"
+      className="min-h-screen bg-[#F3FAF9] text-[#243838] selection:bg-[#6DAEAD]/25"
     >
-      {/* Foundation Accent Bar */}
-      <div className="fixed left-0 top-0 w-1 h-full bg-gradient-to-b from-[#708595] to-[#6DAEAD] z-30 pointer-events-none" />
-
-      {/* Top Header */}
-      <motion.header
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-        className="w-full max-w-4xl flex items-center justify-between pt-2 pb-6 border-b border-[#E5E5E1]"
-      >
-        <div className="flex items-baseline gap-3">
-          <div className="text-[20px] font-medium tracking-[-0.03em] text-[#1A1A1B]">
-            {brand.name}
+      <div className="mx-auto grid min-h-screen w-full max-w-6xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[0.82fr_1.18fr] lg:py-8">
+        <aside className="relative flex flex-col justify-between overflow-hidden rounded-[28px] bg-[#6DAEAD] px-7 py-8 text-white sm:px-10">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-lg font-bold tracking-[-0.04em]">{brand.name}</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/75">
+              Account setup
+            </div>
           </div>
-          <div className="font-support text-[11px] uppercase tracking-[0.15em] text-[#708595] hidden sm:block">
-            {brand.endorsement}
+          <div className="py-10">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/75">
+              {stepCopy.kicker}
+            </p>
+            <h1 className="mt-3 max-w-sm text-4xl font-bold leading-[1.05] tracking-[-0.045em] sm:text-5xl">
+              {stepCopy.title}
+            </h1>
           </div>
-        </div>
+          <OnboardingProgress currentStep={currentStep} totalSteps={4} tone="inverse" />
+        </aside>
 
-        <OnboardingProgress currentStep={currentStep} totalSteps={4} />
-      </motion.header>
+        <main className="flex flex-col justify-center rounded-[28px] border border-white/80 bg-white px-5 py-8 shadow-[0_16px_50px_rgba(109,174,173,0.08)] sm:px-10 sm:py-12">
+          <AnimatePresence mode="wait">
+            {currentStep === 1 && (
+              <NameStep
+                key="step-1"
+                initialValue={formData.displayName}
+                onNext={handleNameComplete}
+              />
+            )}
 
-      {/* Main Step Container */}
-      <main className="w-full max-w-2xl flex flex-col items-center my-auto py-8 sm:py-12">
-        <AnimatePresence mode="wait">
-          {currentStep === 1 && (
-            <NameStep
-              key="step-1"
-              initialValue={formData.displayName}
-              onNext={handleNameComplete}
-            />
-          )}
+            {currentStep === 2 && (
+              <ProfessionStep
+                key="step-2"
+                initialProfession={formData.profession}
+                initialCustomProfession={formData.customProfession}
+                onNext={handleProfessionComplete}
+                onBack={() => setCurrentStep(1)}
+              />
+            )}
 
-          {currentStep === 2 && (
-            <ProfessionStep
-              key="step-2"
-              initialProfession={formData.profession}
-              initialCustomProfession={formData.customProfession}
-              onNext={handleProfessionComplete}
-              onBack={() => setCurrentStep(1)}
-            />
-          )}
+            {currentStep === 3 && (
+              <PortfolioTypeStep
+                key="step-3"
+                initialPortfolioType={formData.portfolioType}
+                onNext={handlePortfolioTypeComplete}
+                onBack={() => setCurrentStep(2)}
+              />
+            )}
 
-          {currentStep === 3 && (
-            <PortfolioTypeStep
-              key="step-3"
-              initialPortfolioType={formData.portfolioType}
-              onNext={handlePortfolioTypeComplete}
-              onBack={() => setCurrentStep(2)}
-            />
-          )}
-
-          {currentStep === 4 && (
-            <LocationStep
-              key="step-4"
-              initialLocation={formData.location}
-              isSubmitting={isSubmitting}
-              submitError={submitError}
-              onSubmit={handleLocationSubmit}
-              onBack={() => setCurrentStep(3)}
-            />
-          )}
-        </AnimatePresence>
-      </main>
-
-      {/* Legal Footer */}
-      <motion.footer
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
-        className="w-full max-w-4xl flex flex-col sm:flex-row items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-[0.12em] text-[#849693] pt-6 border-t border-[#E5E5E1] gap-3"
-      >
-        <div>&copy; 2024 BroadBrand. All Rights Reserved.</div>
-        <div className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#6DAEAD]" />
-          <span>Account Setup</span>
-        </div>
-      </motion.footer>
+            {currentStep === 4 && (
+              <LocationStep
+                key="step-4"
+                initialLocation={formData.location}
+                isSubmitting={isSubmitting}
+                submitError={submitError}
+                onSubmit={handleLocationSubmit}
+                onBack={() => setCurrentStep(3)}
+              />
+            )}
+          </AnimatePresence>
+        </main>
+      </div>
     </div>
   );
 };

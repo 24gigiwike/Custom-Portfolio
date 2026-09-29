@@ -12,105 +12,96 @@ export const AuthScreen: React.FC = () => {
   return (
     <div
       id="auth-screen"
-      className="relative min-h-screen w-full flex flex-col justify-between items-center px-6 sm:px-12 py-10 sm:py-12 bg-[#F8F8F7] text-[#1A1A1B] selection:bg-[#6DAEAD]/20 overflow-x-hidden"
+      className="relative min-h-screen w-full overflow-x-hidden bg-[#F3FAF9] text-[#243838] selection:bg-[#6DAEAD]/25"
     >
-      {/* Foundation Accent Bar */}
-      <div className="fixed left-0 top-0 w-1 h-full bg-gradient-to-b from-[#708595] to-[#6DAEAD] z-30 pointer-events-none" />
-
-      {/* Top Navigation */}
-      <motion.header
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-        className="w-full max-w-5xl flex items-baseline justify-between pt-2"
-      >
-        <div className="text-[20px] font-medium tracking-[-0.03em] text-[#1A1A1B]">
-          {brand.name}
-        </div>
-        <div className="font-support text-[11px] uppercase tracking-[0.15em] text-[#708595]">
-          {brand.endorsement}
-        </div>
-      </motion.header>
-
-      {/* Main Entry (Bold Typography Core) */}
-      <motion.main
-        initial={{ opacity: 0, y: 14 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full max-w-[540px] flex flex-col items-center text-center my-auto py-10 sm:py-14"
-      >
-        {/* Brand Mark Container */}
-        <div className="mb-10 sm:mb-14 opacity-90 flex justify-center">
-          <img
-            src={brand.splashLogoUrl}
-            alt={`${brand.name} Mark`}
-            referrerPolicy="no-referrer"
-            className="h-20 sm:h-24 md:h-[110px] w-auto object-contain select-none pointer-events-none"
-          />
-        </div>
-
-        {/* Bold Headline */}
-        <h1 className="text-3xl sm:text-4xl md:text-[50px] font-light md:font-[300] leading-[1.1] tracking-[-0.04em] mb-8 sm:mb-10 text-[#1A1A1B]">
-          {brand.tagline}
-        </h1>
-
-        {/* Error Notification if any */}
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-[360px] mb-6 p-3 bg-[#FFF5F5] border border-[#FED7D7] rounded-[2px] text-left flex items-start gap-2.5"
-          >
-            <AlertCircle className="w-4 h-4 text-[#B93838] flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-xs font-medium text-[#B93838]">{error}</p>
+      <div className="mx-auto grid min-h-screen w-full max-w-6xl items-stretch gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1.15fr_0.85fr] lg:py-8">
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+          className="relative flex flex-col justify-between overflow-hidden rounded-[28px] bg-[#6DAEAD] px-7 py-8 text-white sm:px-10 sm:py-12"
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div className="text-lg font-bold tracking-[-0.04em]">{brand.name}</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/80">
+              {brand.endorsement}
             </div>
-            <button
-              type="button"
-              onClick={clearError}
-              className="text-xs text-[#B93838]/70 hover:text-[#B93838] ml-1"
+          </div>
+
+          <div className="max-w-xl py-12">
+            <img
+              src={brand.splashLogoUrl}
+              alt={`${brand.name} Mark`}
+              referrerPolicy="no-referrer"
+              className="mb-8 h-16 w-auto object-contain sm:h-20"
+            />
+            <h1 className="text-4xl font-bold leading-[1.05] tracking-[-0.045em] sm:text-5xl lg:text-6xl">
+              {brand.tagline}
+            </h1>
+            <p className="mt-6 max-w-md text-base font-medium leading-relaxed text-white/85 sm:text-lg">
+              A workspace for the work you want people to remember.
+            </p>
+          </div>
+
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/75">
+            BroadBrand
+          </div>
+        </motion.section>
+
+        <motion.section
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
+          className="flex flex-col justify-center rounded-[28px] border border-white/80 bg-white/80 px-6 py-10 shadow-[0_20px_60px_rgba(109,174,173,0.12)] backdrop-blur-xl sm:px-10"
+        >
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">
+            Sign in
+          </p>
+          <h2 className="mt-3 text-3xl font-bold tracking-[-0.04em] text-[#243838] sm:text-4xl">
+            Continue into your workspace.
+          </h2>
+          <p className="mt-3 max-w-sm text-sm leading-relaxed text-[#5C7372]">
+            Google is the only way in. Your portfolio stays tied to this account.
+          </p>
+
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-6 flex items-start gap-2.5 rounded-2xl border border-[#F3C7C7] bg-[#FFF6F6]/90 p-3.5 text-left backdrop-blur-sm"
             >
-              Dismiss
-            </button>
-          </motion.div>
-        )}
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#B93838]" />
+              <p className="flex-1 text-xs font-medium text-[#B93838]">{error}</p>
+              <button
+                type="button"
+                onClick={clearError}
+                className="text-xs font-bold text-[#B93838]/80 hover:text-[#B93838]"
+              >
+                Dismiss
+              </button>
+            </motion.div>
+          )}
 
-        {/* Primary Google Auth Action */}
-        <div className="w-full max-w-[320px] flex flex-col items-center gap-4">
-          <GoogleSignInButton
-            onClick={signInWithGoogle}
-            isLoading={isLoading}
-            disabled={isLoading}
-          />
-        </div>
-
-        {/* Terms and Privacy Footnote */}
-        <p className="mt-8 text-[11px] text-[#849693] leading-relaxed max-w-xs">
-          By continuing, you agree to Custom Portfolio&apos;s{" "}
-          <span className="text-[#708595] underline underline-offset-2 hover:text-[#1A1A1B] cursor-pointer">
-            Terms of Service
-          </span>{" "}
-          and{" "}
-          <span className="text-[#708595] underline underline-offset-2 hover:text-[#1A1A1B] cursor-pointer">
-            Privacy Policy
-          </span>
-          .
-        </p>
-      </motion.main>
-
-      {/* Legal Footer */}
-      <motion.footer
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.25 }}
-        className="w-full max-w-5xl flex flex-col sm:flex-row items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-[0.12em] text-[#849693] pt-6 border-t border-[#E5E5E1] gap-3"
-      >
-        <div>&copy; 2024 BroadBrand. All Rights Reserved.</div>
-        <div className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#6DAEAD]" />
-          <span>Phase 1 Deployment</span>
-        </div>
-      </motion.footer>
+          <div className="mt-8 flex w-full flex-col items-start gap-4">
+            <GoogleSignInButton
+              onClick={signInWithGoogle}
+              isLoading={isLoading}
+              disabled={isLoading}
+            />
+            <p className="max-w-xs text-[11px] leading-relaxed text-[#6E8887]">
+              By continuing, you agree to Custom Portfolio&apos;s{" "}
+              <span className="cursor-pointer font-semibold text-[#3E7574] underline underline-offset-2">
+                Terms of Service
+              </span>{" "}
+              and{" "}
+              <span className="cursor-pointer font-semibold text-[#3E7574] underline underline-offset-2">
+                Privacy Policy
+              </span>
+              .
+            </p>
+          </div>
+        </motion.section>
+      </div>
     </div>
   );
 };

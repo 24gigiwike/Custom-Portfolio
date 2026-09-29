@@ -1,47 +1,48 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-display: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-support: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: "Geist", sans-serif;
+  --font-display: "Geist", sans-serif;
+  --font-support: "Geist", sans-serif;
 
-  /* Custom Brand Core Palette (Bold Typography Design Theme) */
-  --color-custom-slate: #708595;
-  --color-custom-mineral: #689AA1;
-  --color-custom-teal: #6DAEAD;
-  --color-custom-sage: #849693;
-  --color-custom-mint: #94CEBB;
+  --color-custom-slate: #5c7372;
+  --color-custom-mineral: #3e7574;
+  --color-custom-teal: #6daead;
+  --color-custom-sage: #6e8887;
+  --color-custom-mint: #c5e6e0;
 
-  /* Semantic Design Tokens */
-  --color-background: #F8F8F7;
-  --color-foreground: #1A1A1B;
-  --color-paper: #F8F8F7;
-  --color-ink: #1A1A1B;
-  --color-surface: #FFFFFF;
-  --color-surface-subtle: #F0F0EE;
-  --color-muted-foreground: #708595;
-  --color-muted-border: #E5E5E1;
-  --color-border: #E5E5E1;
-  --color-border-strong: #D1D1CB;
-  --color-primary: #1A1A1B;
-  --color-primary-foreground: #FFFFFF;
-  --color-accent: #6DAEAD;
-  --color-accent-soft: #EDF5F5;
-  --color-accent-hover: #5A9998;
-  --color-accent-mint: #94CEBB;
-  --color-accent-sage: #849693;
-  --color-accent-slate: #708595;
-  --color-accent-teal: #6DAEAD;
-  --color-success: #388E6D;
-  --color-warning: #C78229;
-  --color-error: #B93838;
+  --color-background: #f3faf9;
+  --color-foreground: #243838;
+  --color-paper: #f3faf9;
+  --color-ink: #243838;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #e7f4f3;
+  --color-muted-foreground: #5c7372;
+  --color-muted-border: #d5e6e5;
+  --color-border: #d5e6e5;
+  --color-border-strong: #b7d4d2;
+  --color-primary: #6daead;
+  --color-primary-foreground: #ffffff;
+  --color-accent: #6daead;
+  --color-accent-soft: #e7f4f3;
+  --color-accent-hover: #5a9998;
+  --color-accent-mint: #c5e6e0;
+  --color-accent-sage: #6e8887;
+  --color-accent-slate: #5c7372;
+  --color-accent-teal: #6daead;
+  --color-success: #2f7d62;
+  --color-warning: #a56b22;
+  --color-error: #b93838;
+
+  --radius-control: 0.75rem;
+  --radius-panel: 1.25rem;
 }
 
 @layer base {
   * {
     border-color: var(--color-border);
   }
-  
+
   html {
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -50,4 +51,3 @@
     color: var(--color-foreground);
   }
 }
-

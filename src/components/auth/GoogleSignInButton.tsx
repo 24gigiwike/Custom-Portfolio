@@ -20,15 +20,14 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
       type="button"
       onClick={onClick}
       disabled={disabled || isLoading}
-      className={`relative w-full max-w-[320px] flex items-center justify-center gap-3 px-6 py-3.5 min-h-[48px] bg-white hover:bg-white active:bg-[#F9F9F8] text-[#1A1A1B] font-sans font-medium text-[15px] border border-[#E5E5E1] hover:border-[#6DAEAD] hover:shadow-[0_4px_12px_rgba(109,174,173,0.12)] rounded-[2px] shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#6DAEAD] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none select-none ${className}`}
+      className={`relative flex min-h-[52px] w-full max-w-[360px] items-center justify-center gap-3 rounded-xl border border-white/80 bg-white px-6 py-3.5 text-[15px] font-bold tracking-[-0.02em] text-[#243838] shadow-[0_10px_30px_rgba(36,56,56,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(109,174,173,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#6DAEAD] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       aria-label="Continue with Google"
     >
       {isLoading ? (
-        <Loader2 className="w-5 h-5 animate-spin text-[#6DAEAD]" />
+        <Loader2 className="h-5 w-5 animate-spin text-[#6DAEAD]" />
       ) : (
-        /* Official Google 4-Color 'G' Logo */
         <svg
-          className="w-[18px] h-[18px] flex-shrink-0"
+          className="h-[18px] w-[18px] flex-shrink-0"
           viewBox="0 0 24 24"
           xmlns="http://www.w3.org/2000/svg"
         >
@@ -50,7 +49,7 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
           />
         </svg>
       )}
-      <span className="truncate tracking-[-0.01em]">Continue with Google</span>
+      <span className="truncate">Continue with Google</span>
     </button>
   );
 };
