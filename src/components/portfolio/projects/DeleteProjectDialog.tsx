@@ -1,6 +1,6 @@
 import React from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "../../ui/Button";
 
 interface DeleteProjectDialogProps {
@@ -24,39 +24,43 @@ export const DeleteProjectDialog: React.FC<DeleteProjectDialogProps> = ({
     <AnimatePresence>
       <div
         id="delete-project-modal-backdrop"
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4 sm:p-6"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-[#243838]/35 p-4 backdrop-blur-md sm:p-6"
       >
         <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: 8 }}
+          initial={{ opacity: 0, scale: 0.98, y: 8 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, y: 8 }}
+          exit={{ opacity: 0, scale: 0.98, y: 8 }}
           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full max-w-md bg-white border border-[#E5E5E1] rounded-[2px] p-6 sm:p-8 shadow-[0_12px_32px_rgba(0,0,0,0.12)] text-[#1A1A1B]"
+          className="w-full max-w-md rounded-[28px] border border-white/80 bg-white/90 p-6 text-[#243838] shadow-[0_24px_60px_rgba(36,56,56,0.18)] backdrop-blur-xl sm:p-8"
         >
-          <div className="flex items-center gap-3 text-[#B91C1C] mb-4">
-            <div className="w-8 h-8 rounded-full bg-[#FEF2F2] border border-[#FEE2E2] flex items-center justify-center">
-              <AlertTriangle className="w-4 h-4 text-[#B91C1C]" />
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#FFF6F6] text-[#B93838]">
+              <AlertTriangle className="h-4 w-4" />
             </div>
-            <h3 className="text-base sm:text-lg font-medium text-[#1A1A1B] tracking-[-0.02em]">
+            <h3 className="text-xl font-bold tracking-[-0.03em]">
               Delete this project?
             </h3>
           </div>
 
-          <p className="text-xs sm:text-sm text-[#708595] font-light leading-relaxed mb-3">
-            Your project <strong className="text-[#1A1A1B] font-medium font-mono text-xs px-1.5 py-0.5 bg-[#F8F8F7] border border-[#E5E5E1] rounded-[2px]">{projectTitle || "Untitled"}</strong> and its saved information will be permanently removed.
+          <p className="mb-3 text-sm font-medium leading-relaxed text-[#5C7372]">
+            Your project{" "}
+            <strong className="font-bold text-[#243838]">
+              {projectTitle || "Untitled"}
+            </strong>{" "}
+            and its saved information will be permanently removed.
           </p>
 
-          <p className="text-xs text-[#849693] font-light mb-6">
+          <p className="mb-6 text-sm font-medium text-[#6E8887]">
             This action cannot be undone.
           </p>
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E5E5E1]">
+          <div className="flex items-center justify-end gap-3 border-t border-[#E7F4F3] pt-4">
             <button
               type="button"
               id="cancel-delete-project-button"
               onClick={onCancel}
               disabled={isDeleting}
-              className="px-4 py-2 text-xs font-medium text-[#708595] hover:text-[#1A1A1B] transition-colors rounded-[2px]"
+              className="rounded-xl px-4 py-2 text-sm font-bold text-[#5C7372] hover:text-[#243838]"
             >
               Cancel
             </button>
@@ -66,7 +70,7 @@ export const DeleteProjectDialog: React.FC<DeleteProjectDialogProps> = ({
               size="sm"
               isLoading={isDeleting}
               onClick={onConfirm}
-              className="bg-[#B91C1C] hover:bg-[#991B1B] text-white border-none shadow-none focus:ring-[#B91C1C]"
+              className="border-none bg-[#B93838] text-white shadow-none hover:bg-[#9E3030] focus:ring-[#B93838]"
             >
               Delete project
             </Button>

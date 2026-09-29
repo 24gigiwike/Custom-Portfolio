@@ -69,18 +69,18 @@ export const ProjectServicesTools: React.FC<ProjectServicesToolsProps> = ({
   return (
     <section
       id="project-services-tools-section"
-      className="bg-white border border-[#E5E5E1] rounded-[2px] p-6 sm:p-8 shadow-[0_1px_3px_rgba(0,0,0,0.02)]"
+      className="bg-white border border-[#D5E6E5] rounded-2xl p-6 sm:p-8 shadow-[0_12px_32px_rgba(109,174,173,0.08)]"
     >
-      <div className="flex items-baseline justify-between pb-4 mb-6 border-b border-[#E5E5E1]/70">
+      <div className="flex items-baseline justify-between pb-4 mb-6 border-b border-[#D5E6E5]/70">
         <div>
-          <span className="font-support text-[11px] uppercase tracking-[0.15em] text-[#708595] block mb-1">
+          <span className="font-support text-[11px] uppercase tracking-[0.15em] text-[#5C7372] block mb-1">
             03 / Services & Tools
           </span>
-          <h2 className="text-lg font-medium text-[#1A1A1B] tracking-[-0.02em]">
+          <h2 className="text-lg font-medium text-[#243838] tracking-[-0.02em]">
             Capabilities & Stack
           </h2>
         </div>
-        <span className="font-support text-[10px] uppercase tracking-[0.12em] text-[#849693]">
+        <span className="font-support text-[10px] uppercase tracking-[0.12em] text-[#6E8887]">
           Tags & Skills
         </span>
       </div>
@@ -89,12 +89,12 @@ export const ProjectServicesTools: React.FC<ProjectServicesToolsProps> = ({
         {/* Services / Disciplines */}
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <Tag className="w-3.5 h-3.5 text-[#708595]" />
-            <label className="font-support text-[11px] uppercase tracking-[0.14em] text-[#708595]">
+            <Tag className="w-3.5 h-3.5 text-[#5C7372]" />
+            <label className="font-support text-[11px] uppercase tracking-[0.14em] text-[#5C7372]">
               Services Provided
             </label>
           </div>
-          <p className="text-xs text-[#849693] font-light mb-3">
+          <p className="text-xs text-[#6E8887] font-light mb-3">
             Add disciplines or creative capabilities delivered for this project.
           </p>
 
@@ -103,21 +103,21 @@ export const ProjectServicesTools: React.FC<ProjectServicesToolsProps> = ({
             {services.map((service) => (
               <span
                 key={service}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#F8F8F7] border border-[#E5E5E1] rounded-[2px] text-xs text-[#1A1A1B] font-medium"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#F7FBFA] border border-[#D5E6E5] rounded-2xl text-xs text-[#243838] font-medium"
               >
                 <span>{service}</span>
                 <button
                   type="button"
                   aria-label={`Remove ${service}`}
                   onClick={() => handleRemoveService(service)}
-                  className="text-[#849693] hover:text-[#B91C1C] transition-colors"
+                  className="text-[#6E8887] hover:text-[#B93838] transition-colors"
                 >
                   <X className="w-3 h-3" />
                 </button>
               </span>
             ))}
             {services.length === 0 && (
-              <span className="text-xs text-[#849693]/60 italic">No services added yet</span>
+              <span className="text-xs text-[#6E8887]/60 italic">No services added yet</span>
             )}
           </div>
 
@@ -134,13 +134,13 @@ export const ProjectServicesTools: React.FC<ProjectServicesToolsProps> = ({
                 }
               }}
               placeholder="Add custom service (e.g. Brand Identity)"
-              className="flex-1 text-xs px-3 py-2 bg-[#F8F8F7] border border-[#E5E5E1] rounded-[2px] text-[#1A1A1B] placeholder:text-[#849693]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors"
+              className="flex-1 text-xs px-3 py-2 bg-[#F7FBFA] border border-[#D5E6E5] rounded-2xl text-[#243838] placeholder:text-[#6E8887]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors"
               maxLength={40}
             />
             <button
               type="button"
               onClick={() => handleAddService(serviceInput)}
-              className="p-2 bg-white border border-[#E5E5E1] hover:border-[#6DAEAD] text-[#1A1A1B] rounded-[2px] transition-colors"
+              className="p-2 bg-white border border-[#D5E6E5] hover:border-[#6DAEAD] text-[#243838] rounded-2xl transition-colors"
               aria-label="Add service"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -154,7 +154,7 @@ export const ProjectServicesTools: React.FC<ProjectServicesToolsProps> = ({
                 key={s}
                 type="button"
                 onClick={() => handleAddService(s)}
-                className="text-[11px] px-2 py-0.5 bg-transparent border border-dashed border-[#E5E5E1] text-[#708595] hover:text-[#1A1A1B] hover:border-[#6DAEAD] rounded-[2px] transition-colors"
+                className="text-[11px] px-2 py-0.5 bg-transparent border border-dashed border-[#D5E6E5] text-[#5C7372] hover:text-[#243838] hover:border-[#6DAEAD] rounded-2xl transition-colors"
               >
                 + {s}
               </button>
@@ -165,12 +165,12 @@ export const ProjectServicesTools: React.FC<ProjectServicesToolsProps> = ({
         {/* Tools & Technologies */}
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <Wrench className="w-3.5 h-3.5 text-[#708595]" />
-            <label className="font-support text-[11px] uppercase tracking-[0.14em] text-[#708595]">
+            <Wrench className="w-3.5 h-3.5 text-[#5C7372]" />
+            <label className="font-support text-[11px] uppercase tracking-[0.14em] text-[#5C7372]">
               Tools & Stack
             </label>
           </div>
-          <p className="text-xs text-[#849693] font-light mb-3">
+          <p className="text-xs text-[#6E8887] font-light mb-3">
             Software, libraries, frameworks, or physical tools used.
           </p>
 
@@ -179,21 +179,21 @@ export const ProjectServicesTools: React.FC<ProjectServicesToolsProps> = ({
             {tools.map((tool) => (
               <span
                 key={tool}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#F8F8F7] border border-[#E5E5E1] rounded-[2px] text-xs text-[#1A1A1B] font-mono font-medium"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#F7FBFA] border border-[#D5E6E5] rounded-2xl text-xs text-[#243838] font-mono font-medium"
               >
                 <span>{tool}</span>
                 <button
                   type="button"
                   aria-label={`Remove ${tool}`}
                   onClick={() => handleRemoveTool(tool)}
-                  className="text-[#849693] hover:text-[#B91C1C] transition-colors"
+                  className="text-[#6E8887] hover:text-[#B93838] transition-colors"
                 >
                   <X className="w-3 h-3" />
                 </button>
               </span>
             ))}
             {tools.length === 0 && (
-              <span className="text-xs text-[#849693]/60 italic">No tools added yet</span>
+              <span className="text-xs text-[#6E8887]/60 italic">No tools added yet</span>
             )}
           </div>
 
@@ -210,13 +210,13 @@ export const ProjectServicesTools: React.FC<ProjectServicesToolsProps> = ({
                 }
               }}
               placeholder="Add tool / technology (e.g. Figma, React)"
-              className="flex-1 text-xs px-3 py-2 bg-[#F8F8F7] border border-[#E5E5E1] rounded-[2px] text-[#1A1A1B] placeholder:text-[#849693]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors"
+              className="flex-1 text-xs px-3 py-2 bg-[#F7FBFA] border border-[#D5E6E5] rounded-2xl text-[#243838] placeholder:text-[#6E8887]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors"
               maxLength={40}
             />
             <button
               type="button"
               onClick={() => handleAddTool(toolInput)}
-              className="p-2 bg-white border border-[#E5E5E1] hover:border-[#6DAEAD] text-[#1A1A1B] rounded-[2px] transition-colors"
+              className="p-2 bg-white border border-[#D5E6E5] hover:border-[#6DAEAD] text-[#243838] rounded-2xl transition-colors"
               aria-label="Add tool"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -230,7 +230,7 @@ export const ProjectServicesTools: React.FC<ProjectServicesToolsProps> = ({
                 key={t}
                 type="button"
                 onClick={() => handleAddTool(t)}
-                className="text-[11px] px-2 py-0.5 bg-transparent border border-dashed border-[#E5E5E1] text-[#708595] hover:text-[#1A1A1B] hover:border-[#6DAEAD] rounded-[2px] transition-colors"
+                className="text-[11px] px-2 py-0.5 bg-transparent border border-dashed border-[#D5E6E5] text-[#5C7372] hover:text-[#243838] hover:border-[#6DAEAD] rounded-2xl transition-colors"
               >
                 + {t}
               </button>

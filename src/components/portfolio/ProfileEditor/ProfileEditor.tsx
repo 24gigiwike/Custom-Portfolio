@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
-import { brand } from "../../../config/branding";
 import { useAuth } from "../../../lib/authContext";
 import { Button } from "../../ui/Button";
 import { SaveStatus, type SaveState } from "./SaveStatus";
@@ -19,7 +18,6 @@ import {
   Eye,
   CheckCircle2,
   AlertCircle,
-  LogOut,
 } from "lucide-react";
 import type {
   Portfolio,
@@ -38,8 +36,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({
   onBackToWorkspace,
   onSaveSuccess,
 }) => {
-  const { user, signOutUser, status } = useAuth();
-  const isSigningOut = status === "unauthenticated";
+  const { user } = useAuth();
 
   // Form State initialized from current portfolio
   const [title, setTitle] = useState(portfolio.title || "");
@@ -201,80 +198,43 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({
   };
 
   return (
-    <div
-      id="profile-editor-screen"
-      className="relative min-h-screen w-full flex flex-col justify-between items-center px-6 sm:px-12 py-10 sm:py-12 bg-[#F8F8F7] text-[#1A1A1B] selection:bg-[#6DAEAD]/20 overflow-x-hidden"
-    >
-      {/* Foundation Accent Bar */}
-      <div className="fixed left-0 top-0 w-1 h-full bg-gradient-to-b from-[#708595] to-[#6DAEAD] z-30 pointer-events-none" />
-
-      {/* Top Header */}
-      <header className="w-full max-w-5xl flex items-baseline justify-between pt-2 pb-6 border-b border-[#E5E5E1]">
-        <div className="flex items-baseline gap-3">
-          <div className="text-[20px] font-medium tracking-[-0.03em] text-[#1A1A1B]">
-            {brand.name}
-          </div>
-          <div className="font-support text-[11px] uppercase tracking-[0.15em] text-[#708595] hidden sm:block">
-            {brand.endorsement}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            id="back-to-workspace-top-button"
-            onClick={onBackToWorkspace}
-            className="flex items-center gap-1.5 text-xs text-[#708595] hover:text-[#1A1A1B] transition-colors duration-150"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Workspace</span>
-          </button>
-          <span className="text-[#E5E5E1] font-light">|</span>
-          <button
-            type="button"
-            id="editor-signout-button"
-            onClick={signOutUser}
-            disabled={isSigningOut}
-            className="flex items-center gap-1.5 text-xs text-[#708595] hover:text-[#1A1A1B] transition-colors duration-150"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Sign out</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content Area */}
-      <main className="w-full max-w-5xl flex-1 flex flex-col my-8 sm:my-10">
+    <div id="profile-editor-screen" className="text-[#243838]">
+      <main className="flex w-full flex-col">
         {/* Editor Title & Status Ribbon */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 mb-8 border-b border-[#E5E5E1]"
+          className="mb-8 flex w-full flex-col justify-between gap-4 rounded-[28px] bg-[#6DAEAD] p-6 text-white sm:p-8 md:flex-row md:items-end"
         >
           <div>
-            <div className="flex items-center gap-2.5 mb-1.5">
-              <span className="font-support text-[11px] uppercase tracking-[0.15em] text-[#708595]">
-                Profile Builder
-              </span>
-              <span className="text-[#E5E5E1] font-light">•</span>
+            <div className="mb-3 flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                id="back-to-workspace-top-button"
+                onClick={onBackToWorkspace}
+                className="inline-flex items-center gap-1.5 text-sm font-bold text-white/85 hover:text-white"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Overview
+              </button>
               {profileIsComplete ? (
-                <span className="inline-flex items-center gap-1 text-[10px] uppercase font-support tracking-[0.1em] text-[#388E6D] bg-[#F0FDF4] px-2 py-0.5 rounded-[2px] border border-[#DCFCE7]">
-                  <CheckCircle2 className="w-2.5 h-2.5" />
-                  Profile Complete
+                <span className="inline-flex items-center gap-1 rounded-lg bg-white/15 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em]">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Profile complete
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 text-[10px] uppercase font-support tracking-[0.1em] text-[#708595] bg-[#F0F2F2] px-2 py-0.5 rounded-[2px] border border-[#E5E5E1]">
-                  Profile In Progress
+                <span className="inline-flex items-center gap-1 rounded-lg bg-white/15 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em]">
+                  In progress
                 </span>
               )}
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-light text-[#1A1A1B] tracking-[-0.03em] mb-1">
-              Let's build your presence.
+            <h1 className="mb-1 text-3xl font-bold tracking-[-0.045em] sm:text-5xl">
+              Let&apos;s build your presence.
             </h1>
-            <p className="text-xs sm:text-sm text-[#708595] font-light">
-              Start with the information people see first. Tell people who you are.
+            <p className="text-sm font-medium text-white/85">
+              Start with the information people see first.
             </p>
           </div>
 
@@ -283,12 +243,13 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({
             <SaveStatus status={saveStatus} errorMessage={errorMessage} />
             <Button
               id="top-save-profile-button"
-              variant="primary"
+              variant="secondary"
               size="md"
               leftIcon={<Save className="w-3.5 h-3.5" />}
               isLoading={saveStatus === "saving"}
               onClick={handleSave}
               disabled={saveStatus === "saving"}
+              className="bg-white text-[#2F6463] shadow-none hover:bg-[#F4FBFA]"
             >
               Save changes
             </Button>
@@ -300,7 +261,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({
           <motion.div
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full bg-[#FEF2F2] border border-[#FEE2E2] rounded-[2px] p-4 mb-6 text-xs text-[#B91C1C] flex items-center justify-between gap-3"
+            className="mb-6 flex w-full items-center justify-between gap-3 rounded-2xl border border-[#F3C7C7] bg-[#FFF6F6] p-4 text-sm font-medium text-[#B93838]"
           >
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -317,8 +278,8 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({
         )}
 
         {/* Editor Sections Stack */}
-        <div className="w-full space-y-8">
-          {/* 01. Identity */}
+        <div className="grid w-full grid-cols-1 gap-4 lg:grid-cols-12">
+          <div className="lg:col-span-12">
           <IdentitySection
             title={title}
             profession={profession}
@@ -336,8 +297,9 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({
             onLocationChange={setLocation}
             onProfileImageChange={setProfileImage}
           />
+          </div>
 
-          {/* 02. Hero & Narrative */}
+          <div className="lg:col-span-7">
           <HeroSection
             headline={headline}
             bio={bio}
@@ -351,8 +313,9 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({
               if (fieldErrors.bio) setFieldErrors({ ...fieldErrors, bio: "" });
             }}
           />
+          </div>
 
-          {/* 03. Direct Contact */}
+          <div className="lg:col-span-5">
           <ContactSection
             email={email}
             authEmail={user?.email}
@@ -362,18 +325,21 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({
               if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: "" });
             }}
           />
+          </div>
 
-          {/* 04. Social Channels */}
+          <div className="lg:col-span-7">
           <SocialLinksSection
             socialLinks={socialLinks}
             onChange={setSocialLinks}
           />
+          </div>
 
-          {/* 05. Availability */}
+          <div className="lg:col-span-5">
           <AvailabilitySection
             availability={availability}
             onChange={setAvailability}
           />
+          </div>
         </div>
 
         {/* Bottom Actions Footer Bar */}
@@ -381,13 +347,13 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full mt-10 pt-6 border-t border-[#E5E5E1] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4"
+          className="mt-10 flex w-full flex-col items-stretch justify-between gap-4 rounded-[28px] border border-white/80 bg-white/75 p-4 shadow-[0_10px_30px_rgba(109,174,173,0.08)] backdrop-blur-xl sm:flex-row sm:items-center"
         >
           <button
             type="button"
             id="back-to-workspace-bottom-button"
             onClick={onBackToWorkspace}
-            className="flex items-center justify-center sm:justify-start gap-2 text-xs text-[#708595] hover:text-[#1A1A1B] font-medium transition-colors"
+            className="flex items-center justify-center gap-2 text-sm font-bold text-[#3E7574] transition-colors hover:text-[#243838] sm:justify-start"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Return to workspace</span>
@@ -404,7 +370,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({
                 size="md"
                 leftIcon={<Eye className="w-3.5 h-3.5" />}
                 disabled={true}
-                className="opacity-60 cursor-not-allowed"
+                className="cursor-not-allowed opacity-60"
                 title="Full portfolio preview engine arrives in subsequent phases"
               >
                 Preview
@@ -425,12 +391,6 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({
           </div>
         </motion.div>
       </main>
-
-      {/* Legal Footer */}
-      <footer className="w-full max-w-5xl flex flex-col sm:flex-row items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-[0.12em] text-[#849693] pt-6 border-t border-[#E5E5E1] gap-3">
-        <div>&copy; 2024 BroadBrand. All Rights Reserved.</div>
-        <div className="font-support">{brand.endorsement}</div>
-      </footer>
     </div>
   );
 };

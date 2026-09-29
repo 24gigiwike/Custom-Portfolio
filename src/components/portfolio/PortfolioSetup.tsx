@@ -8,7 +8,6 @@ import { Button } from "../ui/Button";
 import {
   ArrowLeft,
   ArrowRight,
-  Sparkles,
   AlertCircle,
   Mail,
   Globe,
@@ -158,29 +157,25 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
   return (
     <div
       id="portfolio-setup-screen"
-      className="relative min-h-screen w-full flex flex-col justify-between items-center px-6 sm:px-12 py-10 sm:py-12 bg-[#F8F8F7] text-[#1A1A1B] selection:bg-[#6DAEAD]/20 overflow-x-hidden"
+      className="relative flex min-h-screen w-full flex-col items-center justify-between overflow-x-hidden bg-[#F3FAF9] px-4 py-6 text-[#243838] selection:bg-[#6DAEAD]/25 sm:px-8 sm:py-8"
     >
-      {/* Foundation Accent Bar */}
-      <div className="fixed left-0 top-0 w-1 h-full bg-gradient-to-b from-[#708595] to-[#6DAEAD] z-30 pointer-events-none" />
-
-      {/* Top Header */}
-      <header className="w-full max-w-4xl flex items-center justify-between pt-2 pb-6 border-b border-[#E5E5E1]">
+      <header className="flex w-full max-w-3xl items-center justify-between rounded-2xl border border-white/80 bg-white/80 px-4 py-3 backdrop-blur-xl">
         <div className="flex items-baseline gap-3">
-          <div className="text-[20px] font-medium tracking-[-0.03em] text-[#1A1A1B]">
+          <div className="text-lg font-bold tracking-[-0.04em] text-[#3E7574]">
             {brand.name}
           </div>
-          <div className="font-support text-[11px] uppercase tracking-[0.15em] text-[#708595] hidden sm:block">
+          <div className="hidden text-[11px] font-bold uppercase tracking-[0.16em] text-[#5C7372] sm:block">
             Setup
           </div>
         </div>
 
-        <div className="flex items-center gap-3 select-none">
-          <span className="font-mono text-xs tracking-widest text-[#708595]">
-            {formattedCurrent} <span className="text-[#849693]/50">/</span> {formattedTotal}
+        <div className="flex select-none items-center gap-3">
+          <span className="text-xs font-bold tracking-[0.16em] text-[#3E7574]">
+            {formattedCurrent} <span className="text-[#8AADAC]">/</span> {formattedTotal}
           </span>
-          <div className="w-16 h-[2px] bg-[#E5E5E1] rounded-full overflow-hidden relative">
+          <div className="relative h-1.5 w-24 overflow-hidden rounded-full bg-[#E7F4F3]">
             <div
-              className="h-full bg-gradient-to-r from-[#708595] to-[#6DAEAD] transition-all duration-500 ease-out"
+              className="h-full rounded-full bg-[#6DAEAD] transition-all duration-500 ease-out"
               style={{ width: `${(step / 4) * 100}%` }}
             />
           </div>
@@ -188,7 +183,7 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
       </header>
 
       {/* Main Container */}
-      <main className="w-full max-w-2xl flex flex-col items-center my-auto py-8 sm:py-12">
+      <main className="my-6 flex w-full max-w-3xl flex-col rounded-[28px] border border-white/80 bg-white px-5 py-8 shadow-[0_16px_50px_rgba(109,174,173,0.08)] sm:px-10 sm:py-12">
         <AnimatePresence mode="wait">
           {/* STEP 1: Name / Title */}
           {step === 1 && (
@@ -202,22 +197,22 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
               transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
               className="w-full flex flex-col items-start text-left"
             >
-              <span className="font-support text-[11px] uppercase tracking-[0.18em] text-[#708595] mb-2.5">
+              <span className="font-support text-[11px] uppercase tracking-[0.18em] text-[#5C7372] mb-2.5">
                 Stage 01 &mdash; Identity
               </span>
 
-              <h1 className="text-3xl sm:text-4xl md:text-[46px] font-light md:font-[300] leading-[1.12] tracking-[-0.04em] text-[#1A1A1B] mb-3">
+              <h1 className="text-3xl sm:text-4xl md:text-[46px] font-bold leading-[1.08] tracking-[-0.045em] text-[#243838] mb-3">
                 Give your portfolio a name.
               </h1>
 
-              <p className="text-base text-[#708595] mb-8 font-normal">
+              <p className="text-base text-[#5C7372] mb-8 font-normal">
                 This defines the main title of your presence. Most creators use their full name.
               </p>
 
               <div className="w-full mb-6">
                 <label
                   htmlFor="portfolio-title-input"
-                  className="block text-xs uppercase tracking-[0.1em] font-medium text-[#708595] mb-2 font-support"
+                  className="block text-xs uppercase tracking-[0.1em] font-medium text-[#5C7372] mb-2 font-support"
                 >
                   Portfolio Title
                 </label>
@@ -231,7 +226,7 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                   }}
                   placeholder="e.g. Great Ibewuike"
                   autoFocus
-                  className="w-full text-xl sm:text-2xl font-light text-[#1A1A1B] bg-white border border-[#E5E5E1] rounded-[2px] px-4 py-3.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD] transition-all duration-200 placeholder:text-[#849693]/40 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+                  className="w-full text-xl sm:text-2xl font-light text-[#243838] bg-white border border-[#D5E6E5] rounded-2xl px-4 py-3.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD] transition-all duration-200 placeholder:text-[#6E8887]/40 shadow-[0_8px_24px_rgba(109,174,173,0.08)]"
                 />
                 {validationError && (
                   <div className="flex items-center gap-1.5 mt-2.5 text-xs text-[#B93838]">
@@ -241,13 +236,13 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                 )}
               </div>
 
-              <div className="w-full flex items-center justify-between pt-4 border-t border-[#E5E5E1]/60">
+              <div className="w-full flex items-center justify-between pt-4 border-t border-[#D5E6E5]/60">
                 <Button
                   id="setup-step1-cancel-button"
                   type="button"
                   variant="ghost"
                   onClick={onCancel}
-                  className="text-[#708595]"
+                  className="text-[#5C7372]"
                 >
                   Cancel
                 </Button>
@@ -277,15 +272,15 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
               transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
               className="w-full flex flex-col items-start text-left"
             >
-              <span className="font-support text-[11px] uppercase tracking-[0.18em] text-[#708595] mb-2.5">
+              <span className="font-support text-[11px] uppercase tracking-[0.18em] text-[#5C7372] mb-2.5">
                 Stage 02 &mdash; Narrative
               </span>
 
-              <h1 className="text-3xl sm:text-4xl md:text-[46px] font-light md:font-[300] leading-[1.12] tracking-[-0.04em] text-[#1A1A1B] mb-3">
+              <h1 className="text-3xl sm:text-4xl md:text-[46px] font-bold leading-[1.08] tracking-[-0.045em] text-[#243838] mb-3">
                 How do you want to introduce yourself?
               </h1>
 
-              <p className="text-base text-[#708595] mb-8 font-normal">
+              <p className="text-base text-[#5C7372] mb-8 font-normal">
                 Establish your headline statement and short introduction.
               </p>
 
@@ -293,7 +288,7 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
               <div className="w-full mb-5">
                 <label
                   htmlFor="portfolio-headline-input"
-                  className="block text-xs uppercase tracking-[0.1em] font-medium text-[#708595] mb-2 font-support"
+                  className="block text-xs uppercase tracking-[0.1em] font-medium text-[#5C7372] mb-2 font-support"
                 >
                   Headline
                 </label>
@@ -307,7 +302,7 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                   }}
                   placeholder="e.g. Web Designer & Digital Product Builder"
                   autoFocus
-                  className="w-full text-base sm:text-lg font-light text-[#1A1A1B] bg-white border border-[#E5E5E1] rounded-[2px] px-4 py-3 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD] transition-all duration-200 placeholder:text-[#849693]/40 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+                  className="w-full text-base sm:text-lg font-light text-[#243838] bg-white border border-[#D5E6E5] rounded-2xl px-4 py-3 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD] transition-all duration-200 placeholder:text-[#6E8887]/40 shadow-[0_8px_24px_rgba(109,174,173,0.08)]"
                 />
               </div>
 
@@ -315,7 +310,7 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
               <div className="w-full mb-6">
                 <label
                   htmlFor="portfolio-bio-input"
-                  className="block text-xs uppercase tracking-[0.1em] font-medium text-[#708595] mb-2 font-support"
+                  className="block text-xs uppercase tracking-[0.1em] font-medium text-[#5C7372] mb-2 font-support"
                 >
                   Short Introduction
                 </label>
@@ -328,7 +323,7 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                     if (validationError) setValidationError(null);
                   }}
                   placeholder="e.g. I design digital experiences that help brands communicate, connect and grow."
-                  className="w-full text-sm sm:text-base font-light text-[#1A1A1B] bg-white border border-[#E5E5E1] rounded-[2px] px-4 py-3 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD] transition-all duration-200 placeholder:text-[#849693]/40 shadow-[0_1px_2px_rgba(0,0,0,0.02)] resize-none"
+                  className="w-full text-sm sm:text-base font-light text-[#243838] bg-white border border-[#D5E6E5] rounded-2xl px-4 py-3 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD] transition-all duration-200 placeholder:text-[#6E8887]/40 shadow-[0_8px_24px_rgba(109,174,173,0.08)] resize-none"
                 />
               </div>
 
@@ -339,13 +334,13 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                 </div>
               )}
 
-              <div className="w-full flex items-center justify-between pt-4 border-t border-[#E5E5E1]/60">
+              <div className="w-full flex items-center justify-between pt-4 border-t border-[#D5E6E5]/60">
                 <Button
                   id="setup-step2-back-button"
                   type="button"
                   variant="outline"
                   onClick={() => setStep(1)}
-                  leftIcon={<ArrowLeft className="w-4 h-4 mr-1 text-[#708595]" />}
+                  leftIcon={<ArrowLeft className="w-4 h-4 mr-1 text-[#5C7372]" />}
                 >
                   Back
                 </Button>
@@ -375,15 +370,15 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
               transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
               className="w-full flex flex-col items-start text-left"
             >
-              <span className="font-support text-[11px] uppercase tracking-[0.18em] text-[#708595] mb-2.5">
+              <span className="font-support text-[11px] uppercase tracking-[0.18em] text-[#5C7372] mb-2.5">
                 Stage 03 &mdash; Presence
               </span>
 
-              <h1 className="text-3xl sm:text-4xl md:text-[46px] font-light md:font-[300] leading-[1.12] tracking-[-0.04em] text-[#1A1A1B] mb-3">
+              <h1 className="text-3xl sm:text-4xl md:text-[46px] font-bold leading-[1.08] tracking-[-0.045em] text-[#243838] mb-3">
                 Where can people find you?
               </h1>
 
-              <p className="text-base text-[#708595] mb-6 font-normal">
+              <p className="text-base text-[#5C7372] mb-6 font-normal">
                 Add the channels through which collaborators or clients can reach you.
               </p>
 
@@ -392,7 +387,7 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                 <div className="sm:col-span-2">
                   <label
                     htmlFor="contact-email-input"
-                    className="block text-xs uppercase tracking-[0.1em] font-medium text-[#708595] mb-1.5 font-support"
+                    className="block text-xs uppercase tracking-[0.1em] font-medium text-[#5C7372] mb-1.5 font-support"
                   >
                     Primary Contact Email *
                   </label>
@@ -406,9 +401,9 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                         if (validationError) setValidationError(null);
                       }}
                       placeholder="hello@example.com"
-                      className="w-full text-sm font-light text-[#1A1A1B] bg-white border border-[#E5E5E1] rounded-[2px] pl-10 pr-4 py-2.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD]"
+                      className="w-full text-sm font-light text-[#243838] bg-white border border-[#D5E6E5] rounded-2xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD]"
                     />
-                    <Mail className="w-4 h-4 text-[#849693] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <Mail className="w-4 h-4 text-[#6E8887] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   </div>
                 </div>
 
@@ -416,7 +411,7 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                 <div>
                   <label
                     htmlFor="website-input"
-                    className="block text-xs uppercase tracking-[0.1em] font-medium text-[#708595] mb-1.5 font-support"
+                    className="block text-xs uppercase tracking-[0.1em] font-medium text-[#5C7372] mb-1.5 font-support"
                   >
                     Personal Website
                   </label>
@@ -427,9 +422,9 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                       value={website}
                       onChange={(e) => setWebsite(e.target.value)}
                       placeholder="https://..."
-                      className="w-full text-sm font-light text-[#1A1A1B] bg-white border border-[#E5E5E1] rounded-[2px] pl-10 pr-4 py-2.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD]"
+                      className="w-full text-sm font-light text-[#243838] bg-white border border-[#D5E6E5] rounded-2xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD]"
                     />
-                    <Globe className="w-4 h-4 text-[#849693] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <Globe className="w-4 h-4 text-[#6E8887] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   </div>
                 </div>
 
@@ -437,7 +432,7 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                 <div>
                   <label
                     htmlFor="linkedin-input"
-                    className="block text-xs uppercase tracking-[0.1em] font-medium text-[#708595] mb-1.5 font-support"
+                    className="block text-xs uppercase tracking-[0.1em] font-medium text-[#5C7372] mb-1.5 font-support"
                   >
                     LinkedIn
                   </label>
@@ -448,9 +443,9 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                       value={linkedin}
                       onChange={(e) => setLinkedin(e.target.value)}
                       placeholder="linkedin.com/in/..."
-                      className="w-full text-sm font-light text-[#1A1A1B] bg-white border border-[#E5E5E1] rounded-[2px] pl-10 pr-4 py-2.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD]"
+                      className="w-full text-sm font-light text-[#243838] bg-white border border-[#D5E6E5] rounded-2xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD]"
                     />
-                    <Linkedin className="w-4 h-4 text-[#849693] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <Linkedin className="w-4 h-4 text-[#6E8887] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   </div>
                 </div>
 
@@ -458,7 +453,7 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                 <div>
                   <label
                     htmlFor="github-input"
-                    className="block text-xs uppercase tracking-[0.1em] font-medium text-[#708595] mb-1.5 font-support"
+                    className="block text-xs uppercase tracking-[0.1em] font-medium text-[#5C7372] mb-1.5 font-support"
                   >
                     GitHub
                   </label>
@@ -469,9 +464,9 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                       value={github}
                       onChange={(e) => setGithub(e.target.value)}
                       placeholder="github.com/..."
-                      className="w-full text-sm font-light text-[#1A1A1B] bg-white border border-[#E5E5E1] rounded-[2px] pl-10 pr-4 py-2.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD]"
+                      className="w-full text-sm font-light text-[#243838] bg-white border border-[#D5E6E5] rounded-2xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD]"
                     />
-                    <Github className="w-4 h-4 text-[#849693] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <Github className="w-4 h-4 text-[#6E8887] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   </div>
                 </div>
 
@@ -479,7 +474,7 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                 <div>
                   <label
                     htmlFor="instagram-input"
-                    className="block text-xs uppercase tracking-[0.1em] font-medium text-[#708595] mb-1.5 font-support"
+                    className="block text-xs uppercase tracking-[0.1em] font-medium text-[#5C7372] mb-1.5 font-support"
                   >
                     Instagram
                   </label>
@@ -490,9 +485,9 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                       value={instagram}
                       onChange={(e) => setInstagram(e.target.value)}
                       placeholder="instagram.com/..."
-                      className="w-full text-sm font-light text-[#1A1A1B] bg-white border border-[#E5E5E1] rounded-[2px] pl-10 pr-4 py-2.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD]"
+                      className="w-full text-sm font-light text-[#243838] bg-white border border-[#D5E6E5] rounded-2xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD]"
                     />
-                    <Instagram className="w-4 h-4 text-[#849693] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <Instagram className="w-4 h-4 text-[#6E8887] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   </div>
                 </div>
 
@@ -500,7 +495,7 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                 <div>
                   <label
                     htmlFor="twitter-input"
-                    className="block text-xs uppercase tracking-[0.1em] font-medium text-[#708595] mb-1.5 font-support"
+                    className="block text-xs uppercase tracking-[0.1em] font-medium text-[#5C7372] mb-1.5 font-support"
                   >
                     X / Twitter
                   </label>
@@ -511,9 +506,9 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                       value={twitter}
                       onChange={(e) => setTwitter(e.target.value)}
                       placeholder="x.com/..."
-                      className="w-full text-sm font-light text-[#1A1A1B] bg-white border border-[#E5E5E1] rounded-[2px] pl-10 pr-4 py-2.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD]"
+                      className="w-full text-sm font-light text-[#243838] bg-white border border-[#D5E6E5] rounded-2xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD]"
                     />
-                    <Twitter className="w-4 h-4 text-[#849693] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <Twitter className="w-4 h-4 text-[#6E8887] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   </div>
                 </div>
 
@@ -521,7 +516,7 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                 <div>
                   <label
                     htmlFor="other-link-input"
-                    className="block text-xs uppercase tracking-[0.1em] font-medium text-[#708595] mb-1.5 font-support"
+                    className="block text-xs uppercase tracking-[0.1em] font-medium text-[#5C7372] mb-1.5 font-support"
                   >
                     Other Link
                   </label>
@@ -532,9 +527,9 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                       value={other}
                       onChange={(e) => setOther(e.target.value)}
                       placeholder="https://..."
-                      className="w-full text-sm font-light text-[#1A1A1B] bg-white border border-[#E5E5E1] rounded-[2px] pl-10 pr-4 py-2.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD]"
+                      className="w-full text-sm font-light text-[#243838] bg-white border border-[#D5E6E5] rounded-2xl pl-10 pr-4 py-2.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD]"
                     />
-                    <LinkIcon className="w-4 h-4 text-[#849693] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <LinkIcon className="w-4 h-4 text-[#6E8887] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   </div>
                 </div>
               </div>
@@ -546,13 +541,13 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                 </div>
               )}
 
-              <div className="w-full flex items-center justify-between pt-4 border-t border-[#E5E5E1]/60">
+              <div className="w-full flex items-center justify-between pt-4 border-t border-[#D5E6E5]/60">
                 <Button
                   id="setup-step3-back-button"
                   type="button"
                   variant="outline"
                   onClick={() => setStep(2)}
-                  leftIcon={<ArrowLeft className="w-4 h-4 mr-1 text-[#708595]" />}
+                  leftIcon={<ArrowLeft className="w-4 h-4 mr-1 text-[#5C7372]" />}
                 >
                   Back
                 </Button>
@@ -582,21 +577,21 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
               transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
               className="w-full flex flex-col items-start text-left"
             >
-              <span className="font-support text-[11px] uppercase tracking-[0.18em] text-[#708595] mb-2.5">
+              <span className="font-support text-[11px] uppercase tracking-[0.18em] text-[#5C7372] mb-2.5">
                 Stage 04 &mdash; Presentation
               </span>
 
-              <h1 className="text-3xl sm:text-4xl md:text-[46px] font-light md:font-[300] leading-[1.12] tracking-[-0.04em] text-[#1A1A1B] mb-3">
+              <h1 className="text-3xl sm:text-4xl md:text-[46px] font-bold leading-[1.08] tracking-[-0.045em] text-[#243838] mb-3">
                 How would you like to be presented?
               </h1>
 
-              <p className="text-base text-[#708595] mb-6 font-normal">
+              <p className="text-base text-[#5C7372] mb-6 font-normal">
                 Choose your availability status and portfolio style preset.
               </p>
 
               {/* Availability Options */}
               <div className="w-full mb-8">
-                <label className="block text-xs uppercase tracking-[0.1em] font-medium text-[#708595] mb-2.5 font-support">
+                <label className="block text-xs uppercase tracking-[0.1em] font-medium text-[#5C7372] mb-2.5 font-support">
                   Availability Status
                 </label>
                 <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -608,19 +603,19 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                         type="button"
                         id={`availability-opt-${opt.id.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}
                         onClick={() => setAvailability(opt.id)}
-                        className={`p-3 text-left border rounded-[2px] transition-all duration-200 select-none flex flex-col justify-between ${
+                        className={`p-3 text-left border rounded-2xl transition-all duration-200 select-none flex flex-col justify-between ${
                           isSelected
                             ? "bg-white border-[#6DAEAD] ring-1 ring-[#6DAEAD] shadow-[0_1px_6px_rgba(109,174,173,0.12)]"
-                            : "bg-white/80 border-[#E5E5E1] hover:border-[#708595]/50 hover:bg-white"
+                            : "bg-white/80 border-[#D5E6E5] hover:border-[#5C7372]/50 hover:bg-white"
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-medium text-[#1A1A1B]">
+                          <span className="text-xs font-medium text-[#243838]">
                             {opt.label}
                           </span>
                           {isSelected && <Check className="w-3 h-3 text-[#6DAEAD]" />}
                         </div>
-                        <span className="text-[11px] text-[#708595] font-normal leading-snug">
+                        <span className="text-[11px] text-[#5C7372] font-normal leading-snug">
                           {opt.desc}
                         </span>
                       </button>
@@ -631,7 +626,7 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
 
               {/* Style Preset Selector */}
               <div className="w-full mb-8">
-                <label className="block text-xs uppercase tracking-[0.1em] font-medium text-[#708595] mb-2.5 font-support">
+                <label className="block text-xs uppercase tracking-[0.1em] font-medium text-[#5C7372] mb-2.5 font-support">
                   Style Preset
                 </label>
                 <StylePresetSelector
@@ -641,20 +636,20 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
               </div>
 
               {submissionError && (
-                <div className="w-full p-3.5 mb-6 bg-[#FFF5F5] border border-[#FED7D7] rounded-[2px] text-xs text-[#B93838] flex items-center gap-2">
+                <div className="w-full p-3.5 mb-6 bg-[#FFF5F5] border border-[#FED7D7] rounded-2xl text-xs text-[#B93838] flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{submissionError}</span>
                 </div>
               )}
 
-              <div className="w-full flex items-center justify-between pt-4 border-t border-[#E5E5E1]/60 gap-3">
+              <div className="w-full flex items-center justify-between pt-4 border-t border-[#D5E6E5]/60 gap-3">
                 <Button
                   id="setup-step4-back-button"
                   type="button"
                   variant="outline"
                   onClick={() => setStep(3)}
                   disabled={isSubmitting}
-                  leftIcon={<ArrowLeft className="w-4 h-4 mr-1 text-[#708595]" />}
+                  leftIcon={<ArrowLeft className="w-4 h-4 mr-1 text-[#5C7372]" />}
                 >
                   Back
                 </Button>
@@ -665,7 +660,7 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
                   size="lg"
                   isLoading={isSubmitting}
                   disabled={isSubmitting}
-                  rightIcon={<Sparkles className="w-4 h-4 ml-1.5 text-[#94CEBB]" />}
+                  rightIcon={<ArrowRight className="ml-1 h-4 w-4" />}
                   className="min-w-[190px]"
                 >
                   Create portfolio
@@ -677,7 +672,7 @@ export const PortfolioSetup: React.FC<PortfolioSetupProps> = ({
       </main>
 
       {/* Legal Footer */}
-      <footer className="w-full max-w-4xl flex flex-col sm:flex-row items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-[0.12em] text-[#849693] pt-6 border-t border-[#E5E5E1] gap-3">
+      <footer className="w-full max-w-4xl flex flex-col sm:flex-row items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-[0.12em] text-[#6E8887] pt-6 border-t border-[#D5E6E5] gap-3">
         <div>&copy; 2024 BroadBrand. All Rights Reserved.</div>
         <div className="font-support">{brand.endorsement}</div>
       </footer>

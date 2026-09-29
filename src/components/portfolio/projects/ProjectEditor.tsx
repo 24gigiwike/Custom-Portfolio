@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from "react";
-import { motion } from "motion/react";
+import React, { useState } from "react";
 import {
   ArrowLeft,
   Save,
@@ -7,7 +6,6 @@ import {
   Loader2,
   AlertCircle,
   Trash2,
-  ExternalLink,
 } from "lucide-react";
 import { ProjectForm, type ProjectFormData } from "./ProjectForm";
 import { DeleteProjectDialog } from "./DeleteProjectDialog";
@@ -248,27 +246,23 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
   return (
     <div
       id="project-editor-view"
-      className="min-h-screen bg-[#FBFBFB] text-[#1A1A1B] flex flex-col font-sans selection:bg-[#6DAEAD]/20"
+      className="flex min-h-screen flex-col bg-[#F3FAF9] font-sans text-[#243838] selection:bg-[#6DAEAD]/25"
     >
-      {/* Foundation Line Accent */}
-      <div className="h-1 w-full bg-[#6DAEAD]" />
-
-      {/* Sticky Header Bar */}
-      <header className="sticky top-0 z-30 bg-[#FBFBFB]/95 backdrop-blur-md border-b border-[#E5E5E1] px-4 sm:px-8 py-3.5 flex items-center justify-between transition-all">
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-[#D5E6E5]/80 bg-white/75 px-4 py-3.5 backdrop-blur-xl sm:px-8">
         <div className="flex items-center gap-3">
           <button
             type="button"
             id="editor-back-to-projects-btn"
             onClick={handleBackClick}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-[#708595] hover:text-[#1A1A1B] px-2.5 py-1.5 rounded-[2px] border border-transparent hover:border-[#E5E5E1] transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-bold text-[#3E7574] transition-colors hover:bg-[#E7F4F3] hover:text-[#243838]"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Work</span>
           </button>
 
-          <span className="text-[#E5E5E1] text-xs">/</span>
+          <span className="text-xs text-[#B7D4D2]">/</span>
 
-          <span className="text-xs font-medium text-[#1A1A1B] truncate max-w-[200px] sm:max-w-xs">
+          <span className="max-w-[200px] truncate text-sm font-bold text-[#243838] sm:max-w-xs">
             {formData.title || (isCreating ? "New Project" : "Edit Project")}
           </span>
         </div>
@@ -276,24 +270,24 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
         {/* Action Controls */}
         <div className="flex items-center gap-3">
           {/* Status Indicator */}
-          <div className="hidden sm:flex items-center text-xs font-mono">
+          <div className="hidden items-center text-xs sm:flex">
             {isSaving && (
-              <span className="text-[#708595] flex items-center gap-1.5">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#6DAEAD]" />
+              <span className="flex items-center gap-1.5 font-semibold text-[#3E7574]">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#6DAEAD]" />
                 <span>Saving...</span>
               </span>
             )}
             {!isSaving && saveStatus === "saved" && (
-              <span className="text-[#6DAEAD] flex items-center gap-1">
-                <Check className="w-3.5 h-3.5" />
+              <span className="flex items-center gap-1 font-semibold text-[#2F7D62]">
+                <Check className="h-3.5 w-3.5" />
                 <span>Saved</span>
               </span>
             )}
             {!isSaving && saveStatus === "idle" && hasUnsavedChanges && (
-              <span className="text-[#849693]">Unsaved changes</span>
+              <span className="font-semibold text-[#5C7372]">Unsaved changes</span>
             )}
             {!isSaving && saveStatus === "idle" && !hasUnsavedChanges && !isCreating && (
-              <span className="text-[#849693]/70">Up to date</span>
+              <span className="font-semibold text-[#8AADAC]">Up to date</span>
             )}
           </div>
 
@@ -302,7 +296,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
               type="button"
               id="editor-delete-project-btn"
               onClick={() => setShowDeleteModal(true)}
-              className="p-2 text-[#849693] hover:text-[#B91C1C] hover:bg-[#FEF2F2] rounded-[2px] border border-transparent hover:border-[#FEE2E2] transition-colors"
+              className="rounded-xl p-2 text-[#6E8887] transition-colors hover:bg-[#FFF6F6] hover:text-[#B93838]"
               title="Delete project"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -315,7 +309,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
             size="sm"
             isLoading={isSaving}
             onClick={handleSave}
-            className="inline-flex items-center gap-1.5 text-xs bg-[#1A1A1B] text-white hover:bg-[#6DAEAD] transition-colors rounded-[2px]"
+            className="inline-flex items-center gap-1.5"
           >
             <Save className="w-3.5 h-3.5" />
             <span>Save project</span>
@@ -324,24 +318,22 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
       </header>
 
       {/* Main Form Content */}
-      <main className="flex-1 w-full max-w-4xl mx-auto px-4 sm:px-8 py-8 sm:py-12">
-        {/* Editorial Sub-Header */}
-        <div className="mb-8 pb-6 border-b border-[#E5E5E1]/70">
-          <span className="font-support text-[11px] uppercase tracking-[0.18em] text-[#708595] block mb-1.5">
-            {isCreating ? "New Project Entry" : "Project Editor"}
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-8 sm:py-12">
+        <div className="mb-8">
+          <span className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">
+            {isCreating ? "New project" : "Project editor"}
           </span>
-          <h1 className="text-2xl sm:text-3xl font-normal text-[#1A1A1B] tracking-[-0.03em] font-serif">
-            {isCreating ? "Add Project" : "Edit Project Details"}
+          <h1 className="text-4xl font-bold tracking-[-0.045em] text-[#243838] sm:text-5xl">
+            {isCreating ? "Add project" : "Edit project"}
           </h1>
-          <p className="text-xs text-[#708595] font-light mt-1.5">
+          <p className="mt-2 text-sm font-medium text-[#5C7372]">
             Structure your project overview, narrative, assets, and metadata.
           </p>
         </div>
 
-        {/* Global Error Banner */}
         {errorMessage && (
-          <div className="mb-6 p-4 bg-[#FEF2F2] border border-[#FEE2E2] rounded-[2px] text-xs text-[#B91C1C] flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <div className="mb-6 flex items-center gap-2 rounded-2xl border border-[#F3C7C7] bg-[#FFF6F6] p-4 text-sm font-medium text-[#B93838]">
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
             <span>{errorMessage}</span>
           </div>
         )}

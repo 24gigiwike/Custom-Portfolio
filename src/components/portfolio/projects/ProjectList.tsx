@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import {
   Plus,
   ArrowLeft,
   Briefcase,
-  Layers,
-  Sparkles,
   Loader2,
   AlertCircle,
 } from "lucide-react";
@@ -124,123 +122,68 @@ export const ProjectList: React.FC<ProjectListProps> = ({
   const featuredCount = projects.filter((p) => p.featured).length;
 
   return (
-    <div
-      id="projects-management-view"
-      className="min-h-screen bg-[#FBFBFB] text-[#1A1A1B] flex flex-col font-sans selection:bg-[#6DAEAD]/20"
-    >
-      {/* Foundation Line Accent */}
-      <div className="h-1 w-full bg-[#6DAEAD]" />
-
-      {/* Top Header Bar */}
-      <header className="sticky top-0 z-30 bg-[#FBFBFB]/95 backdrop-blur-md border-b border-[#E5E5E1] px-4 sm:px-8 py-3.5 flex items-center justify-between transition-all">
-        <div className="flex items-center gap-3">
+    <div id="projects-management-view" className="text-[#243838]">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
           <button
             type="button"
             id="back-to-workspace-btn"
             onClick={onBackToWorkspace}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-[#708595] hover:text-[#1A1A1B] px-2.5 py-1.5 rounded-[2px] border border-transparent hover:border-[#E5E5E1] transition-colors"
+            className="mb-3 inline-flex items-center gap-1.5 text-sm font-bold text-[#3E7574] hover:text-[#243838]"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Workspace</span>
+            <ArrowLeft className="h-4 w-4" />
+            Overview
           </button>
-
-          <span className="text-[#E5E5E1] text-xs">/</span>
-
-          <div className="flex items-center gap-2">
-            <span className="font-support text-[11px] uppercase tracking-[0.14em] text-[#708595] font-medium">
-              Work
-            </span>
-          </div>
+          <h1 className="text-4xl font-bold tracking-[-0.045em] sm:text-5xl">Work</h1>
         </div>
+        <div className="flex items-center gap-3 text-sm font-semibold text-[#5C7372]">
+          <span>
+            {projects.length} {projects.length === 1 ? "project" : "projects"}
+          </span>
+          {featuredCount > 0 && <span className="text-[#3E7574]">1 featured</span>}
+        </div>
+      </div>
 
-        <div className="flex items-center gap-3">
+      {error && (
+        <div className="mb-6 flex items-center gap-2 rounded-2xl border border-[#F3C7C7] bg-[#FFF6F6] p-4 text-sm font-medium text-[#B93838]">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <Loader2 className="mb-3 h-6 w-6 animate-spin text-[#6DAEAD]" />
+          <p className="text-sm font-semibold text-[#5C7372]">Loading your work...</p>
+        </div>
+      ) : projects.length === 0 ? (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="rounded-[28px] bg-[#6DAEAD] px-6 py-16 text-center text-white sm:py-20"
+        >
+          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15">
+            <Briefcase className="h-5 w-5" />
+          </div>
+          <h2 className="text-3xl font-bold tracking-[-0.04em]">Show your work.</h2>
+          <p className="mx-auto mt-3 max-w-sm text-sm font-medium leading-relaxed text-white/85">
+            Add the projects, experiences and work you're proud of.
+          </p>
           <Button
-            id="add-project-header-button"
-            variant="primary"
-            size="sm"
+            id="empty-state-add-project-btn"
+            variant="secondary"
+            size="md"
             onClick={onAddProject}
-            className="inline-flex items-center gap-1.5 text-xs bg-[#1A1A1B] text-white hover:bg-[#6DAEAD] transition-colors rounded-[2px]"
+            className="mt-8 bg-white text-[#2F6463] hover:bg-[#F4FBFA]"
+            leftIcon={<Plus className="h-4 w-4" />}
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add project</span>
+            Add project
           </Button>
-        </div>
-      </header>
-
-      {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-8 py-8 sm:py-12">
-        {/* Editorial Sub-Header */}
-        <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-[#E5E5E1]/70">
-          <div>
-            <span className="font-support text-[11px] uppercase tracking-[0.18em] text-[#708595] block mb-1.5">
-              Portfolio Content
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-normal text-[#1A1A1B] tracking-[-0.03em] font-serif">
-              Work & Projects
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-3 text-xs text-[#849693]">
-            <span className="font-mono">
-              {projects.length} {projects.length === 1 ? "project" : "projects"}
-            </span>
-            {featuredCount > 0 && (
-              <>
-                <span>•</span>
-                <span className="text-[#689AA1] font-medium">1 featured</span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Error Alert */}
-        {error && (
-          <div className="mb-6 p-4 bg-[#FEF2F2] border border-[#FEE2E2] rounded-[2px] text-xs text-[#B91C1C] flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* Loading State */}
-        {isLoading ? (
-          <div className="py-24 flex flex-col items-center justify-center text-center">
-            <Loader2 className="w-6 h-6 animate-spin text-[#6DAEAD] mb-3" />
-            <p className="text-xs text-[#708595] font-light">Loading your work...</p>
-          </div>
-        ) : projects.length === 0 ? (
-          /* Empty State */
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="py-16 sm:py-24 px-6 bg-white border border-[#E5E5E1] rounded-[2px] text-center max-w-xl mx-auto shadow-[0_1px_3px_rgba(0,0,0,0.02)]"
-          >
-            <div className="w-12 h-12 mx-auto rounded-full bg-[#F8F8F7] border border-[#E5E5E1] flex items-center justify-center text-[#708595] mb-5">
-              <Briefcase className="w-5 h-5" />
-            </div>
-
-            <h2 className="text-xl sm:text-2xl font-normal text-[#1A1A1B] tracking-[-0.02em] font-serif mb-2">
-              Show your work.
-            </h2>
-
-            <p className="text-sm text-[#708595] font-light leading-relaxed max-w-sm mx-auto mb-8">
-              Add the projects, experiences and work you're proud of.
-            </p>
-
-            <Button
-              id="empty-state-add-project-btn"
-              variant="primary"
-              size="md"
-              onClick={onAddProject}
-              className="inline-flex items-center gap-2 bg-[#1A1A1B] text-white hover:bg-[#6DAEAD] transition-colors rounded-[2px]"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add project</span>
-            </Button>
-          </motion.div>
-        ) : (
-          /* Project List */
-          <div className="space-y-3">
+        </motion.div>
+      ) : (
+        <div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {projects.map((proj, idx) => (
               <ProjectCard
                 key={proj.id}
@@ -254,24 +197,21 @@ export const ProjectList: React.FC<ProjectListProps> = ({
                 onToggleFeatured={handleToggleFeatured}
               />
             ))}
-
-            {/* Bottom Add Project Row */}
-            <div className="pt-6 flex justify-center">
-              <button
-                type="button"
-                id="bottom-add-project-btn"
-                onClick={onAddProject}
-                className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-medium text-[#708595] hover:text-[#1A1A1B] bg-white border border-dashed border-[#E5E5E1] hover:border-[#6DAEAD] rounded-[2px] transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add another project</span>
-              </button>
-            </div>
           </div>
-        )}
-      </main>
+          <div className="flex justify-center pt-6">
+            <button
+              type="button"
+              id="bottom-add-project-btn"
+              onClick={onAddProject}
+              className="inline-flex items-center gap-2 rounded-xl border border-dashed border-[#B7D4D2] bg-white px-5 py-3 text-sm font-bold text-[#3E7574] hover:border-[#6DAEAD]"
+            >
+              <Plus className="h-4 w-4" />
+              Add another project
+            </button>
+          </div>
+        </div>
+      )}
 
-      {/* Delete Confirmation Modal */}
       <DeleteProjectDialog
         isOpen={Boolean(projectToDelete)}
         projectTitle={projectToDelete?.title || ""}

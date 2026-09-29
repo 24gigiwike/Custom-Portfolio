@@ -439,24 +439,24 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
   return (
     <section
       id="project-media-section"
-      className="bg-white border border-[#E5E5E1] rounded-[2px] p-6 sm:p-8 shadow-[0_1px_3px_rgba(0,0,0,0.02)]"
+      className="bg-white border border-[#D5E6E5] rounded-2xl p-6 sm:p-8 shadow-[0_12px_32px_rgba(109,174,173,0.08)]"
     >
-      <div className="flex items-baseline justify-between pb-4 mb-6 border-b border-[#E5E5E1]/70">
+      <div className="flex items-baseline justify-between pb-4 mb-6 border-b border-[#D5E6E5]/70">
         <div>
-          <span className="font-support text-[11px] uppercase tracking-[0.15em] text-[#708595] block mb-1">
+          <span className="font-support text-[11px] uppercase tracking-[0.15em] text-[#5C7372] block mb-1">
             04 / Media
           </span>
-          <h2 className="text-lg font-medium text-[#1A1A1B] tracking-[-0.02em]">
+          <h2 className="text-lg font-medium text-[#243838] tracking-[-0.02em]">
             Visual Imagery & Gallery
           </h2>
         </div>
-        <span className="font-support text-[10px] uppercase tracking-[0.12em] text-[#849693]">
+        <span className="font-support text-[10px] uppercase tracking-[0.12em] text-[#6E8887]">
           Visual Assets
         </span>
       </div>
 
       {mediaError && (
-        <div className="mb-6 p-3 bg-[#FEF2F2] border border-[#FEE2E2] rounded-[2px] text-xs text-[#B91C1C] flex items-center justify-between gap-2">
+        <div className="mb-6 p-3 bg-[#FFF6F6] border border-[#F3C7C7] rounded-2xl text-xs text-[#B93838] flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{mediaError}</span>
@@ -464,7 +464,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
           <button
             type="button"
             onClick={() => setMediaError(null)}
-            className="text-[#B91C1C] hover:opacity-80 p-0.5"
+            className="text-[#B93838] hover:opacity-80 p-0.5"
             aria-label="Dismiss error"
           >
             <X className="w-3.5 h-3.5" />
@@ -476,10 +476,10 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
        * COVER IMAGE SECTION
        * --------------------------------------------------------------- */}
       <div className="mb-8">
-        <label className="font-support text-[11px] uppercase tracking-[0.14em] text-[#708595] block mb-2">
+        <label className="font-support text-[11px] uppercase tracking-[0.14em] text-[#5C7372] block mb-2">
           Primary Cover Image
         </label>
-        <p className="text-xs text-[#849693] font-light mb-4">
+        <p className="text-xs text-[#6E8887] font-light mb-4">
           The main image displayed on project cards and editorial hero layouts.
         </p>
 
@@ -487,7 +487,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
           {/* Cover Preview Card */}
           <div className="sm:col-span-1">
             {displayCover ? (
-              <div className="relative group rounded-[2px] border border-[#E5E5E1] overflow-hidden bg-[#F8F8F7] aspect-[4/3] flex items-center justify-center">
+              <div className="relative group rounded-2xl border border-[#D5E6E5] overflow-hidden bg-[#F7FBFA] aspect-[4/3] flex items-center justify-center">
                 <img
                   src={displayCover}
                   alt="Project cover preview"
@@ -497,7 +497,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
 
                 {/* Uploading progress overlay */}
                 {isCoverActive && (
-                  <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center p-4 text-center text-white">
+                  <div className="absolute inset-0 bg-[#243838]/60 backdrop-blur-[2px] flex flex-col items-center justify-center p-4 text-center text-white">
                     <Loader2 className="w-5 h-5 animate-spin text-[#94CEBB] mb-2" />
                     <span className="font-mono text-xs font-medium text-white mb-1">
                       {coverUploadState.statusText || "Preparing..."}
@@ -515,14 +515,14 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
 
                 {/* Error overlay */}
                 {coverUploadState.error && !isCoverActive && (
-                  <div className="absolute inset-0 bg-[#7F1D1D]/80 backdrop-blur-[1px] flex flex-col items-center justify-center p-3 text-center text-white">
+                  <div className="absolute inset-0 bg-[#8C3030]/85 backdrop-blur-[1px] flex flex-col items-center justify-center p-3 text-center text-white">
                     <AlertCircle className="w-4 h-4 text-white mb-1" />
                     <span className="text-[11px] leading-tight mb-2">Upload failed</span>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={handleRetryCoverUpload}
-                        className="inline-flex items-center gap-1 text-[10px] font-medium bg-white text-[#7F1D1D] px-2 py-1 rounded-[2px] hover:bg-white/90"
+                        className="inline-flex items-center gap-1 text-[10px] font-medium bg-white text-[#7F1D1D] px-2 py-1 rounded-2xl hover:bg-white/90"
                       >
                         <RotateCcw className="w-3 h-3" />
                         <span>Retry</span>
@@ -544,17 +544,17 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
                     type="button"
                     aria-label="Remove cover image"
                     onClick={handleRemoveCover}
-                    className="absolute top-2 right-2 p-1 bg-black/60 hover:bg-black text-white rounded-[2px] opacity-90 transition-opacity"
+                    className="absolute top-2 right-2 p-1 bg-[#243838]/60 hover:bg-black text-white rounded-2xl opacity-90 transition-opacity"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
             ) : (
-              <div className="rounded-[2px] border border-dashed border-[#E5E5E1] bg-[#F8F8F7] aspect-[4/3] flex flex-col items-center justify-center p-4 text-center">
-                <ImageIcon className="w-6 h-6 text-[#849693]/60 mb-2" />
-                <span className="text-xs text-[#708595] font-medium">No cover image</span>
-                <span className="text-[10px] text-[#849693] font-light mt-0.5">
+              <div className="rounded-2xl border border-dashed border-[#D5E6E5] bg-[#F7FBFA] aspect-[4/3] flex flex-col items-center justify-center p-4 text-center">
+                <ImageIcon className="w-6 h-6 text-[#6E8887]/60 mb-2" />
+                <span className="text-xs text-[#5C7372] font-medium">No cover image</span>
+                <span className="text-[10px] text-[#6E8887] font-light mt-0.5">
                   Subtle neutral placeholder will be used
                 </span>
               </div>
@@ -578,12 +578,12 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
                 id="upload-cover-button"
                 disabled={isCoverActive}
                 onClick={() => coverFileInputRef.current?.click()}
-                className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-[#1A1A1B] bg-white border border-[#E5E5E1] hover:border-[#6DAEAD] rounded-[2px] transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-[#243838] bg-white border border-[#D5E6E5] hover:border-[#6DAEAD] rounded-2xl transition-colors disabled:opacity-50"
               >
                 {isCoverActive ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-[#6DAEAD]" />
                 ) : (
-                  <UploadCloud className="w-3.5 h-3.5 text-[#708595]" />
+                  <UploadCloud className="w-3.5 h-3.5 text-[#5C7372]" />
                 )}
                 <span>{isCoverActive ? "Uploading..." : "Upload image file"}</span>
               </button>
@@ -592,7 +592,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
                 type="button"
                 id="toggle-cover-url-button"
                 onClick={() => setShowCoverUrlInput(!showCoverUrlInput)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-[#708595] hover:text-[#1A1A1B] transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-[#5C7372] hover:text-[#243838] transition-colors"
               >
                 <LinkIcon className="w-3.5 h-3.5" />
                 <span>{showCoverUrlInput ? "Hide image URL" : "Enter image URL"}</span>
@@ -607,9 +607,9 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
                   value={coverImage || ""}
                   onChange={(e) => onCoverImageChange(e.target.value.trim() || null)}
                   placeholder="https://..."
-                  className="w-full text-xs font-mono px-3 py-2 bg-[#F8F8F7] border border-[#E5E5E1] rounded-[2px] text-[#1A1A1B] placeholder:text-[#849693]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors"
+                  className="w-full text-xs font-mono px-3 py-2 bg-[#F7FBFA] border border-[#D5E6E5] rounded-2xl text-[#243838] placeholder:text-[#6E8887]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors"
                 />
-                <span className="font-support text-[10px] text-[#849693] mt-1 block">
+                <span className="font-support text-[10px] text-[#6E8887] mt-1 block">
                   Accepts direct links (JPG, PNG, WEBP)
                 </span>
               </div>
@@ -621,9 +621,9 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
       {/* ---------------------------------------------------------------
        * GALLERY SECTION
        * --------------------------------------------------------------- */}
-      <div className="pt-6 border-t border-[#E5E5E1]/70">
+      <div className="pt-6 border-t border-[#D5E6E5]/70">
         <div className="flex items-baseline justify-between mb-2">
-          <label className="font-support text-[11px] uppercase tracking-[0.14em] text-[#708595] block">
+          <label className="font-support text-[11px] uppercase tracking-[0.14em] text-[#5C7372] block">
             Project Gallery
           </label>
           <div className="flex items-center gap-3">
@@ -633,12 +633,12 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
                 <span>Uploading {uploadingGalleryCount} item{uploadingGalleryCount > 1 ? "s" : ""}</span>
               </span>
             )}
-            <span className="text-[11px] font-mono text-[#849693]">
+            <span className="text-[11px] font-mono text-[#6E8887]">
               {galleryItems.length} {galleryItems.length === 1 ? "image" : "images"}
             </span>
           </div>
         </div>
-        <p className="text-xs text-[#849693] font-light mb-4">
+        <p className="text-xs text-[#6E8887] font-light mb-4">
           Supplementary visuals, interface screens, photography, or case study media.
         </p>
 
@@ -653,7 +653,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
               return (
                 <div
                   key={item.id}
-                  className="relative group rounded-[2px] border border-[#E5E5E1] overflow-hidden bg-[#F8F8F7] aspect-[4/3] flex items-center justify-center"
+                  className="relative group rounded-2xl border border-[#D5E6E5] overflow-hidden bg-[#F7FBFA] aspect-[4/3] flex items-center justify-center"
                 >
                   <img
                     src={item.url}
@@ -664,7 +664,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
 
                   {/* Uploading Progress Overlay */}
                   {isUploading && (
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex flex-col items-center justify-center p-2 text-center text-white">
+                    <div className="absolute inset-0 bg-[#243838]/60 backdrop-blur-[1px] flex flex-col items-center justify-center p-2 text-center text-white">
                       <Loader2 className="w-4 h-4 animate-spin text-[#94CEBB] mb-1.5" />
                       <span className="font-mono text-[10px] text-white">
                         {item.status === "optimizing"
@@ -684,7 +684,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
 
                   {/* Error Overlay */}
                   {isError && (
-                    <div className="absolute inset-0 bg-[#7F1D1D]/85 backdrop-blur-[1px] flex flex-col items-center justify-center p-2 text-center text-white">
+                    <div className="absolute inset-0 bg-[#8C3030]/85 backdrop-blur-[1px] flex flex-col items-center justify-center p-2 text-center text-white">
                       <AlertCircle className="w-3.5 h-3.5 text-white mb-1" />
                       <span className="text-[10px] font-medium leading-tight mb-1.5">
                         Upload failed
@@ -693,7 +693,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
                         <button
                           type="button"
                           onClick={() => handleRetryGalleryItem(item)}
-                          className="inline-flex items-center gap-1 text-[9px] font-medium bg-white text-[#7F1D1D] px-1.5 py-0.5 rounded-[2px] hover:bg-white/90"
+                          className="inline-flex items-center gap-1 text-[9px] font-medium bg-white text-[#7F1D1D] px-1.5 py-0.5 rounded-2xl hover:bg-white/90"
                         >
                           <RotateCcw className="w-2.5 h-2.5" />
                           <span>Retry</span>
@@ -712,13 +712,13 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
 
                   {/* Reorder and Delete Toolbar (Completed items) */}
                   {isComplete && (
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-2">
+                    <div className="absolute inset-0 bg-[#243838]/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-2">
                       <button
                         type="button"
                         aria-label={`Move image ${idx + 1} left`}
                         disabled={idx === 0}
                         onClick={() => handleMoveGalleryItem(idx, idx - 1)}
-                        className="p-1 bg-white/90 text-[#1A1A1B] rounded-[2px] hover:bg-white disabled:opacity-30 disabled:pointer-events-none"
+                        className="p-1 bg-white/90 text-[#243838] rounded-2xl hover:bg-white disabled:opacity-30 disabled:pointer-events-none"
                       >
                         <ChevronLeft className="w-3.5 h-3.5" />
                       </button>
@@ -727,7 +727,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
                         aria-label={`Move image ${idx + 1} right`}
                         disabled={idx === galleryItems.length - 1}
                         onClick={() => handleMoveGalleryItem(idx, idx + 1)}
-                        className="p-1 bg-white/90 text-[#1A1A1B] rounded-[2px] hover:bg-white disabled:opacity-30 disabled:pointer-events-none"
+                        className="p-1 bg-white/90 text-[#243838] rounded-2xl hover:bg-white disabled:opacity-30 disabled:pointer-events-none"
                       >
                         <ChevronRight className="w-3.5 h-3.5" />
                       </button>
@@ -735,7 +735,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
                         type="button"
                         aria-label={`Delete image ${idx + 1}`}
                         onClick={() => handleRemoveGalleryItem(item)}
-                        className="p-1 bg-[#B91C1C]/90 text-white rounded-[2px] hover:bg-[#B91C1C]"
+                        className="p-1 bg-[#B93838]/90 text-white rounded-2xl hover:bg-[#B93838]"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -768,12 +768,12 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
             id="upload-gallery-button"
             disabled={uploadingGalleryCount > 0}
             onClick={() => galleryFileInputRef.current?.click()}
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-[#1A1A1B] bg-white border border-[#E5E5E1] hover:border-[#6DAEAD] rounded-[2px] transition-colors disabled:opacity-60"
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-[#243838] bg-white border border-[#D5E6E5] hover:border-[#6DAEAD] rounded-2xl transition-colors disabled:opacity-60"
           >
             {uploadingGalleryCount > 0 ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-[#6DAEAD]" />
             ) : (
-              <UploadCloud className="w-3.5 h-3.5 text-[#708595]" />
+              <UploadCloud className="w-3.5 h-3.5 text-[#5C7372]" />
             )}
             <span>
               {uploadingGalleryCount > 0
@@ -786,7 +786,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
             type="button"
             id="toggle-gallery-url-button"
             onClick={() => setShowGalleryUrlInput(!showGalleryUrlInput)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-[#708595] hover:text-[#1A1A1B] transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-[#5C7372] hover:text-[#243838] transition-colors"
           >
             <LinkIcon className="w-3.5 h-3.5" />
             <span>{showGalleryUrlInput ? "Hide URL input" : "Add by URL"}</span>
@@ -801,13 +801,13 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
               value={galleryUrlValue}
               onChange={(e) => setGalleryUrlValue(e.target.value)}
               placeholder="https://..."
-              className="flex-1 text-xs font-mono px-3 py-2 bg-[#F8F8F7] border border-[#E5E5E1] rounded-[2px] text-[#1A1A1B] placeholder:text-[#849693]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors"
+              className="flex-1 text-xs font-mono px-3 py-2 bg-[#F7FBFA] border border-[#D5E6E5] rounded-2xl text-[#243838] placeholder:text-[#6E8887]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors"
             />
             <button
               type="button"
               id="add-gallery-url-submit-button"
               onClick={handleAddGalleryUrl}
-              className="px-3.5 py-2 text-xs font-medium text-white bg-[#1A1A1B] hover:bg-[#6DAEAD] rounded-[2px] transition-colors"
+              className="rounded-xl bg-[#6DAEAD] px-3.5 py-2 text-xs font-bold text-white transition-colors hover:bg-[#5A9998]"
             >
               Add
             </button>

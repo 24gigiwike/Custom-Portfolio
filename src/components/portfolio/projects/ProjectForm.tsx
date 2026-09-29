@@ -40,8 +40,8 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
   onChange,
 }) => {
   return (
-    <div className="space-y-8 max-w-4xl mx-auto pb-16">
-      {/* 01: Identity & Narrative */}
+    <div className="mx-auto grid max-w-5xl gap-6 pb-16 lg:grid-cols-12">
+      <div className="space-y-6 lg:col-span-7">
       <ProjectOverview
         title={formData.title}
         slug={formData.slug}
@@ -71,8 +71,9 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
         onServicesChange={(services) => onChange({ services })}
         onToolsChange={(tools) => onChange({ tools })}
       />
+      </div>
 
-      {/* 04: Media */}
+      <div className="space-y-6 lg:col-span-5 lg:sticky lg:top-24 lg:self-start">
       <ProjectMedia
         portfolioId={portfolioId}
         projectId={projectId}
@@ -81,8 +82,9 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
         onCoverImageChange={(coverImage) => onChange({ coverImage })}
         onImagesChange={(images) => onChange({ images })}
       />
+      </div>
 
-      {/* 05: Links */}
+      <div className="space-y-6 lg:col-span-12">
       <ProjectLinks
         projectUrl={formData.projectUrl}
         caseStudyUrl={formData.caseStudyUrl}
@@ -95,6 +97,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
         featured={formData.featured}
         onFeaturedChange={(featured) => onChange({ featured })}
       />
+      </div>
     </div>
   );
 };

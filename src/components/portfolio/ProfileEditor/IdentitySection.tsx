@@ -40,18 +40,18 @@ export const IdentitySection: React.FC<IdentitySectionProps> = ({
   return (
     <section
       id="identity-section"
-      className="bg-white border border-[#E5E5E1] rounded-[2px] p-6 sm:p-8 shadow-[0_1px_3px_rgba(0,0,0,0.02)]"
+      className="bg-white border border-[#D5E6E5] rounded-2xl p-6 sm:p-8 shadow-[0_12px_32px_rgba(109,174,173,0.08)]"
     >
-      <div className="flex items-baseline justify-between pb-4 mb-6 border-b border-[#E5E5E1]/70">
+      <div className="flex items-baseline justify-between pb-4 mb-6 border-b border-[#D5E6E5]/70">
         <div>
-          <span className="font-support text-[11px] uppercase tracking-[0.15em] text-[#708595] block mb-1">
+          <span className="font-support text-[11px] uppercase tracking-[0.15em] text-[#5C7372] block mb-1">
             01 / Identity
           </span>
-          <h2 className="text-lg font-medium text-[#1A1A1B] tracking-[-0.02em]">
+          <h2 className="text-lg font-medium text-[#243838] tracking-[-0.02em]">
             Personal & Professional Identity
           </h2>
         </div>
-        <span className="font-support text-[10px] uppercase tracking-[0.12em] text-[#849693]">
+        <span className="font-support text-[10px] uppercase tracking-[0.12em] text-[#6E8887]">
           Core Presence
         </span>
       </div>
@@ -59,7 +59,7 @@ export const IdentitySection: React.FC<IdentitySectionProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
         {/* Profile Image & Avatar Display */}
         <div className="flex flex-col items-start gap-3">
-          <label className="font-support text-[11px] uppercase tracking-[0.14em] text-[#708595] block">
+          <label className="font-support text-[11px] uppercase tracking-[0.14em] text-[#5C7372] block">
             Profile Portrait
           </label>
 
@@ -69,14 +69,14 @@ export const IdentitySection: React.FC<IdentitySectionProps> = ({
                 src={profileImage}
                 alt={title || "Profile"}
                 referrerPolicy="no-referrer"
-                className="w-24 h-24 sm:w-28 sm:h-28 rounded-[2px] border border-[#E5E5E1] object-cover shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
+                className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl border border-[#D5E6E5] object-cover shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
               />
             ) : (
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-[2px] bg-[#F8F8F7] border border-[#E5E5E1] flex flex-col items-center justify-center text-[#708595]">
-                <span className="font-mono text-xl font-medium tracking-tight text-[#1A1A1B]">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-[#F7FBFA] border border-[#D5E6E5] flex flex-col items-center justify-center text-[#5C7372]">
+                <span className="font-mono text-xl font-medium tracking-tight text-[#243838]">
                   {getInitials(title)}
                 </span>
-                <span className="font-support text-[9px] uppercase tracking-[0.12em] text-[#849693] mt-1">
+                <span className="font-support text-[9px] uppercase tracking-[0.12em] text-[#6E8887] mt-1">
                   Portrait
                 </span>
               </div>
@@ -87,7 +87,7 @@ export const IdentitySection: React.FC<IdentitySectionProps> = ({
             type="button"
             id="toggle-custom-image-url"
             onClick={() => setShowImageUrlInput(!showImageUrlInput)}
-            className="flex items-center gap-1.5 text-xs text-[#6DAEAD] hover:text-[#1A1A1B] font-medium transition-colors duration-150"
+            className="flex items-center gap-1.5 text-xs text-[#6DAEAD] hover:text-[#243838] font-medium transition-colors duration-150"
           >
             <LinkIcon className="w-3.5 h-3.5" />
             <span>{showImageUrlInput ? "Hide image URL" : "Custom image URL"}</span>
@@ -101,9 +101,9 @@ export const IdentitySection: React.FC<IdentitySectionProps> = ({
                 value={profileImage || ""}
                 onChange={(e) => onProfileImageChange(e.target.value.trim() || null)}
                 placeholder="https://..."
-                className="w-full text-xs font-mono px-3 py-2 bg-[#F8F8F7] border border-[#E5E5E1] rounded-[2px] text-[#1A1A1B] placeholder:text-[#849693]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors"
+                className="w-full text-xs font-mono px-3 py-2 bg-[#F7FBFA] border border-[#D5E6E5] rounded-2xl text-[#243838] placeholder:text-[#6E8887]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors"
               />
-              <span className="font-support text-[10px] text-[#849693] mt-1 block">
+              <span className="font-support text-[10px] text-[#6E8887] mt-1 block">
                 Direct image link (HTTPS)
               </span>
             </div>
@@ -116,9 +116,9 @@ export const IdentitySection: React.FC<IdentitySectionProps> = ({
           <div>
             <label
               htmlFor="identity-name-input"
-              className="font-support text-[11px] uppercase tracking-[0.14em] text-[#708595] block mb-2"
+              className="font-support text-[11px] uppercase tracking-[0.14em] text-[#5C7372] block mb-2"
             >
-              Full Name / Display Title <span className="text-[#B91C1C]">*</span>
+              Full Name / Display Title <span className="text-[#B93838]">*</span>
             </label>
             <div className="relative">
               <input
@@ -127,16 +127,16 @@ export const IdentitySection: React.FC<IdentitySectionProps> = ({
                 value={title}
                 onChange={(e) => onTitleChange(e.target.value)}
                 placeholder="e.g. Alex Morgan"
-                className={`w-full text-sm sm:text-base px-3.5 py-2.5 bg-[#F8F8F7] border rounded-[2px] text-[#1A1A1B] placeholder:text-[#849693]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors ${
-                  errors.title ? "border-[#B91C1C]" : "border-[#E5E5E1]"
+                className={`w-full text-sm sm:text-base px-3.5 py-2.5 bg-[#F7FBFA] border rounded-2xl text-[#243838] placeholder:text-[#6E8887]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors ${
+                  errors.title ? "border-[#B93838]" : "border-[#D5E6E5]"
                 }`}
                 maxLength={100}
               />
             </div>
             {errors.title ? (
-              <p className="text-xs text-[#B91C1C] mt-1 font-light">{errors.title}</p>
+              <p className="text-xs text-[#B93838] mt-1 font-light">{errors.title}</p>
             ) : (
-              <p className="text-xs text-[#849693] mt-1 font-light">
+              <p className="text-xs text-[#6E8887] mt-1 font-light">
                 The primary display name shown across your portfolio.
               </p>
             )}
@@ -148,28 +148,28 @@ export const IdentitySection: React.FC<IdentitySectionProps> = ({
             <div>
               <label
                 htmlFor="identity-profession-input"
-                className="font-support text-[11px] uppercase tracking-[0.14em] text-[#708595] block mb-2"
+                className="font-support text-[11px] uppercase tracking-[0.14em] text-[#5C7372] block mb-2"
               >
-                Profession / Role <span className="text-[#B91C1C]">*</span>
+                Profession / Role <span className="text-[#B93838]">*</span>
               </label>
               <div className="relative flex items-center">
-                <Briefcase className="w-4 h-4 text-[#849693] absolute left-3 pointer-events-none" />
+                <Briefcase className="w-4 h-4 text-[#6E8887] absolute left-3 pointer-events-none" />
                 <input
                   type="text"
                   id="identity-profession-input"
                   value={profession}
                   onChange={(e) => onProfessionChange(e.target.value)}
                   placeholder="e.g. Web Designer"
-                  className={`w-full text-sm pl-9 pr-3.5 py-2.5 bg-[#F8F8F7] border rounded-[2px] text-[#1A1A1B] placeholder:text-[#849693]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors ${
-                    errors.profession ? "border-[#B91C1C]" : "border-[#E5E5E1]"
+                  className={`w-full text-sm pl-9 pr-3.5 py-2.5 bg-[#F7FBFA] border rounded-2xl text-[#243838] placeholder:text-[#6E8887]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors ${
+                    errors.profession ? "border-[#B93838]" : "border-[#D5E6E5]"
                   }`}
                   maxLength={100}
                 />
               </div>
               {errors.profession ? (
-                <p className="text-xs text-[#B91C1C] mt-1 font-light">{errors.profession}</p>
+                <p className="text-xs text-[#B93838] mt-1 font-light">{errors.profession}</p>
               ) : (
-                <p className="text-xs text-[#849693] mt-1 font-light">
+                <p className="text-xs text-[#6E8887] mt-1 font-light">
                   Your core discipline or primary professional title.
                 </p>
               )}
@@ -179,23 +179,23 @@ export const IdentitySection: React.FC<IdentitySectionProps> = ({
             <div>
               <label
                 htmlFor="identity-location-input"
-                className="font-support text-[11px] uppercase tracking-[0.14em] text-[#708595] block mb-2"
+                className="font-support text-[11px] uppercase tracking-[0.14em] text-[#5C7372] block mb-2"
               >
-                Location <span className="text-[#849693] font-normal lowercase">(optional)</span>
+                Location <span className="text-[#6E8887] font-normal lowercase">(optional)</span>
               </label>
               <div className="relative flex items-center">
-                <MapPin className="w-4 h-4 text-[#849693] absolute left-3 pointer-events-none" />
+                <MapPin className="w-4 h-4 text-[#6E8887] absolute left-3 pointer-events-none" />
                 <input
                   type="text"
                   id="identity-location-input"
                   value={location}
                   onChange={(e) => onLocationChange(e.target.value)}
                   placeholder="e.g. Lagos, Nigeria"
-                  className="w-full text-sm pl-9 pr-3.5 py-2.5 bg-[#F8F8F7] border border-[#E5E5E1] rounded-[2px] text-[#1A1A1B] placeholder:text-[#849693]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors"
+                  className="w-full text-sm pl-9 pr-3.5 py-2.5 bg-[#F7FBFA] border border-[#D5E6E5] rounded-2xl text-[#243838] placeholder:text-[#6E8887]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors"
                   maxLength={100}
                 />
               </div>
-              <p className="text-xs text-[#849693] mt-1 font-light">
+              <p className="text-xs text-[#6E8887] mt-1 font-light">
                 City, country, or remote base.
               </p>
             </div>

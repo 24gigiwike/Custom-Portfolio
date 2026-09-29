@@ -9,6 +9,9 @@ import { ProfileEditor } from "./ProfileEditor/ProfileEditor";
 import { ProjectList } from "./projects/ProjectList";
 import { ProjectEditor } from "./projects/ProjectEditor";
 import { brand } from "../../config/branding";
+import { WorkspaceChrome, type WorkspaceNavKey } from "../ui/WorkspaceChrome";
+import { Button } from "../ui/Button";
+import { Plus } from "lucide-react";
 import type { Portfolio } from "../../types/portfolio";
 import type { Project } from "../../types/project";
 
@@ -64,28 +67,27 @@ export const PortfolioAppView: React.FC = () => {
     return (
       <div
         id="portfolio-loading-screen"
-        className="relative min-h-screen w-full flex flex-col justify-between items-center px-6 sm:px-12 py-10 sm:py-12 bg-[#F8F8F7] text-[#1A1A1B]"
+        className="relative flex min-h-screen w-full flex-col items-center justify-between bg-[#F3FAF9] px-6 py-10 text-[#243838] sm:px-12 sm:py-12"
       >
-        <div className="fixed left-0 top-0 w-1 h-full bg-gradient-to-b from-[#708595] to-[#6DAEAD] z-30 pointer-events-none" />
 
-        <header className="w-full max-w-5xl flex items-baseline justify-between pt-2">
-          <div className="text-[20px] font-medium tracking-[-0.03em] text-[#1A1A1B]">
+        <header className="flex w-full max-w-5xl items-baseline justify-between pt-2">
+          <div className="text-[20px] font-bold tracking-[-0.04em] text-[#3E7574]">
             {brand.name}
           </div>
-          <div className="font-support text-[11px] uppercase tracking-[0.15em] text-[#708595]">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#6E8887]">
             {brand.endorsement}
           </div>
         </header>
 
-        <div className="flex flex-col items-center gap-3 my-auto">
-          <div className="w-6 h-6 border-2 border-[#E5E5E1] border-t-[#6DAEAD] rounded-full animate-spin" />
-          <span className="font-support text-xs uppercase tracking-[0.14em] text-[#708595]">
+        <div className="my-auto flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#D5E6E5] border-t-[#6DAEAD]" />
+          <span className="text-xs font-bold uppercase tracking-[0.16em] text-[#5C7372]">
             Loading workspace...
           </span>
         </div>
 
-        <footer className="w-full max-w-5xl flex items-center justify-between text-[10px] uppercase tracking-[0.12em] text-[#849693] pt-6 border-t border-[#E5E5E1]">
-          <div>&copy; 2024 BroadBrand. All Rights Reserved.</div>
+        <footer className="w-full max-w-5xl border-t border-[#D5E6E5] pt-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6E8887]">
+          BroadBrand
         </footer>
       </div>
     );
@@ -116,59 +118,19 @@ export const PortfolioAppView: React.FC = () => {
     );
   }
 
+  const openProjectEditor = (project: Project | null) => {
+    setSelectedProject(project);
+    setCurrentView("project-editor");
+  };
+
+  const navigateWorkspace = (key: WorkspaceNavKey) => {
+    if (key === "overview") setCurrentView("workspace");
+    if (key === "work") setCurrentView("projects-list");
+    if (key === "profile") setCurrentView("profile-editor");
+  };
+
   // If portfolio exists, render current view
   if (portfolio) {
-    if (currentView === "profile-editor") {
-      return (
-        <AnimatePresence mode="wait">
-          <motion.div
-            key="profile-editor-view"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="w-full min-h-screen"
-          >
-            <ProfileEditor
-              portfolio={portfolio}
-              onBackToWorkspace={() => setCurrentView("workspace")}
-              onSaveSuccess={(updatedPortfolio) => {
-                setPortfolio(updatedPortfolio);
-              }}
-            />
-          </motion.div>
-        </AnimatePresence>
-      );
-    }
-
-    if (currentView === "projects-list") {
-      return (
-        <AnimatePresence mode="wait">
-          <motion.div
-            key="projects-list-view"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="w-full min-h-screen"
-          >
-            <ProjectList
-              portfolio={portfolio}
-              onBackToWorkspace={() => setCurrentView("workspace")}
-              onAddProject={() => {
-                setSelectedProject(null);
-                setCurrentView("project-editor");
-              }}
-              onEditProject={(project) => {
-                setSelectedProject(project);
-                setCurrentView("project-editor");
-              }}
-            />
-          </motion.div>
-        </AnimatePresence>
-      );
-    }
-
     if (currentView === "project-editor") {
       return (
         <AnimatePresence mode="wait">
@@ -196,27 +158,83 @@ export const PortfolioAppView: React.FC = () => {
       );
     }
 
+    const activeNav: WorkspaceNavKey =
+      currentView === "profile-editor"
+        ? "profile"
+        : currentView === "projects-list"
+          ? "work"
+          : "overview";
+
     return (
-      <AnimatePresence mode="wait">
-        <motion.div
-          key="workspace-view"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25 }}
-          className="w-full min-h-screen"
-        >
-          <PortfolioWorkspace
-            portfolio={portfolio}
-            onOpenProfileEditor={() => setCurrentView("profile-editor")}
-            onOpenProjects={() => setCurrentView("projects-list")}
-            onAddProject={() => {
-              setSelectedProject(null);
-              setCurrentView("project-editor");
-            }}
-          />
-        </motion.div>
-      </AnimatePresence>
+      <WorkspaceChrome
+        active={activeNav}
+        portfolioTitle={portfolio.title}
+        published={portfolio.published}
+        onNavigate={navigateWorkspace}
+        trailing={
+          currentView === "projects-list" ? (
+            <Button
+              id="add-project-header-button"
+              variant="primary"
+              size="sm"
+              onClick={() => openProjectEditor(null)}
+              leftIcon={<Plus className="h-3.5 w-3.5" />}
+            >
+              Add project
+            </Button>
+          ) : undefined
+        }
+      >
+        <AnimatePresence mode="wait">
+          {currentView === "profile-editor" ? (
+            <motion.div
+              key="profile-editor-view"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+            >
+              <ProfileEditor
+                portfolio={portfolio}
+                onBackToWorkspace={() => setCurrentView("workspace")}
+                onSaveSuccess={(updatedPortfolio) => {
+                  setPortfolio(updatedPortfolio);
+                }}
+              />
+            </motion.div>
+          ) : currentView === "projects-list" ? (
+            <motion.div
+              key="projects-list-view"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+            >
+              <ProjectList
+                portfolio={portfolio}
+                onBackToWorkspace={() => setCurrentView("workspace")}
+                onAddProject={() => openProjectEditor(null)}
+                onEditProject={(project) => openProjectEditor(project)}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="workspace-view"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+            >
+              <PortfolioWorkspace
+                portfolio={portfolio}
+                onOpenProfileEditor={() => setCurrentView("profile-editor")}
+                onOpenProjects={() => setCurrentView("projects-list")}
+                onAddProject={() => openProjectEditor(null)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </WorkspaceChrome>
     );
   }
 

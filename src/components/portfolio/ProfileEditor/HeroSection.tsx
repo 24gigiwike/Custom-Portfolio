@@ -1,5 +1,4 @@
 import React from "react";
-import { Sparkles, FileText } from "lucide-react";
 
 interface HeroSectionProps {
   headline: string;
@@ -22,18 +21,18 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   return (
     <section
       id="hero-section"
-      className="bg-white border border-[#E5E5E1] rounded-[2px] p-6 sm:p-8 shadow-[0_1px_3px_rgba(0,0,0,0.02)]"
+      className="bg-white border border-[#D5E6E5] rounded-2xl p-6 sm:p-8 shadow-[0_12px_32px_rgba(109,174,173,0.08)]"
     >
-      <div className="flex items-baseline justify-between pb-4 mb-6 border-b border-[#E5E5E1]/70">
+      <div className="flex items-baseline justify-between pb-4 mb-6 border-b border-[#D5E6E5]/70">
         <div>
-          <span className="font-support text-[11px] uppercase tracking-[0.15em] text-[#708595] block mb-1">
+          <span className="font-support text-[11px] uppercase tracking-[0.15em] text-[#5C7372] block mb-1">
             02 / Hero & Narrative
           </span>
-          <h2 className="text-lg font-medium text-[#1A1A1B] tracking-[-0.02em]">
+          <h2 className="text-lg font-medium text-[#243838] tracking-[-0.02em]">
             Positioning & Narrative
           </h2>
         </div>
-        <span className="font-support text-[10px] uppercase tracking-[0.12em] text-[#849693]">
+        <span className="font-support text-[10px] uppercase tracking-[0.12em] text-[#6E8887]">
           Primary Statement
         </span>
       </div>
@@ -44,11 +43,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           <div className="flex items-baseline justify-between mb-2">
             <label
               htmlFor="hero-headline-input"
-              className="font-support text-[11px] uppercase tracking-[0.14em] text-[#708595] block"
+              className="font-support text-[11px] uppercase tracking-[0.14em] text-[#5C7372] block"
             >
-              Hero Headline <span className="text-[#B91C1C]">*</span>
+              Hero Headline <span className="text-[#B93838]">*</span>
             </label>
-            <span className="text-[11px] font-mono text-[#849693]">
+            <span className="text-[11px] font-mono text-[#6E8887]">
               {headline.length}/140
             </span>
           </div>
@@ -59,16 +58,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             value={headline}
             onChange={(e) => onHeadlineChange(e.target.value)}
             placeholder="I design digital experiences that help brands move forward."
-            className={`w-full text-base sm:text-lg px-3.5 py-3 bg-[#F8F8F7] border rounded-[2px] text-[#1A1A1B] placeholder:text-[#849693]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors ${
-              errors.headline ? "border-[#B91C1C]" : "border-[#E5E5E1]"
+            className={`w-full text-base sm:text-lg px-3.5 py-3 bg-[#F7FBFA] border rounded-2xl text-[#243838] placeholder:text-[#6E8887]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors ${
+              errors.headline ? "border-[#B93838]" : "border-[#D5E6E5]"
             }`}
             maxLength={140}
           />
 
           {errors.headline ? (
-            <p className="text-xs text-[#B91C1C] mt-1 font-light">{errors.headline}</p>
+            <p className="text-xs text-[#B93838] mt-1 font-light">{errors.headline}</p>
           ) : (
-            <p className="text-xs text-[#849693] mt-1.5 font-light leading-relaxed">
+            <p className="text-xs text-[#6E8887] mt-1.5 font-light leading-relaxed">
               The prominent statement displayed on your portfolio landing hero. Keep it focused and impactful.
             </p>
           )}
@@ -79,11 +78,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           <div className="flex items-baseline justify-between mb-2">
             <label
               htmlFor="hero-bio-input"
-              className="font-support text-[11px] uppercase tracking-[0.14em] text-[#708595] block"
+              className="font-support text-[11px] uppercase tracking-[0.14em] text-[#5C7372] block"
             >
-              Short Introduction <span className="text-[#B91C1C]">*</span>
+              Short Introduction <span className="text-[#B93838]">*</span>
             </label>
-            <span className="text-[11px] font-mono text-[#849693]">
+            <span className="text-[11px] font-mono text-[#6E8887]">
               {bio.length}/500
             </span>
           </div>
@@ -94,16 +93,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             value={bio}
             onChange={(e) => onBioChange(e.target.value)}
             placeholder="I create thoughtful digital experiences across web, product and brand."
-            className={`w-full text-sm sm:text-base px-3.5 py-3 bg-[#F8F8F7] border rounded-[2px] text-[#1A1A1B] placeholder:text-[#849693]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors resize-y leading-relaxed ${
-              errors.bio ? "border-[#B91C1C]" : "border-[#E5E5E1]"
+            className={`w-full text-sm sm:text-base px-3.5 py-3 bg-[#F7FBFA] border rounded-2xl text-[#243838] placeholder:text-[#6E8887]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors resize-y leading-relaxed ${
+              errors.bio ? "border-[#B93838]" : "border-[#D5E6E5]"
             }`}
             maxLength={500}
           />
 
           {errors.bio ? (
-            <p className="text-xs text-[#B91C1C] mt-1 font-light">{errors.bio}</p>
+            <p className="text-xs text-[#B93838] mt-1 font-light">{errors.bio}</p>
           ) : (
-            <p className="text-xs text-[#849693] mt-1.5 font-light leading-relaxed">
+            <p className="text-xs text-[#6E8887] mt-1.5 font-light leading-relaxed">
               A 2–4 sentence overview of your background, philosophy, and craft.
             </p>
           )}

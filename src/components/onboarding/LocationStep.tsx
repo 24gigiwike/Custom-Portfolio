@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { motion } from "motion/react";
 import { Button } from "../ui/Button";
-import { ArrowLeft, Sparkles, AlertCircle, MapPin } from "lucide-react";
+import { ArrowLeft, ArrowRight, AlertCircle, MapPin } from "lucide-react";
 
 interface LocationStepProps {
   initialLocation?: string;
@@ -39,22 +39,22 @@ export const LocationStep: React.FC<LocationStepProps> = ({
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       className="w-full flex flex-col items-start text-left"
     >
-      <span className="font-support text-[11px] uppercase tracking-[0.18em] text-[#708595] mb-2.5">
-        Step 04 &mdash; Origin
+      <span className="mb-2.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">
+        Step 04 — Origin
       </span>
 
-      <h1 className="text-3xl sm:text-4xl md:text-[46px] font-light md:font-[300] leading-[1.12] tracking-[-0.04em] text-[#1A1A1B] mb-3">
+      <h2 className="mb-3 text-3xl font-bold leading-[1.1] tracking-[-0.04em] text-[#243838] sm:text-4xl">
         Where are you based?
-      </h1>
+      </h2>
 
-      <p className="text-base text-[#708595] mb-8 font-normal">
+      <p className="mb-8 text-base text-[#5C7372]">
         Your city or region helps ground your presence. This is optional.
       </p>
 
       <div className="w-full mb-6">
         <label
           htmlFor="location-input"
-          className="block text-xs uppercase tracking-[0.1em] font-medium text-[#708595] mb-2 font-support"
+          className="mb-2 block text-[11px] font-bold uppercase tracking-[0.14em] text-[#3E7574]"
         >
           City, Country or Region
         </label>
@@ -67,9 +67,9 @@ export const LocationStep: React.FC<LocationStepProps> = ({
             placeholder="e.g. Lagos, Nigeria or London, UK"
             autoFocus
             disabled={isSubmitting}
-            className="w-full text-xl sm:text-2xl font-light text-[#1A1A1B] bg-white border border-[#E5E5E1] rounded-[2px] pl-11 pr-4 py-3.5 focus:outline-none focus:border-[#6DAEAD] focus:ring-1 focus:ring-[#6DAEAD] transition-all duration-200 placeholder:text-[#849693]/40 shadow-[0_1px_2px_rgba(0,0,0,0.02)] disabled:opacity-60"
+            className="w-full rounded-xl border border-[#D5E6E5] bg-[#F7FBFA] py-3.5 pl-11 pr-4 text-xl font-semibold text-[#243838] transition-all duration-200 placeholder:text-[#8AADAC] focus:border-[#6DAEAD] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#6DAEAD]/30 disabled:opacity-60 sm:text-2xl"
           />
-          <MapPin className="w-5 h-5 text-[#849693] absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <MapPin className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-[#6DAEAD]" />
         </div>
       </div>
 
@@ -77,14 +77,14 @@ export const LocationStep: React.FC<LocationStepProps> = ({
         <motion.div
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full p-3.5 mb-6 bg-[#FFF5F5] border border-[#FED7D7] rounded-[2px] text-xs text-[#B93838] flex items-center gap-2"
+          className="mb-6 flex w-full items-center gap-2 rounded-2xl border border-[#F3C7C7] bg-[#FFF6F6] p-3.5 text-xs font-medium text-[#B93838]"
         >
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span>{submitError}</span>
         </motion.div>
       )}
 
-      <div className="w-full flex flex-col-reverse sm:flex-row items-center justify-between pt-4 border-t border-[#E5E5E1]/60 gap-3">
+      <div className="flex w-full flex-col-reverse items-center justify-between gap-3 border-t border-[#E7F4F3] pt-5 sm:flex-row">
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <Button
             id="location-step-back-button"
@@ -92,7 +92,7 @@ export const LocationStep: React.FC<LocationStepProps> = ({
             variant="outline"
             onClick={onBack}
             disabled={isSubmitting}
-            leftIcon={<ArrowLeft className="w-4 h-4 mr-1 text-[#708595]" />}
+            leftIcon={<ArrowLeft className="w-4 h-4 mr-1 text-[#5C7372]" />}
             className="flex-1 sm:flex-initial"
           >
             Back
@@ -103,7 +103,7 @@ export const LocationStep: React.FC<LocationStepProps> = ({
             variant="ghost"
             onClick={handleSkip}
             disabled={isSubmitting}
-            className="flex-1 sm:flex-initial text-[#708595]"
+            className="flex-1 sm:flex-initial text-[#5C7372]"
           >
             Skip for now
           </Button>
@@ -116,7 +116,7 @@ export const LocationStep: React.FC<LocationStepProps> = ({
           size="lg"
           isLoading={isSubmitting}
           disabled={isSubmitting}
-          rightIcon={<Sparkles className="w-4 h-4 ml-1.5 text-[#94CEBB]" />}
+          rightIcon={<ArrowRight className="ml-1 h-4 w-4" />}
           className="w-full sm:w-auto min-w-[190px]"
         >
           Create my portfolio
