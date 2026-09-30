@@ -12,6 +12,13 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db, auth } from "./firebase";
+import { deleteStoredImages } from "./storage";
+import {
+  alignImagePaths,
+  collectStoredImagePaths,
+  normalizeImagesAndPaths,
+  readCoverImagePath,
+} from "./projectImagePaths";
 import type {
   Project,
   CreateProjectInput,
@@ -71,6 +78,49 @@ export function generateProjectSlug(title: string): string {
 /**
  * Normalize external URL to include https:// protocol if missing
  */
+function toProject(
+  portfolioId: string,
+  id: string,
+  data: Record<string, unknown>,
+  fallbackOrder: number
+): Project {
+  const images = Array.isArray(data.images)
+    ? data.images.filter((image): image is string => typeof image === "string" && image.length > 0)
+    : [];
+
+  return {
+    id,
+    portfolioId,
+    ownerId: typeof data.ownerId === "string" ? data.ownerId : "",
+    title: typeof data.title === "string" && data.title ? data.title : "Untitled Project",
+    slug: typeof data.slug === "string" && data.slug ? data.slug : id,
+    shortDescription: typeof data.shortDescription === "string" ? data.shortDescription : "",
+    description: typeof data.description === "string" ? data.description : "",
+    coverImage: typeof data.coverImage === "string" && data.coverImage ? data.coverImage : null,
+    coverImagePath: readCoverImagePath(data.coverImagePath),
+    images,
+    imagePaths: Array.isArray(data.imagePaths) ? alignImagePaths(images, data.imagePaths) : undefined,
+    role: typeof data.role === "string" ? data.role : "",
+    client: typeof data.client === "string" ? data.client : "",
+    year: typeof data.year === "string" ? data.year : "",
+    services: Array.isArray(data.services)
+      ? data.services.filter((item): item is string => typeof item === "string")
+      : [],
+    tools: Array.isArray(data.tools)
+      ? data.tools.filter((item): item is string => typeof item === "string")
+      : [],
+    projectUrl: typeof data.projectUrl === "string" ? data.projectUrl : "",
+    caseStudyUrl: typeof data.caseStudyUrl === "string" ? data.caseStudyUrl : "",
+    featured: Boolean(data.featured),
+    order: typeof data.order === "number" ? data.order : fallbackOrder,
+    createdAt: (data.createdAt as Project["createdAt"]) || null,
+    updatedAt: (data.updatedAt as Project["updatedAt"]) || null,
+  };
+}
+
+/**
+ * Normalize external URL to include https:// protocol if missing
+ */
 export function normalizeProjectUrl(url: string | undefined): string {
   if (!url) return "";
   const trimmed = url.trim();
@@ -100,29 +150,7 @@ export async function getPortfolioProjects(portfolioId: string): Promise<Project
 
     const projects: Project[] = [];
     snap.forEach((docSnap) => {
-      const data = docSnap.data();
-      projects.push({
-        id: docSnap.id,
-        portfolioId,
-        ownerId: data.ownerId || "",
-        title: data.title || "Untitled Project",
-        slug: data.slug || docSnap.id,
-        shortDescription: data.shortDescription || "",
-        description: data.description || "",
-        coverImage: data.coverImage || null,
-        images: Array.isArray(data.images) ? data.images : [],
-        role: data.role || "",
-        client: data.client || "",
-        year: data.year || "",
-        services: Array.isArray(data.services) ? data.services : [],
-        tools: Array.isArray(data.tools) ? data.tools : [],
-        projectUrl: data.projectUrl || "",
-        caseStudyUrl: data.caseStudyUrl || "",
-        featured: Boolean(data.featured),
-        order: typeof data.order === "number" ? data.order : projects.length,
-        createdAt: data.createdAt || null,
-        updatedAt: data.updatedAt || null,
-      });
+      projects.push(toProject(portfolioId, docSnap.id, docSnap.data(), projects.length));
     });
 
     // Ensure sorted by order
@@ -146,29 +174,7 @@ export async function getPortfolioProject(
     if (!snap.exists()) {
       return null;
     }
-    const data = snap.data();
-    return {
-      id: snap.id,
-      portfolioId,
-      ownerId: data.ownerId || "",
-      title: data.title || "Untitled Project",
-      slug: data.slug || snap.id,
-      shortDescription: data.shortDescription || "",
-      description: data.description || "",
-      coverImage: data.coverImage || null,
-      images: Array.isArray(data.images) ? data.images : [],
-      role: data.role || "",
-      client: data.client || "",
-      year: data.year || "",
-      services: Array.isArray(data.services) ? data.services : [],
-      tools: Array.isArray(data.tools) ? data.tools : [],
-      projectUrl: data.projectUrl || "",
-      caseStudyUrl: data.caseStudyUrl || "",
-      featured: Boolean(data.featured),
-      order: typeof data.order === "number" ? data.order : 0,
-      createdAt: data.createdAt || null,
-      updatedAt: data.updatedAt || null,
-    };
+    return toProject(portfolioId, snap.id, snap.data(), 0);
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, path);
   }
@@ -199,14 +205,26 @@ async function clearOtherFeaturedProjects(
 }
 
 /**
- * Create a new project under a portfolio
+ * Reserve a project id without writing a document.
+ * New uploads use this id so files are not stored under a shared "draft" path.
+ */
+export function allocateProjectId(portfolioId: string): string {
+  return doc(collection(db, "portfolios", portfolioId, "projects")).id;
+}
+
+/**
+ * Create a new project under a portfolio.
+ * Pass projectId when uploads already used a reserved id.
  */
 export async function createProject(
   portfolioId: string,
-  input: CreateProjectInput
+  input: CreateProjectInput,
+  projectId?: string
 ): Promise<Project> {
-  const projectRef = doc(collection(db, "portfolios", portfolioId, "projects"));
-  const projectId = projectRef.id;
+  const projectRef = projectId
+    ? doc(db, "portfolios", portfolioId, "projects", projectId)
+    : doc(collection(db, "portfolios", portfolioId, "projects"));
+  projectId = projectRef.id;
   const path = `portfolios/${portfolioId}/projects/${projectId}`;
 
   // Get current project count to place at the end
@@ -222,6 +240,7 @@ export async function createProject(
   }
 
   const slug = input.slug?.trim() || generateProjectSlug(input.title);
+  const media = normalizeImagesAndPaths(input.images, input.imagePaths);
 
   const payload = {
     id: projectId,
@@ -232,7 +251,9 @@ export async function createProject(
     shortDescription: input.shortDescription.trim(),
     description: input.description ? input.description.trim() : "",
     coverImage: input.coverImage || null,
-    images: Array.isArray(input.images) ? input.images.filter(Boolean) : [],
+    coverImagePath: readCoverImagePath(input.coverImagePath),
+    images: media.images,
+    imagePaths: media.imagePaths,
     role: input.role ? input.role.trim() : "",
     client: input.client ? input.client.trim() : "",
     year: input.year ? input.year.trim() : "",
@@ -279,12 +300,16 @@ export async function updateProject(
     await clearOtherFeaturedProjects(portfolioId, projectId);
   }
 
+  const media = normalizeImagesAndPaths(input.images, input.imagePaths);
+
   const updates: Record<string, unknown> = {
     title: input.title.trim(),
     shortDescription: input.shortDescription.trim(),
     description: input.description !== undefined ? input.description.trim() : "",
     coverImage: input.coverImage !== undefined ? input.coverImage : null,
-    images: Array.isArray(input.images) ? input.images.filter(Boolean) : [],
+    coverImagePath: readCoverImagePath(input.coverImagePath),
+    images: media.images,
+    imagePaths: media.imagePaths,
     role: input.role !== undefined ? input.role.trim() : "",
     client: input.client !== undefined ? input.client.trim() : "",
     year: input.year !== undefined ? input.year.trim() : "",
@@ -325,7 +350,12 @@ export async function deleteProject(
   const docRef = doc(db, "portfolios", portfolioId, "projects", projectId);
   const path = `portfolios/${portfolioId}/projects/${projectId}`;
   try {
+    const snap = await getDoc(docRef);
+    const storedPaths = snap.exists()
+      ? collectStoredImagePaths(toProject(portfolioId, snap.id, snap.data(), 0))
+      : [];
     await deleteDoc(docRef);
+    await deleteStoredImages(storedPaths);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }

@@ -27,11 +27,13 @@ export interface AuthContextType {
   authPhase: AuthPhase;
   isLoading: boolean;
   error: string | null;
+  accountError: string | null;
   signInWithGoogle: () => Promise<void>;
   signOutUser: () => Promise<void>;
   clearError: () => void;
   saveOnboarding: (data: OnboardingData) => Promise<UserProfile>;
   refreshAccount: () => Promise<UserProfile | null>;
+  retryLoadAccount: () => Promise<void>;
 }
 
 export type AppRoute = "/" | "/auth" | "/onboarding" | "/app" | (string & {});

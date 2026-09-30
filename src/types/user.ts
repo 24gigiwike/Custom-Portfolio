@@ -26,5 +26,6 @@ export type AuthPhase =
   | "AUTH_LOADING"
   | "SIGNED_OUT"
   | "ACCOUNT_LOADING"
+  | "ACCOUNT_ERROR"
   | "ONBOARDING_REQUIRED"
   | "READY";

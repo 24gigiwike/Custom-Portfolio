@@ -2,7 +2,7 @@ import React from "react";
 import { ProjectOverview } from "./ProjectOverview";
 import { ProjectDetails } from "./ProjectDetails";
 import { ProjectServicesTools } from "./ProjectServicesTools";
-import { ProjectMedia } from "./ProjectMedia";
+import { ProjectMedia, type ProjectMediaHandle } from "./ProjectMedia";
 import { ProjectLinks } from "./ProjectLinks";
 import { ProjectPresentation } from "./ProjectPresentation";
 import type { CreateProjectInput, UpdateProjectInput } from "../../../types/project";
@@ -13,7 +13,9 @@ export interface ProjectFormData {
   shortDescription: string;
   description: string;
   coverImage: string | null;
+  coverImagePath: string | null;
   images: string[];
+  imagePaths: string[];
   role: string;
   client: string;
   year: string;
@@ -32,13 +34,13 @@ interface ProjectFormProps {
   onChange: (updated: Partial<ProjectFormData>) => void;
 }
 
-export const ProjectForm: React.FC<ProjectFormProps> = ({
+export const ProjectForm = React.forwardRef<ProjectMediaHandle, ProjectFormProps>(function ProjectForm({
   portfolioId,
   projectId,
   formData,
   errors,
   onChange,
-}) => {
+}, ref) {
   return (
     <div className="mx-auto grid max-w-5xl gap-6 pb-16 lg:grid-cols-12">
       <div className="space-y-6 lg:col-span-7">
@@ -75,12 +77,17 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
 
       <div className="space-y-6 lg:col-span-5 lg:sticky lg:top-24 lg:self-start">
       <ProjectMedia
+        ref={ref}
         portfolioId={portfolioId}
         projectId={projectId}
         coverImage={formData.coverImage}
+        coverImagePath={formData.coverImagePath}
         images={formData.images}
-        onCoverImageChange={(coverImage) => onChange({ coverImage })}
-        onImagesChange={(images) => onChange({ images })}
+        imagePaths={formData.imagePaths}
+        onCoverImageChange={(coverImage, coverImagePath) =>
+          onChange({ coverImage, coverImagePath: coverImagePath || null })
+        }
+        onImagesChange={(images, imagePaths) => onChange({ images, imagePaths })}
       />
       </div>
 
@@ -100,4 +107,4 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
       </div>
     </div>
   );
-};
+});

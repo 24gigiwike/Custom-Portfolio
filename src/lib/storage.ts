@@ -3,6 +3,7 @@ import {
   ref,
   uploadBytesResumable,
   getDownloadURL,
+  deleteObject,
   type FirebaseStorage,
   type UploadTaskSnapshot,
 } from "firebase/storage";
@@ -69,6 +70,11 @@ export interface UploadProjectImageOptions {
   onOptimized?: (result: OptimizedImageResult) => void;
 }
 
+export interface UploadedProjectImage {
+  downloadUrl: string;
+  storagePath: string;
+}
+
 /**
  * Adaptively optimize and upload a project image to Firebase Storage with real progress tracking.
  * Path: portfolio-assets/{uid}/{portfolioId}/projects/{projectId}/{folder}/{timestamp}_{filename}
@@ -78,7 +84,7 @@ export async function uploadProjectImage(
   projectId: string,
   file: File,
   options?: UploadProjectImageOptions | "cover" | "gallery"
-): Promise<string> {
+): Promise<UploadedProjectImage> {
   const folder: "cover" | "gallery" =
     typeof options === "string" ? options : options?.folder || "cover";
   const onProgress = typeof options === "object" ? options.onProgress : undefined;
@@ -123,7 +129,7 @@ export async function uploadProjectImage(
       },
     });
 
-    return await new Promise<string>((resolve, reject) => {
+    return await new Promise<UploadedProjectImage>((resolve, reject) => {
       uploadTask.on(
         "state_changed",
         (snapshot: UploadTaskSnapshot) => {
@@ -150,7 +156,7 @@ export async function uploadProjectImage(
           try {
             const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
             if (onProgress) onProgress(100);
-            resolve(downloadUrl);
+            resolve({ downloadUrl, storagePath });
           } catch (err) {
             console.error("Failed to get download URL:", err);
             reject(new Error("We couldn't prepare this image. Try another image."));
@@ -165,5 +171,50 @@ export async function uploadProjectImage(
     }
     throw new Error("Couldn't upload this image. Try again.");
   }
+}
+
+function ownedStoragePrefix(uid: string): string {
+  return `portfolio-assets/${uid}/`;
+}
+
+/**
+ * Delete one object by the storage path recorded at upload time.
+ * Paths are never inferred from download URLs.
+ */
+export async function deleteStoredImage(storagePath: string): Promise<void> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error("You must be signed in to remove images.");
+  }
+
+  const prefix = ownedStoragePrefix(currentUser.uid);
+  if (!storagePath.startsWith(prefix) || storagePath.includes("..")) {
+    throw new Error("This image cannot be removed because its storage path is not available.");
+  }
+
+  try {
+    await deleteObject(ref(getStorageInstance(), storagePath));
+  } catch (error) {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? String((error as { code?: unknown }).code ?? "")
+        : "";
+    if (code === "storage/object-not-found") return;
+    console.error("Firebase Storage delete error:", error);
+    throw new Error("We couldn't remove the stored image file.");
+  }
+}
+
+export async function deleteStoredImages(storagePaths: string[]): Promise<void> {
+  const unique = [...new Set(storagePaths.filter(Boolean))];
+  await Promise.all(
+    unique.map(async (storagePath) => {
+      try {
+        await deleteStoredImage(storagePath);
+      } catch (error) {
+        console.error("Stored image cleanup failed:", storagePath, error);
+      }
+    })
+  );
 }
 

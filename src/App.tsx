@@ -5,10 +5,20 @@ import { SplashScreen } from "./components/splash/SplashScreen";
 import { AuthScreen } from "./components/auth/AuthScreen";
 import { OnboardingScreen } from "./components/onboarding/OnboardingScreen";
 import { PortfolioAppView } from "./components/portfolio/PortfolioAppView";
+import { Button } from "./components/ui/Button";
 import type { AppRoute } from "./types";
 
 function AppContent() {
-  const { user, userAccount, isLoading: isAuthLoading, authPhase } = useAuth();
+  const {
+    user,
+    userAccount,
+    isLoading: isAuthLoading,
+    authPhase,
+    accountError,
+    retryLoadAccount,
+    signOutUser,
+  } = useAuth();
+  const [isRetryingAccount, setIsRetryingAccount] = useState(false);
   const [hasCompletedSplash, setHasCompletedSplash] = useState(false);
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
     const path = window.location.pathname;
@@ -41,7 +51,7 @@ function AppContent() {
   const handleSplashComplete = () => {
     setHasCompletedSplash(true);
     const initialPath = window.location.pathname || "/";
-    if (!user) {
+    if (!user || authPhase === "SIGNED_OUT") {
       if (initialPath === "/auth") {
         navigateTo("/auth");
       } else if (initialPath === "/app" || initialPath === "/onboarding" || initialPath === "/") {
@@ -49,20 +59,22 @@ function AppContent() {
       } else {
         navigateTo(initialPath);
       }
-    } else if (userAccount?.onboardingCompleted) {
+    } else if (authPhase === "ONBOARDING_REQUIRED") {
+      navigateTo("/onboarding");
+    } else if (authPhase === "READY" || userAccount?.onboardingCompleted) {
       if (initialPath === "/" || initialPath === "/auth") {
         navigateTo("/app");
       } else {
         navigateTo(initialPath);
       }
-    } else {
-      navigateTo("/onboarding");
     }
   };
 
   // Route protection & state synchronization
   useEffect(() => {
-    if (!hasCompletedSplash || isAuthLoading || authPhase === "AUTH_LOADING") return;
+    if (!hasCompletedSplash || isAuthLoading || authPhase === "AUTH_LOADING" || authPhase === "ACCOUNT_LOADING") return;
+
+    if (authPhase === "ACCOUNT_ERROR") return;
 
     if (authPhase === "SIGNED_OUT" || !user) {
       // Unauthenticated user -> redirect to /auth
@@ -85,6 +97,35 @@ function AppContent() {
   // If splash is not yet completed, show original SplashScreen
   if (!hasCompletedSplash) {
     return <SplashScreen onComplete={handleSplashComplete} minDuration={2000} />;
+  }
+
+  if (user && (authPhase === "ACCOUNT_ERROR" || isRetryingAccount)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F3FAF9] px-6 font-sans text-[#243838]">
+        <div className="w-full max-w-md rounded-2xl border border-[#D5E6E5] bg-white p-8 shadow-[0_12px_32px_rgba(109,174,173,0.08)]">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">Account</p>
+          <h1 className="mt-2 text-2xl font-bold tracking-[-0.04em]">Account data couldn't be loaded</h1>
+          <p className="mt-3 text-sm font-medium leading-relaxed text-[#5C7372]">
+            {accountError || "You're signed in, but your account could not be loaded. This is not a new account."}
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button
+              id="retry-account-load"
+              isLoading={isRetryingAccount}
+              onClick={() => {
+                setIsRetryingAccount(true);
+                void retryLoadAccount().finally(() => setIsRetryingAccount(false));
+              }}
+            >
+              Try again
+            </Button>
+            <Button id="sign-out-account-error" variant="outline" onClick={() => void signOutUser()}>
+              Sign out
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
