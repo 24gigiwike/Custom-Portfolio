@@ -205,6 +205,74 @@ export async function deleteStoredImage(storagePath: string): Promise<void> {
   }
 }
 
+/**
+ * Upload an account profile image with the same optimizer and resumable upload
+ * used for project images. Stored under the signed-in user's own prefix.
+ */
+export async function uploadAccountProfileImage(
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<UploadedProjectImage> {
+  const validation = validateImageFile(file);
+  if (!validation.valid) {
+    throw new Error(validation.error || "Please choose a valid image.");
+  }
+
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error("You must be signed in to upload a profile picture.");
+  }
+
+  const optimizationResult = await optimizeImageForUpload(file);
+  const fileToUpload = optimizationResult.file;
+  const cleanFileName = fileToUpload.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+  const storagePath = `portfolio-assets/${currentUser.uid}/account/profile/${Date.now()}_${cleanFileName}`;
+  const fileRef = ref(getStorageInstance(), storagePath);
+
+  const uploadTask = uploadBytesResumable(fileRef, fileToUpload, {
+    contentType: fileToUpload.type,
+    customMetadata: {
+      ownerId: currentUser.uid,
+      purpose: "account-profile",
+      originalName: file.name,
+    },
+  });
+
+  return await new Promise<UploadedProjectImage>((resolve, reject) => {
+    uploadTask.on(
+      "state_changed",
+      (snapshot: UploadTaskSnapshot) => {
+        if (snapshot.totalBytes > 0 && onProgress) {
+          const percent = Math.min(
+            100,
+            Math.max(0, Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100))
+          );
+          onProgress(percent);
+        }
+      },
+      (error) => {
+        console.error("Profile image upload error:", error);
+        const msg = error.message || String(error);
+        if (msg.includes("unauthorized") || msg.includes("permission")) {
+          reject(new Error("You do not have permission to upload this picture."));
+        } else {
+          reject(new Error("Couldn't upload this picture. Try again."));
+        }
+      },
+      async () => {
+        try {
+          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+          if (onProgress) onProgress(100);
+          resolve({ downloadUrl, storagePath });
+        } catch (err) {
+          console.error("Failed to get profile image URL:", err);
+          reject(new Error("We couldn't prepare this picture. Try another image."));
+        }
+      }
+    );
+  });
+}
+
 export async function deleteStoredImages(storagePaths: string[]): Promise<void> {
   const unique = [...new Set(storagePaths.filter(Boolean))];
   await Promise.all(

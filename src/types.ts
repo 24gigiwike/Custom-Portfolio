@@ -3,7 +3,7 @@
  * Core TypeScript type definitions
  */
 
-import type { UserProfile, OnboardingData, AuthPhase } from "./types/user";
+import type { UserProfile, FoundationDraft, OnboardingStep, AuthPhase } from "./types/user";
 import type { Portfolio, PortfolioStylePreset, CreatePortfolioInput } from "./types/portfolio";
 
 export * from "./types/user";
@@ -31,10 +31,11 @@ export interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   signOutUser: () => Promise<void>;
   clearError: () => void;
-  saveOnboarding: (data: OnboardingData) => Promise<UserProfile>;
+  saveOnboardingProgress: (draft: FoundationDraft, step: OnboardingStep) => Promise<UserProfile>;
+  finishOnboardingFoundation: (draft: FoundationDraft) => Promise<UserProfile>;
   refreshAccount: () => Promise<UserProfile | null>;
   retryLoadAccount: () => Promise<void>;
 }
 
-export type AppRoute = "/" | "/auth" | "/onboarding" | "/app" | (string & {});
+export type AppRoute = "/" | "/auth" | "/onboarding" | "/discover" | "/app" | (string & {});
 

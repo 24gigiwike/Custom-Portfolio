@@ -2,11 +2,20 @@ import {
   doc,
   getDoc,
   setDoc,
-  updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
 import { db, auth } from "./firebase";
-import type { AuthUser, UserProfile, OnboardingData } from "../types";
+import type { AuthUser, FoundationDraft, OnboardingStep, UserProfile } from "../types";
+import {
+  displayNameFromDraft,
+  draftFromAccount,
+  isOnboardingStep,
+  resolvedCategories,
+  stepFromAccount,
+  toAccountPrivate,
+  toPortfolioPreferences,
+  toProfessionalProfile,
+} from "./onboardingFoundation";
 
 enum OperationType {
   CREATE = "create",
@@ -70,20 +79,7 @@ export async function getUserAccount(uid: string): Promise<UserProfile | null> {
     const docSnap = await getDoc(userRef);
 
     if (docSnap.exists()) {
-      const data = docSnap.data();
-      return {
-        uid,
-        email: data.email || "",
-        displayName: data.displayName || "",
-        photoURL: data.photoURL || null,
-        createdAt: data.createdAt || null,
-        updatedAt: data.updatedAt || null,
-        onboardingCompleted: Boolean(data.onboardingCompleted),
-        profession: data.profession || undefined,
-        customProfession: data.customProfession || undefined,
-        portfolioType: data.portfolioType || undefined,
-        location: data.location || undefined,
-      };
+      return mapUserAccount(uid, docSnap.data());
     }
     return null;
   } catch (error) {
@@ -136,40 +132,118 @@ export async function getOrCreateUserAccount(user: AuthUser): Promise<UserProfil
 }
 
 /**
- * Complete onboarding and update the users/{uid} document with profile data
+ * Save onboarding progress on the private user document.
+ * This does not create a portfolio and does not mark the legacy workspace as ready.
  */
-export async function completeUserOnboarding(
+export async function saveFoundationProgress(
   uid: string,
-  data: OnboardingData
+  draft: FoundationDraft,
+  step: OnboardingStep,
+  options?: { readyForTemplates?: boolean }
 ): Promise<UserProfile> {
   const path = `users/${uid}`;
+  const readyForTemplates = Boolean(options?.readyForTemplates);
+  const email = auth.currentUser?.email || "";
+  const professional = toProfessionalProfile(draft);
+  const categories = resolvedCategories(draft);
+
   try {
     const userRef = doc(db, "users", uid);
-    
-    const updatePayload: Record<string, unknown> = {
-      displayName: data.displayName.trim(),
-      profession: data.profession,
-      portfolioType: data.portfolioType,
-      onboardingCompleted: true,
-      updatedAt: serverTimestamp(),
-    };
-
-    if (data.customProfession && data.customProfession.trim()) {
-      updatePayload.customProfession = data.customProfession.trim();
-    }
-
-    if (data.location && data.location.trim()) {
-      updatePayload.location = data.location.trim();
-    }
-
-    await updateDoc(userRef, updatePayload);
+    await setDoc(
+      userRef,
+      {
+        displayName: displayNameFromDraft(draft) || auth.currentUser?.displayName || "",
+        photoURL: professional.photoURL,
+        profession: professional.title || categories[0] || "",
+        customProfession: draft.categories.includes("Other") ? draft.otherCategory.trim() : "",
+        accountPrivate: toAccountPrivate(draft, email),
+        professionalProfile: professional,
+        portfolioPreferences: toPortfolioPreferences(draft),
+        onboarding: {
+          completed: false,
+          readyForTemplates,
+          currentStep: readyForTemplates ? "ready" : step,
+          version: 1,
+        },
+        onboardingCompleted: false,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
 
     const refreshed = await getUserAccount(uid);
     if (!refreshed) {
-      throw new Error("Failed to retrieve updated user profile after onboarding completion.");
+      throw new Error("Failed to retrieve your account after saving.");
     }
     return refreshed;
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
+
+function mapUserAccount(uid: string, data: Record<string, unknown>): UserProfile {
+  const onboardingData = isRecord(data.onboarding) ? data.onboarding : undefined;
+  const privateData = isRecord(data.accountPrivate) ? data.accountPrivate : undefined;
+  const professionalData = isRecord(data.professionalProfile) ? data.professionalProfile : undefined;
+  const preferenceData = isRecord(data.portfolioPreferences) ? data.portfolioPreferences : undefined;
+  const currentStep = onboardingData?.currentStep;
+
+  const account: UserProfile = {
+    uid,
+    email: typeof data.email === "string" ? data.email : "",
+    displayName: typeof data.displayName === "string" ? data.displayName : "",
+    photoURL: typeof data.photoURL === "string" ? data.photoURL : null,
+    createdAt: (data.createdAt as UserProfile["createdAt"]) || null,
+    updatedAt: (data.updatedAt as UserProfile["updatedAt"]) || null,
+    onboardingCompleted: Boolean(data.onboardingCompleted),
+    profession: typeof data.profession === "string" ? data.profession : undefined,
+    customProfession: typeof data.customProfession === "string" ? data.customProfession : undefined,
+    portfolioType: typeof data.portfolioType === "string" ? data.portfolioType : undefined,
+    location: typeof data.location === "string" ? data.location : undefined,
+  };
+
+  if (onboardingData) {
+    account.onboarding = {
+      completed: Boolean(onboardingData.completed),
+      readyForTemplates: Boolean(onboardingData.readyForTemplates),
+      currentStep: isOnboardingStep(currentStep) ? currentStep : "welcome",
+      version: 1,
+    };
+  }
+
+  if (privateData) {
+    account.accountPrivate = {
+      firstName: typeof privateData.firstName === "string" ? privateData.firstName : "",
+      lastName: typeof privateData.lastName === "string" ? privateData.lastName : "",
+      dateOfBirth: typeof privateData.dateOfBirth === "string" ? privateData.dateOfBirth : null,
+      email: typeof privateData.email === "string" ? privateData.email : account.email,
+    };
+  }
+
+  if (professionalData) {
+    account.professionalProfile = {
+      categories: stringList(professionalData.categories),
+      title: typeof professionalData.title === "string" ? professionalData.title : "",
+      description: typeof professionalData.description === "string" ? professionalData.description : "",
+      photoURL: typeof professionalData.photoURL === "string" ? professionalData.photoURL : null,
+      photoPath: typeof professionalData.photoPath === "string" ? professionalData.photoPath : null,
+    };
+  }
+
+  if (preferenceData) {
+    account.portfolioPreferences = { goals: stringList(preferenceData.goals) };
+  }
+
+  return account;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+export { draftFromAccount, stepFromAccount };

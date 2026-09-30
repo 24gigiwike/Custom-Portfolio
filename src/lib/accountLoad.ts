@@ -1,7 +1,9 @@
 import type { AuthPhase, UserProfile } from "../types";
 
 export function phaseForLoadedAccount(account: UserProfile): AuthPhase {
-  return account.onboardingCompleted ? "READY" : "ONBOARDING_REQUIRED";
+  if (account.onboardingCompleted) return "READY";
+  if (account.onboarding?.readyForTemplates) return "TEMPLATE_DISCOVERY";
+  return "ONBOARDING_REQUIRED";
 }
 
 /**
