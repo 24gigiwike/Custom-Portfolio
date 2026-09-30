@@ -26,20 +26,19 @@ service cloud.firestore {
       allow update: if isSignedIn() && resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == request.auth.uid;
       allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
 
-      // Projects subcollection rules
+      // Projects subcollection rules.
+      // Writes require the signed-in user to own the parent portfolio.
       match /projects/{projectId} {
+        function parentOwnerId() {
+          return get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.ownerId;
+        }
+
         allow read: if isSignedIn() && (
-          request.auth.uid == get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.ownerId ||
+          request.auth.uid == parentOwnerId() ||
           (resource != null && resource.data.ownerId == request.auth.uid)
         );
-        allow create: if isSignedIn() && (
-          request.auth.uid == get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.ownerId ||
-          request.resource.data.ownerId == request.auth.uid
-        );
-        allow update, delete: if isSignedIn() && (
-          request.auth.uid == get(/databases/$(database)/documents/portfolios/$(portfolioId)).data.ownerId ||
-          (resource != null && resource.data.ownerId == request.auth.uid)
-        );
+        allow create: if isSignedIn() && request.auth.uid == parentOwnerId();
+        allow update, delete: if isSignedIn() && request.auth.uid == parentOwnerId();
       }
     }
 

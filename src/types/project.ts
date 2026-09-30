@@ -12,7 +12,9 @@ export interface Project {
   description: string;
 
   coverImage: string | null;
+  coverImagePath?: string | null;
   images: string[];
+  imagePaths?: string[];
 
   role: string;
   client: string;
@@ -37,7 +39,9 @@ export interface CreateProjectInput {
   shortDescription: string;
   description?: string;
   coverImage?: string | null;
+  coverImagePath?: string | null;
   images?: string[];
+  imagePaths?: string[];
   role?: string;
   client?: string;
   year?: string;
@@ -54,7 +58,9 @@ export interface UpdateProjectInput {
   shortDescription: string;
   description?: string;
   coverImage?: string | null;
+  coverImagePath?: string | null;
   images?: string[];
+  imagePaths?: string[];
   role?: string;
   client?: string;
   year?: string;

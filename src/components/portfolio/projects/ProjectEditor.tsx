@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ArrowLeft,
   Save,
@@ -8,16 +8,21 @@ import {
   Trash2,
 } from "lucide-react";
 import { ProjectForm, type ProjectFormData } from "./ProjectForm";
+import type { ProjectMediaHandle } from "./ProjectMedia";
 import { DeleteProjectDialog } from "./DeleteProjectDialog";
 import { Button } from "../../ui/Button";
 import type { Project } from "../../../types/project";
 import type { Portfolio } from "../../../types/portfolio";
 import {
+  allocateProjectId,
   createProject,
   updateProject,
   deleteProject,
   generateProjectSlug,
 } from "../../../lib/projects";
+import { deleteStoredImages } from "../../../lib/storage";
+import { alignImagePaths, collectStoredImagePaths } from "../../../lib/projectImagePaths";
+import { userFacingWriteError } from "../../../lib/accountLoad";
 
 interface ProjectEditorProps {
   portfolio: Portfolio;
@@ -35,17 +40,22 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
   onDeleted,
 }) => {
   const isCreating = !projectToEdit;
+  const [projectId] = useState(() => projectToEdit?.id || allocateProjectId(portfolio.id));
+  const mediaRef = useRef<ProjectMediaHandle>(null);
 
   // Initialize form state
   const [formData, setFormData] = useState<ProjectFormData>(() => {
     if (projectToEdit) {
+      const images = projectToEdit.images || [];
       return {
         title: projectToEdit.title,
         slug: projectToEdit.slug,
         shortDescription: projectToEdit.shortDescription,
         description: projectToEdit.description || "",
         coverImage: projectToEdit.coverImage || null,
-        images: projectToEdit.images || [],
+        coverImagePath: projectToEdit.coverImagePath || null,
+        images,
+        imagePaths: alignImagePaths(images, projectToEdit.imagePaths),
         role: projectToEdit.role || "",
         client: projectToEdit.client || "",
         year: projectToEdit.year || "",
@@ -62,7 +72,9 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
       shortDescription: "",
       description: "",
       coverImage: null,
+      coverImagePath: null,
       images: [],
+      imagePaths: [],
       role: "",
       client: "",
       year: "",
@@ -73,6 +85,8 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
       featured: false,
     };
   });
+
+  const persistedPathsRef = useRef<Set<string>>(new Set(collectStoredImagePaths(formData)));
 
   const [initialData, setInitialData] = useState<ProjectFormData>(formData);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -87,6 +101,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
 
   // Auto-slug when creating new project and typing title
   const handleFormChange = (updatedFields: Partial<ProjectFormData>) => {
+    let abandonedUploads: string[] = [];
     setFormData((prev) => {
       const next = { ...prev, ...updatedFields };
 
@@ -104,8 +119,16 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
       setHasUnsavedChanges(isDifferent);
       if (saveStatus === "saved") setSaveStatus("idle");
 
+      const nextPaths = new Set(collectStoredImagePaths(next));
+      abandonedUploads = collectStoredImagePaths(prev).filter(
+        (path) => !nextPaths.has(path) && !persistedPathsRef.current.has(path)
+      );
+
       return next;
     });
+    if (abandonedUploads.length > 0) {
+      void deleteStoredImages(abandonedUploads);
+    }
 
     // Clear related field errors
     if (updatedFields.title) {
@@ -149,7 +172,9 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
           shortDescription: formData.shortDescription,
           description: formData.description,
           coverImage: formData.coverImage,
+          coverImagePath: formData.coverImagePath,
           images: formData.images,
+          imagePaths: formData.imagePaths,
           role: formData.role,
           client: formData.client,
           year: formData.year,
@@ -158,11 +183,16 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
           projectUrl: formData.projectUrl,
           caseStudyUrl: formData.caseStudyUrl,
           featured: formData.featured,
-        });
+        }, projectId);
 
+        const obsolete = [...persistedPathsRef.current].filter(
+          (path) => !collectStoredImagePaths(formData).includes(path)
+        );
+        persistedPathsRef.current = new Set(collectStoredImagePaths(formData));
         setInitialData(formData);
         setHasUnsavedChanges(false);
         setSaveStatus("saved");
+        await deleteStoredImages(obsolete);
         setTimeout(() => {
           onSaved(created);
         }, 600);
@@ -173,7 +203,9 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
           shortDescription: formData.shortDescription,
           description: formData.description,
           coverImage: formData.coverImage,
+          coverImagePath: formData.coverImagePath,
           images: formData.images,
+          imagePaths: formData.imagePaths,
           role: formData.role,
           client: formData.client,
           year: formData.year,
@@ -191,7 +223,9 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
           shortDescription: formData.shortDescription.trim(),
           description: formData.description.trim(),
           coverImage: formData.coverImage,
+          coverImagePath: formData.coverImagePath,
           images: formData.images,
+          imagePaths: formData.imagePaths,
           role: formData.role.trim(),
           client: formData.client.trim(),
           year: formData.year.trim(),
@@ -202,9 +236,14 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
           featured: formData.featured,
         };
 
+        const obsolete = [...persistedPathsRef.current].filter(
+          (path) => !collectStoredImagePaths(formData).includes(path)
+        );
+        persistedPathsRef.current = new Set(collectStoredImagePaths(formData));
         setInitialData(formData);
         setHasUnsavedChanges(false);
         setSaveStatus("saved");
+        await deleteStoredImages(obsolete);
         setTimeout(() => {
           onSaved(updatedProject);
         }, 600);
@@ -212,7 +251,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
     } catch (err) {
       console.error("Save Project Error:", err);
       setSaveStatus("error");
-      setErrorMessage("We couldn't save this project. Please try again.");
+      setErrorMessage(userFacingWriteError(err, "We couldn't save this project. Please try again."));
     } finally {
       setIsSaving(false);
     }
@@ -228,7 +267,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
       onDeleted(projectToEdit.id);
     } catch (err) {
       console.error("Failed to delete project:", err);
-      setErrorMessage("We couldn't delete this project. Please try again.");
+      setErrorMessage(userFacingWriteError(err, "We couldn't delete this project. Please try again."));
     } finally {
       setIsDeleting(false);
     }
@@ -240,6 +279,11 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
       const confirmLeave = window.confirm("You have unsaved changes. Discard and leave?");
       if (!confirmLeave) return;
     }
+    mediaRef.current?.cancelPendingUploads();
+    const abandoned = collectStoredImagePaths(formData).filter(
+      (path) => !persistedPathsRef.current.has(path)
+    );
+    void deleteStoredImages(abandoned);
     onBack();
   };
 
@@ -340,8 +384,9 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
 
         {/* Form Components */}
         <ProjectForm
+          ref={mediaRef}
           portfolioId={portfolio.id}
-          projectId={projectToEdit?.id || "draft"}
+          projectId={projectId}
           formData={formData}
           errors={fieldErrors}
           onChange={handleFormChange}

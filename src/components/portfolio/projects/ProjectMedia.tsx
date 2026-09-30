@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useImperativeHandle } from "react";
 import {
   Image as ImageIcon,
   UploadCloud,
@@ -11,20 +11,27 @@ import {
   RotateCcw,
   Check,
 } from "lucide-react";
-import { uploadProjectImage, validateImageFile } from "../../../lib/storage";
+import { deleteStoredImage, uploadProjectImage, validateImageFile } from "../../../lib/storage";
 
 interface ProjectMediaProps {
   portfolioId: string;
   projectId: string;
   coverImage: string | null;
+  coverImagePath?: string | null;
   images: string[];
-  onCoverImageChange: (url: string | null) => void;
-  onImagesChange: (urls: string[]) => void;
+  imagePaths?: string[];
+  onCoverImageChange: (url: string | null, storagePath?: string | null) => void;
+  onImagesChange: (urls: string[], storagePaths: string[]) => void;
+}
+
+export interface ProjectMediaHandle {
+  cancelPendingUploads: () => void;
 }
 
 interface GalleryItem {
   id: string;
   url: string;
+  storagePath?: string;
   isLocal: boolean;
   file?: File;
   status: "optimizing" | "uploading" | "complete" | "error";
@@ -32,14 +39,24 @@ interface GalleryItem {
   error?: string;
 }
 
-export const ProjectMedia: React.FC<ProjectMediaProps> = ({
+function completedGallery(items: GalleryItem[]): { urls: string[]; paths: string[] } {
+  const completed = items.filter((item) => item.status === "complete" && !item.isLocal);
+  return {
+    urls: completed.map((item) => item.url),
+    paths: completed.map((item) => item.storagePath || ""),
+  };
+}
+
+export const ProjectMedia = React.forwardRef<ProjectMediaHandle, ProjectMediaProps>(function ProjectMedia({
   portfolioId,
   projectId,
   coverImage,
+  coverImagePath,
   images,
+  imagePaths,
   onCoverImageChange,
   onImagesChange,
-}) => {
+}, ref) {
   const [showCoverUrlInput, setShowCoverUrlInput] = useState(false);
   const [showGalleryUrlInput, setShowGalleryUrlInput] = useState(false);
   const [galleryUrlValue, setGalleryUrlValue] = useState("");
@@ -64,11 +81,23 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
     return images.map((url, idx) => ({
       id: `remote_${idx}_${url}`,
       url,
+      storagePath: imagePaths?.[idx] || "",
       isLocal: false,
       status: "complete",
       progress: 100,
     }));
   });
+
+  const cancelledRef = useRef(false);
+  const knownCoverRef = useRef<{ url: string; storagePath: string } | null>(
+    coverImage && coverImagePath ? { url: coverImage, storagePath: coverImagePath } : null
+  );
+
+  useImperativeHandle(ref, () => ({
+    cancelPendingUploads() {
+      cancelledRef.current = true;
+    },
+  }), []);
 
   // Keep track of active object URLs for cleanup
   const activeObjectUrls = useRef<Set<string>>(new Set());
@@ -109,13 +138,16 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
     setGalleryItems((prev) => {
       // Keep any local/in-progress items, update remote completed ones
       const localOrUploading = prev.filter((item) => item.isLocal && item.status !== "complete");
-      const currentCompletedUrls = prev
-        .filter((item) => !item.isLocal && item.status === "complete")
-        .map((item) => item.url);
+      const currentCompleted = prev.filter((item) => !item.isLocal && item.status === "complete");
+      const currentCompletedUrls = currentCompleted.map((item) => item.url);
+      const currentCompletedPaths = currentCompleted.map((item) => item.storagePath || "");
+      const nextPaths = images.map((_, idx) => imagePaths?.[idx] || "");
 
       const arraysEqual =
         currentCompletedUrls.length === images.length &&
-        currentCompletedUrls.every((val, idx) => val === images[idx]);
+        currentCompletedUrls.every((val, idx) => val === images[idx]) &&
+        currentCompletedPaths.length === nextPaths.length &&
+        currentCompletedPaths.every((val, idx) => val === nextPaths[idx]);
 
       if (arraysEqual) {
         return prev;
@@ -124,6 +156,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
       const newRemoteItems: GalleryItem[] = images.map((url, idx) => ({
         id: `remote_${idx}_${url}`,
         url,
+        storagePath: imagePaths?.[idx] || "",
         isLocal: false,
         status: "complete",
         progress: 100,
@@ -131,7 +164,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
 
       return [...newRemoteItems, ...localOrUploading];
     });
-  }, [images]);
+  }, [images, imagePaths]);
 
   const coverFileInputRef = useRef<HTMLInputElement>(null);
   const galleryFileInputRef = useRef<HTMLInputElement>(null);
@@ -160,7 +193,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
     });
 
     try {
-      const downloadUrl = await uploadProjectImage(portfolioId, projectId, file, {
+      const uploaded = await uploadProjectImage(portfolioId, projectId, file, {
         folder: "cover",
         onProgress: (percent) => {
           setCoverUploadState((prev) => ({
@@ -171,8 +204,17 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
         },
       });
 
-      // Upload finished successfully
-      onCoverImageChange(downloadUrl);
+      if (cancelledRef.current) {
+        try {
+          await deleteStoredImage(uploaded.storagePath);
+        } catch (deleteError) {
+          console.error("Cancelled cover upload cleanup failed:", deleteError);
+        }
+        return;
+      }
+
+      knownCoverRef.current = { url: uploaded.downloadUrl, storagePath: uploaded.storagePath };
+      onCoverImageChange(uploaded.downloadUrl, uploaded.storagePath);
       setCoverUploadState({
         isUploading: false,
         progress: 100,
@@ -217,7 +259,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
       progress: 0,
       statusText: "",
     });
-    onCoverImageChange(null);
+    onCoverImageChange(null, null);
   };
 
   /* ------------------------------------------------------------------
@@ -246,6 +288,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
 
       const worker = async () => {
         while (index < pendingItems.length) {
+          if (cancelledRef.current) return;
           const currentItem = pendingItems[index++];
           if (!currentItem || !currentItem.file) continue;
 
@@ -259,7 +302,7 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
           );
 
           try {
-            const downloadUrl = await uploadProjectImage(
+            const uploaded = await uploadProjectImage(
               portfolioId,
               projectId,
               currentItem.file,
@@ -277,6 +320,15 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
               }
             );
 
+            if (cancelledRef.current) {
+              try {
+                await deleteStoredImage(uploaded.storagePath);
+              } catch (deleteError) {
+                console.error("Cancelled gallery upload cleanup failed:", deleteError);
+              }
+              return;
+            }
+
             // Item succeeded
             revokeObjectUrl(currentItem.url);
 
@@ -285,7 +337,8 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
                 it.id === currentItem.id
                   ? {
                       ...it,
-                      url: downloadUrl,
+                      url: uploaded.downloadUrl,
+                      storagePath: uploaded.storagePath,
                       isLocal: false,
                       status: "complete" as const,
                       progress: 100,
@@ -293,11 +346,8 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
                   : it
               );
 
-              // Update parent with list of completed URLs
-              const completedUrls = updated
-                .filter((it) => it.status === "complete" && !it.isLocal)
-                .map((it) => it.url);
-              onImagesChange(completedUrls);
+              const completed = completedGallery(updated);
+              onImagesChange(completed.urls, completed.paths);
 
               return updated;
             });
@@ -384,10 +434,8 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
     }
     setGalleryItems((prev) => {
       const updated = prev.filter((it) => it.id !== itemToRemove.id);
-      const completedUrls = updated
-        .filter((it) => it.status === "complete" && !it.isLocal)
-        .map((it) => it.url);
-      onImagesChange(completedUrls);
+      const completed = completedGallery(updated);
+      onImagesChange(completed.urls, completed.paths);
       return updated;
     });
   };
@@ -399,10 +447,8 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
     updated.splice(toIdx, 0, item);
     setGalleryItems(updated);
 
-    const completedUrls = updated
-      .filter((it) => it.status === "complete" && !it.isLocal)
-      .map((it) => it.url);
-    onImagesChange(completedUrls);
+    const completed = completedGallery(updated);
+    onImagesChange(completed.urls, completed.paths);
   };
 
   const handleAddGalleryUrl = () => {
@@ -417,10 +463,8 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
     };
     setGalleryItems((prev) => {
       const updated = [...prev, newItem];
-      const completedUrls = updated
-        .filter((it) => it.status === "complete" && !it.isLocal)
-        .map((it) => it.url);
-      onImagesChange(completedUrls);
+      const completed = completedGallery(updated);
+      onImagesChange(completed.urls, completed.paths);
       return updated;
     });
     setGalleryUrlValue("");
@@ -605,7 +649,14 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
                   type="url"
                   id="cover-image-url-input"
                   value={coverImage || ""}
-                  onChange={(e) => onCoverImageChange(e.target.value.trim() || null)}
+                  onChange={(e) => {
+                    const next = e.target.value.trim() || null;
+                    const known = knownCoverRef.current;
+                    onCoverImageChange(
+                      next,
+                      known && next === known.url ? known.storagePath : null
+                    );
+                  }}
                   placeholder="https://..."
                   className="w-full text-xs font-mono px-3 py-2 bg-[#F7FBFA] border border-[#D5E6E5] rounded-2xl text-[#243838] placeholder:text-[#6E8887]/60 focus:outline-none focus:border-[#6DAEAD] focus:bg-white transition-colors"
                 />
@@ -816,4 +867,4 @@ export const ProjectMedia: React.FC<ProjectMediaProps> = ({
       </div>
     </section>
   );
-};
+});

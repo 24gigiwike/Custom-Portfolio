@@ -2,20 +2,33 @@ import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
 import firebaseConfigData from "../../firebase-applet-config.json";
+import { resolveFirebaseWebConfig } from "./firebaseConfig";
 
 /**
  * Firebase Client & Firestore Initialization
  * Uses the provisioned Firebase configuration for Custom Portfolio.
+ * Environment variables must be supplied as a complete set. A partial set
+ * is rejected so it cannot be mixed with the committed project.
  */
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfigData.apiKey,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigData.authDomain,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfigData.projectId,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfigData.storageBucket,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfigData.messagingSenderId,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseConfigData.appId,
-};
+const firebaseConfig = resolveFirebaseWebConfig(
+  {
+    VITE_FIREBASE_API_KEY: import.meta.env.VITE_FIREBASE_API_KEY,
+    VITE_FIREBASE_AUTH_DOMAIN: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    VITE_FIREBASE_PROJECT_ID: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    VITE_FIREBASE_STORAGE_BUCKET: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    VITE_FIREBASE_MESSAGING_SENDER_ID: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    VITE_FIREBASE_APP_ID: import.meta.env.VITE_FIREBASE_APP_ID,
+  },
+  {
+    apiKey: firebaseConfigData.apiKey,
+    authDomain: firebaseConfigData.authDomain,
+    projectId: firebaseConfigData.projectId,
+    storageBucket: firebaseConfigData.storageBucket,
+    messagingSenderId: firebaseConfigData.messagingSenderId,
+    appId: firebaseConfigData.appId,
+  }
+);
 
 let app: FirebaseApp;
 

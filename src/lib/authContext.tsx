@@ -18,6 +18,7 @@ import {
   getUserAccount,
   completeUserOnboarding,
 } from "./userAccount";
+import { accountLoadFailureMessage, phaseForLoadedAccount } from "./accountLoad";
 import type {
   AuthContextType,
   AuthStatus,
@@ -36,6 +37,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [authPhase, setAuthPhase] = useState<AuthPhase>("AUTH_LOADING");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
+
+  const applyLoadedAccount = (account: UserProfile) => {
+    setUserAccount(account);
+    setAccountError(null);
+    setAuthPhase(phaseForLoadedAccount(account));
+  };
+
+  const failAccountLoad = (err: unknown) => {
+    console.error("Error loading Firestore user account:", err);
+    setUserAccount(null);
+    setAccountError(accountLoadFailureMessage(err));
+    setAuthPhase("ACCOUNT_ERROR");
+    setStatus("authenticated");
+  };
 
   // Sync strictly with Firebase Auth state observer and Firestore user document
   useEffect(() => {
@@ -65,23 +81,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             try {
               const account = await getOrCreateUserAccount(mappedUser);
               if (isMounted) {
-                setUserAccount(account);
-                if (account.onboardingCompleted) {
-                  setAuthPhase("READY");
-                } else {
-                  setAuthPhase("ONBOARDING_REQUIRED");
-                }
+                applyLoadedAccount(account);
               }
             } catch (err) {
-              console.error("Error loading/creating Firestore user account:", err);
               if (isMounted) {
-                // If Firestore error occurs, we still preserve the user but flag onboarding
-                setAuthPhase("ONBOARDING_REQUIRED");
+                failAccountLoad(err);
               }
             }
           } else {
             setUser(null);
             setUserAccount(null);
+            setAccountError(null);
             setStatus("unauthenticated");
             setAuthPhase("SIGNED_OUT");
           }
@@ -136,15 +146,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         try {
           const account = await getOrCreateUserAccount(mappedUser);
-          setUserAccount(account);
-          if (account.onboardingCompleted) {
-            setAuthPhase("READY");
-          } else {
-            setAuthPhase("ONBOARDING_REQUIRED");
-          }
+          applyLoadedAccount(account);
         } catch (dbErr) {
-          console.error("Firestore user account creation error on sign in:", dbErr);
-          setAuthPhase("ONBOARDING_REQUIRED");
+          failAccountLoad(dbErr);
         }
       }
     } catch (err: unknown) {
@@ -188,6 +192,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } finally {
       setUser(null);
       setUserAccount(null);
+      setAccountError(null);
       setStatus("unauthenticated");
       setAuthPhase("SIGNED_OUT");
     }
@@ -213,17 +218,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const account = await getUserAccount(user.uid);
       if (account) {
-        setUserAccount(account);
-        if (account.onboardingCompleted) {
-          setAuthPhase("READY");
-        } else {
-          setAuthPhase("ONBOARDING_REQUIRED");
-        }
+        applyLoadedAccount(account);
       }
       return account;
     } catch (err) {
       console.error("Error refreshing account:", err);
+      if (!userAccount) {
+        failAccountLoad(err);
+      }
       return null;
+    }
+  }, [user, userAccount]);
+
+  const retryLoadAccount = useCallback(async () => {
+    if (!user) return;
+    setStatus("authenticated");
+    setAuthPhase("ACCOUNT_LOADING");
+    setAccountError(null);
+    try {
+      const account = await getOrCreateUserAccount(user);
+      applyLoadedAccount(account);
+    } catch (err) {
+      failAccountLoad(err);
     }
   }, [user]);
 
@@ -238,11 +254,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         authPhase,
         isLoading,
         error,
+        accountError,
         signInWithGoogle,
         signOutUser,
         clearError,
         saveOnboarding,
         refreshAccount,
+        retryLoadAccount,
       }}
     >
       {children}
