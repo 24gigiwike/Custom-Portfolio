@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "./lib/authContext";
 import { SplashScreen } from "./components/splash/SplashScreen";
 import { AuthScreen } from "./components/auth/AuthScreen";
 import { OnboardingScreen } from "./components/onboarding/OnboardingScreen";
+import { TemplateDiscovery } from "./components/discover/TemplateDiscovery";
 import { PortfolioAppView } from "./components/portfolio/PortfolioAppView";
 import { Button } from "./components/ui/Button";
 import type { AppRoute } from "./types";
@@ -54,15 +55,22 @@ function AppContent() {
     if (!user || authPhase === "SIGNED_OUT") {
       if (initialPath === "/auth") {
         navigateTo("/auth");
-      } else if (initialPath === "/app" || initialPath === "/onboarding" || initialPath === "/") {
+      } else if (initialPath === "/app" || initialPath === "/onboarding" || initialPath === "/discover" || initialPath === "/") {
         navigateTo("/auth");
       } else {
         navigateTo(initialPath);
       }
     } else if (authPhase === "ONBOARDING_REQUIRED") {
       navigateTo("/onboarding");
+    } else if (authPhase === "TEMPLATE_DISCOVERY") {
+      navigateTo("/discover");
     } else if (authPhase === "READY" || userAccount?.onboardingCompleted) {
-      if (initialPath === "/" || initialPath === "/auth") {
+      if (
+        initialPath === "/" ||
+        initialPath === "/auth" ||
+        initialPath === "/onboarding" ||
+        initialPath === "/discover"
+      ) {
         navigateTo("/app");
       } else {
         navigateTo(initialPath);
@@ -77,18 +85,19 @@ function AppContent() {
     if (authPhase === "ACCOUNT_ERROR") return;
 
     if (authPhase === "SIGNED_OUT" || !user) {
-      // Unauthenticated user -> redirect to /auth
-      if (currentRoute === "/app" || currentRoute === "/onboarding" || currentRoute === "/") {
+      if (currentRoute === "/app" || currentRoute === "/onboarding" || currentRoute === "/discover" || currentRoute === "/") {
         navigateTo("/auth");
       }
     } else if (authPhase === "ONBOARDING_REQUIRED") {
-      // Authenticated but onboarding incomplete -> redirect to /onboarding
-      if (currentRoute === "/app" || currentRoute === "/auth" || currentRoute === "/") {
+      if (currentRoute === "/app" || currentRoute === "/auth" || currentRoute === "/discover" || currentRoute === "/") {
         navigateTo("/onboarding");
       }
+    } else if (authPhase === "TEMPLATE_DISCOVERY") {
+      if (currentRoute === "/app" || currentRoute === "/auth" || currentRoute === "/onboarding" || currentRoute === "/") {
+        navigateTo("/discover");
+      }
     } else if (authPhase === "READY") {
-      // Authenticated and onboarding complete -> redirect to /app
-      if (currentRoute === "/auth" || currentRoute === "/onboarding" || currentRoute === "/") {
+      if (currentRoute === "/auth" || currentRoute === "/onboarding" || currentRoute === "/discover" || currentRoute === "/") {
         navigateTo("/app");
       }
     }
@@ -142,7 +151,18 @@ function AppContent() {
           >
             <PortfolioAppView />
           </motion.div>
-        ) : currentRoute === "/onboarding" && user ? (
+        ) : currentRoute === "/discover" && user && authPhase === "TEMPLATE_DISCOVERY" ? (
+          <motion.div
+            key="discover-route"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full min-h-screen"
+          >
+            <TemplateDiscovery account={userAccount} onSignOut={() => void signOutUser()} />
+          </motion.div>
+        ) : currentRoute === "/onboarding" && user && authPhase === "ONBOARDING_REQUIRED" ? (
           <motion.div
             key="onboarding-route"
             initial={{ opacity: 0, y: 8 }}
@@ -151,7 +171,7 @@ function AppContent() {
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
             className="w-full min-h-screen"
           >
-            <OnboardingScreen onCompleted={() => navigateTo("/app")} />
+            <OnboardingScreen onDiscover={() => navigateTo("/discover")} />
           </motion.div>
         ) : (
           <motion.div

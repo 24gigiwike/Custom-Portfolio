@@ -1,147 +1,214 @@
 import React, { useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import { brand } from "../../config/branding";
 import { useAuth } from "../../lib/authContext";
+import { userFacingWriteError } from "../../lib/accountLoad";
+import {
+  draftFromAccount,
+  hasErrors,
+  stepFromAccount,
+  validateAbout,
+  validateGoals,
+  validatePersonal,
+  validateProfessional,
+} from "../../lib/onboardingFoundation";
+import type { FoundationDraft, OnboardingStep } from "../../types";
 import { OnboardingProgress } from "./OnboardingProgress";
-import { NameStep } from "./NameStep";
-import { ProfessionStep } from "./ProfessionStep";
-import { PortfolioTypeStep } from "./PortfolioTypeStep";
-import { LocationStep } from "./LocationStep";
-import type { OnboardingData } from "../../types";
+import { WelcomeStep } from "./WelcomeStep";
+import { AboutYouStep } from "./AboutYouStep";
+import { PersonalDetailsStep } from "./PersonalDetailsStep";
+import { ProfessionalIdentityStep } from "./ProfessionalIdentityStep";
+import { PortfolioGoalStep } from "./PortfolioGoalStep";
+import { ReadyStep } from "./ReadyStep";
 
 interface OnboardingScreenProps {
-  onCompleted: () => void;
+  onDiscover: () => void;
 }
 
-const STEP_COPY = [
-  { kicker: "Identity", title: "Start with the name people should remember." },
-  { kicker: "Craft", title: "Name the work you actually do." },
-  { kicker: "Purpose", title: "Choose the presence you are building." },
-  { kicker: "Origin", title: "Place yourself, if you want to." },
-];
+const FORM_STEP_INDEX: Partial<Record<OnboardingStep, number>> = {
+  about: 1,
+  personal: 2,
+  professional: 3,
+  goal: 4,
+};
 
-export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onCompleted }) => {
-  const { user, userAccount, saveOnboarding } = useAuth();
+const PREVIOUS_STEP: Partial<Record<OnboardingStep, OnboardingStep>> = {
+  about: "welcome",
+  personal: "about",
+  professional: "personal",
+  goal: "professional",
+  ready: "goal",
+};
 
-  const [currentStep, setCurrentStep] = useState<number>(1);
-  const [formData, setFormData] = useState<OnboardingData>({
-    displayName: userAccount?.displayName || user?.displayName || "",
-    profession: userAccount?.profession || "",
-    customProfession: userAccount?.customProfession || "",
-    portfolioType: userAccount?.portfolioType || "",
-    location: userAccount?.location || "",
-  });
+export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onDiscover }) => {
+  const { user, userAccount, saveOnboardingProgress, finishOnboardingFoundation, signOutUser } = useAuth();
+  const [step, setStep] = useState<OnboardingStep>(() => stepFromAccount(userAccount));
+  const [draft, setDraft] = useState<FoundationDraft>(() => draftFromAccount(userAccount, user));
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-
-  const handleNameComplete = (name: string) => {
-    setFormData((prev) => ({ ...prev, displayName: name }));
-    setCurrentStep(2);
+  const patchDraft = (patch: Partial<FoundationDraft>) => {
+    setDraft((current) => ({ ...current, ...patch }));
+    setFieldErrors({});
   };
 
-  const handleProfessionComplete = (profession: string, customProfession?: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      profession,
-      customProfession: customProfession || "",
-    }));
-    setCurrentStep(3);
-  };
-
-  const handlePortfolioTypeComplete = (portfolioType: string) => {
-    setFormData((prev) => ({ ...prev, portfolioType }));
-    setCurrentStep(4);
-  };
-
-  const handleLocationSubmit = async (location?: string) => {
-    const finalData: OnboardingData = {
-      ...formData,
-      location: location || "",
-    };
-
-    setIsSubmitting(true);
-    setSubmitError(null);
-
+  const persist = async (nextStep: OnboardingStep, ready = false) => {
+    setIsSaving(true);
+    setSaveError(null);
     try {
-      await saveOnboarding(finalData);
-      onCompleted();
-    } catch (err) {
-      console.error("Onboarding submission failed:", err);
-      setSubmitError("We couldn't save your information. Please try again.");
+      if (ready) {
+        await finishOnboardingFoundation(draft);
+        onDiscover();
+      } else {
+        await saveOnboardingProgress(draft, nextStep);
+        setStep(nextStep);
+      }
+    } catch (error) {
+      console.error("Onboarding save failed:", error);
+      setSaveError(userFacingWriteError(error, "We couldn't save your information. Please try again."));
     } finally {
-      setIsSubmitting(false);
+      setIsSaving(false);
     }
   };
 
-  const stepCopy = STEP_COPY[currentStep - 1];
+  const continueForward = () => {
+    if (step === "welcome") {
+      void persist("about");
+      return;
+    }
+    if (step === "about") {
+      const errors = validateAbout(draft);
+      if (hasErrors(errors)) {
+        setFieldErrors(errors);
+        return;
+      }
+      void persist("personal");
+      return;
+    }
+    if (step === "personal") {
+      const errors = validatePersonal(draft);
+      if (hasErrors(errors)) {
+        setFieldErrors(errors);
+        return;
+      }
+      void persist("professional");
+      return;
+    }
+    if (step === "professional") {
+      const errors = validateProfessional(draft);
+      if (hasErrors(errors)) {
+        setFieldErrors(errors);
+        return;
+      }
+      void persist("goal");
+      return;
+    }
+    if (step === "goal") {
+      const errors = validateGoals(draft);
+      if (hasErrors(errors)) {
+        setFieldErrors(errors);
+        return;
+      }
+      void persist("ready");
+      return;
+    }
+    void persist("ready", true);
+  };
+
+  const goBack = () => {
+    const previous = PREVIOUS_STEP[step];
+    if (!previous) return;
+    setFieldErrors({});
+    setStep(previous);
+    void saveOnboardingProgress(draft, previous).catch((error) => {
+      console.error("Onboarding back-save failed:", error);
+      setSaveError(userFacingWriteError(error, "We couldn't save your information. Please try again."));
+    });
+  };
+
+  const progressIndex = FORM_STEP_INDEX[step];
 
   return (
-    <div
-      id="onboarding-screen"
-      className="min-h-screen bg-[#F3FAF9] text-[#243838] selection:bg-[#6DAEAD]/25"
-    >
-      <div className="mx-auto grid min-h-screen w-full max-w-6xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[0.82fr_1.18fr] lg:py-8">
-        <aside className="relative flex flex-col justify-between overflow-hidden rounded-[28px] bg-[#6DAEAD] px-7 py-8 text-white sm:px-10">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-lg font-bold tracking-[-0.04em]">{brand.name}</div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/75">
-              Account setup
-            </div>
-          </div>
-          <div className="py-10">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/75">
-              {stepCopy.kicker}
-            </p>
-            <h1 className="mt-3 max-w-sm text-4xl font-bold leading-[1.05] tracking-[-0.045em] sm:text-5xl">
-              {stepCopy.title}
-            </h1>
-          </div>
-          <OnboardingProgress currentStep={currentStep} totalSteps={4} tone="inverse" />
-        </aside>
-
-        <main className="flex flex-col justify-center rounded-[28px] border border-white/80 bg-white px-5 py-8 shadow-[0_16px_50px_rgba(109,174,173,0.08)] sm:px-10 sm:py-12">
-          <AnimatePresence mode="wait">
-            {currentStep === 1 && (
-              <NameStep
-                key="step-1"
-                initialValue={formData.displayName}
-                onNext={handleNameComplete}
-              />
-            )}
-
-            {currentStep === 2 && (
-              <ProfessionStep
-                key="step-2"
-                initialProfession={formData.profession}
-                initialCustomProfession={formData.customProfession}
-                onNext={handleProfessionComplete}
-                onBack={() => setCurrentStep(1)}
-              />
-            )}
-
-            {currentStep === 3 && (
-              <PortfolioTypeStep
-                key="step-3"
-                initialPortfolioType={formData.portfolioType}
-                onNext={handlePortfolioTypeComplete}
-                onBack={() => setCurrentStep(2)}
-              />
-            )}
-
-            {currentStep === 4 && (
-              <LocationStep
-                key="step-4"
-                initialLocation={formData.location}
-                isSubmitting={isSubmitting}
-                submitError={submitError}
-                onSubmit={handleLocationSubmit}
-                onBack={() => setCurrentStep(3)}
-              />
-            )}
-          </AnimatePresence>
-        </main>
-      </div>
+    <div id="onboarding-screen" className="min-h-screen bg-[#F8F8F7] text-[#243838]">
+      <div className="pointer-events-none fixed left-0 top-0 z-30 h-full w-1 bg-gradient-to-b from-[#708595] to-[#6DAEAD]" />
+      <header className="flex items-center justify-between gap-4 px-5 py-5 sm:px-10">
+        <div>
+          <p className="text-lg font-bold tracking-[-0.04em]">{brand.name}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#5C7372]">{brand.endorsement}</p>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {progressIndex && <OnboardingProgress currentStep={progressIndex} totalSteps={4} />}
+          <button type="button" onClick={() => void signOutUser()} className="text-sm font-bold text-[#3E7574]">
+            Sign out
+          </button>
+        </div>
+      </header>
+      <main className="mx-auto w-full max-w-2xl px-5 pb-20 pt-4 sm:px-10 sm:pt-10">
+        <AnimatePresence mode="wait">
+          {step === "welcome" && (
+            <WelcomeStep key="welcome" onContinue={continueForward} isSaving={isSaving} saveError={saveError} />
+          )}
+          {step === "about" && (
+            <AboutYouStep
+              key="about"
+              draft={draft}
+              errors={fieldErrors}
+              saveError={saveError}
+              isSaving={isSaving}
+              onChange={patchDraft}
+              onContinue={continueForward}
+              onBack={goBack}
+            />
+          )}
+          {step === "personal" && (
+            <PersonalDetailsStep
+              key="personal"
+              draft={draft}
+              email={userAccount?.accountPrivate?.email || userAccount?.email || user?.email || ""}
+              errors={fieldErrors}
+              saveError={saveError}
+              isSaving={isSaving}
+              onChange={patchDraft}
+              onContinue={continueForward}
+              onBack={goBack}
+            />
+          )}
+          {step === "professional" && (
+            <ProfessionalIdentityStep
+              key="professional"
+              draft={draft}
+              errors={fieldErrors}
+              saveError={saveError}
+              isSaving={isSaving}
+              onChange={patchDraft}
+              onContinue={continueForward}
+              onBack={goBack}
+            />
+          )}
+          {step === "goal" && (
+            <PortfolioGoalStep
+              key="goal"
+              draft={draft}
+              errors={fieldErrors}
+              saveError={saveError}
+              isSaving={isSaving}
+              onChange={patchDraft}
+              onContinue={continueForward}
+              onBack={goBack}
+            />
+          )}
+          {step === "ready" && (
+            <ReadyStep
+              key="ready"
+              onContinue={continueForward}
+              onBack={goBack}
+              isSaving={isSaving}
+              saveError={saveError}
+            />
+          )}
+        </AnimatePresence>
+      </main>
     </div>
   );
 };

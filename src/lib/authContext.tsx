@@ -16,7 +16,7 @@ import { auth, googleProvider } from "./firebase";
 import {
   getOrCreateUserAccount,
   getUserAccount,
-  completeUserOnboarding,
+  saveFoundationProgress,
 } from "./userAccount";
 import { accountLoadFailureMessage, phaseForLoadedAccount } from "./accountLoad";
 import type {
@@ -24,7 +24,8 @@ import type {
   AuthStatus,
   AuthUser,
   UserProfile,
-  OnboardingData,
+  FoundationDraft,
+  OnboardingStep,
   AuthPhase,
 } from "../types";
 
@@ -198,17 +199,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const saveOnboarding = async (data: OnboardingData): Promise<UserProfile> => {
+  const saveOnboardingProgress = async (
+    draft: FoundationDraft,
+    step: OnboardingStep
+  ): Promise<UserProfile> => {
     if (!user) {
       throw new Error("Cannot save onboarding without an active authenticated session.");
     }
     try {
-      const updated = await completeUserOnboarding(user.uid, data);
+      const updated = await saveFoundationProgress(user.uid, draft, step);
       setUserAccount(updated);
-      setAuthPhase("READY");
+      setAuthPhase(phaseForLoadedAccount(updated));
       return updated;
     } catch (err) {
-      console.error("Failed to save onboarding data:", err);
+      console.error("Failed to save onboarding progress:", err);
+      throw err;
+    }
+  };
+
+  const finishOnboardingFoundation = async (draft: FoundationDraft): Promise<UserProfile> => {
+    if (!user) {
+      throw new Error("Cannot finish onboarding without an active authenticated session.");
+    }
+    try {
+      const updated = await saveFoundationProgress(user.uid, draft, "ready", {
+        readyForTemplates: true,
+      });
+      setUserAccount(updated);
+      setAuthPhase("TEMPLATE_DISCOVERY");
+      return updated;
+    } catch (err) {
+      console.error("Failed to finish onboarding foundation:", err);
       throw err;
     }
   };
@@ -258,7 +279,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         signInWithGoogle,
         signOutUser,
         clearError,
-        saveOnboarding,
+        saveOnboardingProgress,
+        finishOnboardingFoundation,
         refreshAccount,
         retryLoadAccount,
       }}
