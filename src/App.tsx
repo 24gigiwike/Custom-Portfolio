@@ -10,6 +10,8 @@ import { Button } from "./components/ui/Button";
 import { isWdkTemplatePreviewPath, WDK_TEMPLATE_PREVIEW_PATH } from "./preview/templatePreviewPath";
 import { isPortfolioEditorPath } from "./components/portfolio-editor/portfolioEditorPath";
 import { PortfolioEditor } from "./components/portfolio-editor/PortfolioEditor";
+import { isPortfolioWorkspacePath, PORTFOLIO_WORKSPACE_PATH } from "./components/portfolio-workspace/portfolioWorkspacePath";
+import { PortfolioWorkspace } from "./components/portfolio-workspace/PortfolioWorkspace";
 import type { AppRoute } from "./types";
 
 const WdkTemplatePreview = lazy(() =>
@@ -61,7 +63,11 @@ function AppContent() {
   const handleSplashComplete = () => {
     setHasCompletedSplash(true);
     const initialPath = window.location.pathname || "/";
-    if (isWdkTemplatePreviewPath(initialPath) || isPortfolioEditorPath(initialPath)) {
+    if (
+      isWdkTemplatePreviewPath(initialPath) ||
+      isPortfolioEditorPath(initialPath) ||
+      isPortfolioWorkspacePath(initialPath)
+    ) {
       navigateTo(initialPath);
       return;
     }
@@ -105,7 +111,8 @@ function AppContent() {
         currentRoute === "/onboarding" ||
         currentRoute === "/discover" ||
         currentRoute === "/" ||
-        isPortfolioEditorPath(currentRoute)
+        isPortfolioEditorPath(currentRoute) ||
+        isPortfolioWorkspacePath(currentRoute)
       ) {
         navigateTo("/auth");
       }
@@ -180,10 +187,21 @@ function AppContent() {
           >
             <PortfolioAppView />
           </motion.div>
-        ) : isPortfolioEditorPath(currentRoute) && !user ? (
+        ) : (isPortfolioWorkspacePath(currentRoute) || isPortfolioEditorPath(currentRoute)) && !user ? (
           <div className="flex min-h-screen items-center justify-center bg-[#F3FAF9] font-sans text-[#243838]">
             <p className="text-sm font-medium text-[#5C7372]">Loading your portfolio…</p>
           </div>
+        ) : isPortfolioWorkspacePath(currentRoute) && user ? (
+          <motion.div
+            key="portfolio-workspace-route"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full min-h-screen"
+          >
+            <PortfolioWorkspace onOpenPath={navigateTo} />
+          </motion.div>
         ) : isPortfolioEditorPath(currentRoute) && user ? (
           <motion.div
             key="portfolio-editor-route"
@@ -193,7 +211,10 @@ function AppContent() {
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
             className="w-full min-h-screen"
           >
-            <PortfolioEditor onPreview={() => navigateTo(WDK_TEMPLATE_PREVIEW_PATH)} />
+            <PortfolioEditor
+              onWorkspace={() => navigateTo(PORTFOLIO_WORKSPACE_PATH)}
+              onPreview={() => navigateTo(WDK_TEMPLATE_PREVIEW_PATH)}
+            />
           </motion.div>
         ) : currentRoute === "/discover" && user && authPhase === "TEMPLATE_DISCOVERY" ? (
           <motion.div

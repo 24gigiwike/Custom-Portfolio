@@ -18,9 +18,10 @@ import {
 
 type PortfolioEditorProps = {
   onPreview: () => void;
+  onWorkspace: () => void;
 };
 
-export function PortfolioEditor({ onPreview }: PortfolioEditorProps) {
+export function PortfolioEditor({ onPreview, onWorkspace }: PortfolioEditorProps) {
   const [lookup, setLookup] = useState<OwnedPortfolioLookup | null>(null);
   const [portfolio, setPortfolio] = useState<UserPortfolio | null>(null);
   const [draft, setDraft] = useState<EditorDraft | null>(null);
@@ -157,6 +158,12 @@ export function PortfolioEditor({ onPreview }: PortfolioEditorProps) {
 
   const portrait = draft.heroImage || draft.heroImageMobile;
   const hasUnsavedChanges = !draftsMatch(draft, savedDraft);
+  const leaveEditor = (go: () => void) => {
+    if (hasUnsavedChanges && !window.confirm("You have unsaved changes. Leave without saving?")) {
+      return;
+    }
+    go();
+  };
 
   return (
     <div id="portfolio-editor" className="min-h-screen bg-[#F3FAF9] font-sans text-[#243838]">
@@ -166,21 +173,21 @@ export function PortfolioEditor({ onPreview }: PortfolioEditorProps) {
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">{brand.name}</p>
             <h1 className="mt-1 text-2xl font-bold tracking-[-0.04em]">Edit your portfolio</h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {justSaved && <p className="text-sm font-semibold text-[#3E7574]">Saved</p>}
+            <Button
+              id="portfolio-editor-workspace"
+              variant="ghost"
+              disabled={portraitProgress !== null}
+              onClick={() => leaveEditor(onWorkspace)}
+            >
+              Workspace
+            </Button>
             <Button
               id="portfolio-editor-preview"
               variant="outline"
               disabled={portraitProgress !== null}
-              onClick={() => {
-                if (
-                  hasUnsavedChanges &&
-                  !window.confirm("You have unsaved changes. Leave without saving?")
-                ) {
-                  return;
-                }
-                onPreview();
-              }}
+              onClick={() => leaveEditor(onPreview)}
             >
               Preview
             </Button>
