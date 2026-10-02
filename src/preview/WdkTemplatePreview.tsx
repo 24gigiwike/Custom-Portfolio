@@ -10,6 +10,7 @@ import {
 } from "../lib/userPortfolio";
 import { toWdkPremiumPortfolioData } from "../lib/wdkPortfolioAdapter";
 import { PORTFOLIO_EDITOR_PATH } from "../components/portfolio-editor/portfolioEditorPath";
+import { PORTFOLIO_WORKSPACE_PATH } from "../components/portfolio-workspace/portfolioWorkspacePath";
 import type { UserPortfolio } from "../types/userPortfolio";
 import { Button } from "../components/ui/Button";
 import { wdkFictionalPortfolioData } from "./wdkFictionalPortfolioData";
@@ -83,6 +84,7 @@ const PersistedPortfolioPreview: React.FC = () => {
       .then((created) => {
         setPortfolio(created);
         setLookup({ status: "ready", portfolio: created });
+        openAppPath(PORTFOLIO_WORKSPACE_PATH);
       })
       .catch((createError) => {
         setError(userFacingWriteError(createError, "Your portfolio could not be created."));
@@ -125,14 +127,24 @@ const PersistedPortfolioPreview: React.FC = () => {
   if (portfolio) {
     return (
       <>
-        <button
-          type="button"
-          id="portfolio-preview-edit"
-          onClick={openPortfolioEditor}
-          className="fixed right-4 top-4 z-[80] rounded-full border border-[#D5E6E5] bg-white/95 px-4 py-2 text-sm font-bold tracking-[-0.02em] text-[#243838] shadow-[0_8px_20px_rgba(36,56,56,0.08)]"
-        >
-          Edit portfolio
-        </button>
+        <div className="fixed right-4 top-4 z-[80] flex max-w-[calc(100%-2rem)] flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            id="portfolio-preview-workspace"
+            onClick={() => openAppPath(PORTFOLIO_WORKSPACE_PATH)}
+            className="rounded-full border border-[#D5E6E5] bg-white/95 px-4 py-2 text-sm font-bold tracking-[-0.02em] text-[#243838] shadow-[0_8px_20px_rgba(36,56,56,0.08)]"
+          >
+            Workspace
+          </button>
+          <button
+            type="button"
+            id="portfolio-preview-edit"
+            onClick={() => openAppPath(PORTFOLIO_EDITOR_PATH)}
+            className="rounded-full border border-[#D5E6E5] bg-white/95 px-4 py-2 text-sm font-bold tracking-[-0.02em] text-[#243838] shadow-[0_8px_20px_rgba(36,56,56,0.08)]"
+          >
+            Edit portfolio
+          </button>
+        </div>
         <WdkPremiumPortfolio data={toWdkPremiumPortfolioData(portfolio)} />
       </>
     );
@@ -158,9 +170,13 @@ const PersistedPortfolioPreview: React.FC = () => {
   );
 };
 
-function openPortfolioEditor() {
-  if (window.location.pathname !== PORTFOLIO_EDITOR_PATH) {
-    window.history.pushState(null, "", PORTFOLIO_EDITOR_PATH);
+function openAppPath(path: string) {
+  try {
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, "", path);
+    }
+  } catch {
+    // Ignore pushState failures in a strict iframe sandbox.
   }
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
