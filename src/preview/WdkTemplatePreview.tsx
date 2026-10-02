@@ -9,6 +9,7 @@ import {
   type OwnedPortfolioLookup,
 } from "../lib/userPortfolio";
 import { toWdkPremiumPortfolioData } from "../lib/wdkPortfolioAdapter";
+import { PORTFOLIO_EDITOR_PATH } from "../components/portfolio-editor/portfolioEditorPath";
 import type { UserPortfolio } from "../types/userPortfolio";
 import { Button } from "../components/ui/Button";
 import { wdkFictionalPortfolioData } from "./wdkFictionalPortfolioData";
@@ -122,7 +123,19 @@ const PersistedPortfolioPreview: React.FC = () => {
   }
 
   if (portfolio) {
-    return <WdkPremiumPortfolio data={toWdkPremiumPortfolioData(portfolio)} />;
+    return (
+      <>
+        <button
+          type="button"
+          id="portfolio-preview-edit"
+          onClick={openPortfolioEditor}
+          className="fixed right-4 top-4 z-[80] rounded-full border border-[#D5E6E5] bg-white/95 px-4 py-2 text-sm font-bold tracking-[-0.02em] text-[#243838] shadow-[0_8px_20px_rgba(36,56,56,0.08)]"
+        >
+          Edit portfolio
+        </button>
+        <WdkPremiumPortfolio data={toWdkPremiumPortfolioData(portfolio)} />
+      </>
+    );
   }
 
   if (lookup?.status === "legacy") {
@@ -144,6 +157,13 @@ const PersistedPortfolioPreview: React.FC = () => {
     />
   );
 };
+
+function openPortfolioEditor() {
+  if (window.location.pathname !== PORTFOLIO_EDITOR_PATH) {
+    window.history.pushState(null, "", PORTFOLIO_EDITOR_PATH);
+  }
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
 
 function PreviewStatus({
   title,

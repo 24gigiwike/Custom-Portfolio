@@ -7,7 +7,9 @@ import { OnboardingScreen } from "./components/onboarding/OnboardingScreen";
 import { TemplateDiscovery } from "./components/discover/TemplateDiscovery";
 import { PortfolioAppView } from "./components/portfolio/PortfolioAppView";
 import { Button } from "./components/ui/Button";
-import { isWdkTemplatePreviewPath } from "./preview/templatePreviewPath";
+import { isWdkTemplatePreviewPath, WDK_TEMPLATE_PREVIEW_PATH } from "./preview/templatePreviewPath";
+import { isPortfolioEditorPath } from "./components/portfolio-editor/portfolioEditorPath";
+import { PortfolioEditor } from "./components/portfolio-editor/PortfolioEditor";
 import type { AppRoute } from "./types";
 
 const WdkTemplatePreview = lazy(() =>
@@ -59,7 +61,7 @@ function AppContent() {
   const handleSplashComplete = () => {
     setHasCompletedSplash(true);
     const initialPath = window.location.pathname || "/";
-    if (isWdkTemplatePreviewPath(initialPath)) {
+    if (isWdkTemplatePreviewPath(initialPath) || isPortfolioEditorPath(initialPath)) {
       navigateTo(initialPath);
       return;
     }
@@ -98,7 +100,13 @@ function AppContent() {
     if (isWdkTemplatePreviewPath(currentRoute)) return;
 
     if (authPhase === "SIGNED_OUT" || !user) {
-      if (currentRoute === "/app" || currentRoute === "/onboarding" || currentRoute === "/discover" || currentRoute === "/") {
+      if (
+        currentRoute === "/app" ||
+        currentRoute === "/onboarding" ||
+        currentRoute === "/discover" ||
+        currentRoute === "/" ||
+        isPortfolioEditorPath(currentRoute)
+      ) {
         navigateTo("/auth");
       }
     } else if (authPhase === "ONBOARDING_REQUIRED") {
@@ -171,6 +179,21 @@ function AppContent() {
             className="w-full min-h-screen"
           >
             <PortfolioAppView />
+          </motion.div>
+        ) : isPortfolioEditorPath(currentRoute) && !user ? (
+          <div className="flex min-h-screen items-center justify-center bg-[#F3FAF9] font-sans text-[#243838]">
+            <p className="text-sm font-medium text-[#5C7372]">Loading your portfolio…</p>
+          </div>
+        ) : isPortfolioEditorPath(currentRoute) && user ? (
+          <motion.div
+            key="portfolio-editor-route"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full min-h-screen"
+          >
+            <PortfolioEditor onPreview={() => navigateTo(WDK_TEMPLATE_PREVIEW_PATH)} />
           </motion.div>
         ) : currentRoute === "/discover" && user && authPhase === "TEMPLATE_DISCOVERY" ? (
           <motion.div
