@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { lazy, Suspense, useState, useEffect } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AuthProvider, useAuth } from "./lib/authContext";
 import { SplashScreen } from "./components/splash/SplashScreen";
@@ -7,7 +7,14 @@ import { OnboardingScreen } from "./components/onboarding/OnboardingScreen";
 import { TemplateDiscovery } from "./components/discover/TemplateDiscovery";
 import { PortfolioAppView } from "./components/portfolio/PortfolioAppView";
 import { Button } from "./components/ui/Button";
+import { isWdkTemplatePreviewPath } from "./preview/templatePreviewPath";
 import type { AppRoute } from "./types";
+
+const WdkTemplatePreview = lazy(() =>
+  import("./preview/WdkTemplatePreview").then((module) => ({
+    default: module.WdkTemplatePreview,
+  })),
+);
 
 function AppContent() {
   const {
@@ -52,6 +59,10 @@ function AppContent() {
   const handleSplashComplete = () => {
     setHasCompletedSplash(true);
     const initialPath = window.location.pathname || "/";
+    if (isWdkTemplatePreviewPath(initialPath)) {
+      navigateTo(initialPath);
+      return;
+    }
     if (!user || authPhase === "SIGNED_OUT") {
       if (initialPath === "/auth") {
         navigateTo("/auth");
@@ -84,6 +95,8 @@ function AppContent() {
 
     if (authPhase === "ACCOUNT_ERROR") return;
 
+    if (isWdkTemplatePreviewPath(currentRoute)) return;
+
     if (authPhase === "SIGNED_OUT" || !user) {
       if (currentRoute === "/app" || currentRoute === "/onboarding" || currentRoute === "/discover" || currentRoute === "/") {
         navigateTo("/auth");
@@ -106,6 +119,14 @@ function AppContent() {
   // If splash is not yet completed, show original SplashScreen
   if (!hasCompletedSplash) {
     return <SplashScreen onComplete={handleSplashComplete} minDuration={2000} />;
+  }
+
+  if (isWdkTemplatePreviewPath(currentRoute)) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-[#F8F5F0]" />}>
+        <WdkTemplatePreview />
+      </Suspense>
+    );
   }
 
   if (user && (authPhase === "ACCOUNT_ERROR" || isRetryingAccount)) {
