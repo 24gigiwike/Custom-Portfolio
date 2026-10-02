@@ -104,6 +104,13 @@ export const DEFAULT_PORTFOLIO_THEME: PortfolioTheme = {
   accent: "#6DAEAD",
 };
 
+function legacySocialLinks(value: unknown): Portfolio["socialLinks"] {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Portfolio["socialLinks"];
+  }
+  return {};
+}
+
 /**
  * Fetch the user's portfolio by ownerId (Firebase Auth UID)
  */
@@ -131,7 +138,7 @@ export async function getUserPortfolio(ownerId: string): Promise<Portfolio | nul
         profileImage: data.profileImage || null,
         availability: data.availability || undefined,
         email: data.email || "",
-        socialLinks: data.socialLinks || {},
+        socialLinks: legacySocialLinks(data.socialLinks),
         stylePreset: (data.stylePreset as PortfolioStylePreset) || "MINIMAL",
         theme: data.theme || DEFAULT_PORTFOLIO_THEME,
         enabledSections: data.enabledSections || DEFAULT_ENABLED_SECTIONS,
