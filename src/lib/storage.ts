@@ -273,6 +273,79 @@ export async function uploadAccountProfileImage(
   });
 }
 
+/**
+ * Upload the portfolio portrait with the same optimizer and resumable upload
+ * used for account and project images. The portfolio stores the download URL only.
+ */
+export async function uploadPortfolioPortrait(
+  portfolioId: string,
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<UploadedProjectImage> {
+  const validation = validateImageFile(file);
+  if (!validation.valid) {
+    throw new Error(validation.error || "Please choose a valid image.");
+  }
+
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error("You must be signed in to upload a portrait.");
+  }
+  if (!portfolioId) {
+    throw new Error("Your portfolio needs to finish loading before a portrait can be added.");
+  }
+
+  const optimizationResult = await optimizeImageForUpload(file);
+  const fileToUpload = optimizationResult.file;
+  const cleanFileName = fileToUpload.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+  const storagePath = `portfolio-assets/${currentUser.uid}/${portfolioId}/portrait/${Date.now()}_${cleanFileName}`;
+  const fileRef = ref(getStorageInstance(), storagePath);
+
+  const uploadTask = uploadBytesResumable(fileRef, fileToUpload, {
+    contentType: fileToUpload.type,
+    customMetadata: {
+      ownerId: currentUser.uid,
+      portfolioId,
+      purpose: "portfolio-portrait",
+      originalName: file.name,
+    },
+  });
+
+  return await new Promise<UploadedProjectImage>((resolve, reject) => {
+    uploadTask.on(
+      "state_changed",
+      (snapshot: UploadTaskSnapshot) => {
+        if (snapshot.totalBytes > 0 && onProgress) {
+          const percent = Math.min(
+            100,
+            Math.max(0, Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100))
+          );
+          onProgress(percent);
+        }
+      },
+      (error) => {
+        console.error("Portfolio portrait upload error:", error);
+        const msg = error.message || String(error);
+        if (msg.includes("unauthorized") || msg.includes("permission")) {
+          reject(new Error("You do not have permission to upload this portrait."));
+        } else {
+          reject(new Error("Couldn't upload this portrait. Try again."));
+        }
+      },
+      async () => {
+        try {
+          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+          if (onProgress) onProgress(100);
+          resolve({ downloadUrl, storagePath });
+        } catch (err) {
+          console.error("Failed to get portfolio portrait URL:", err);
+          reject(new Error("We couldn't prepare this portrait. Try another image."));
+        }
+      }
+    );
+  });
+}
+
 export async function deleteStoredImages(storagePaths: string[]): Promise<void> {
   const unique = [...new Set(storagePaths.filter(Boolean))];
   await Promise.all(

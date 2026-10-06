@@ -10,7 +10,6 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { templateConfig } from "../templates/wdk-premium-portfolio-1/data/template-config";
 import type {
   PortfolioContact,
   PortfolioProfile,
@@ -24,6 +23,7 @@ import type { UserPortfolio, UserPortfolioContent } from "../types/userPortfolio
 import { auth, db } from "./firebase";
 import { DEFAULT_ENABLED_SECTIONS, DEFAULT_PORTFOLIO_THEME, generateSlug } from "./portfolio";
 import { seedPortfolioFromAccount } from "./portfolioSeed";
+import { findCatalogTemplate, templateForCreation } from "./templateCatalog";
 
 const PLATFORMS = new Set<SocialPlatform>(["x", "instagram", "facebook", "youtube", "tiktok", "email"]);
 
@@ -54,7 +54,9 @@ function stringList(value: unknown): string[] {
 }
 
 function isTemplateRecord(data: Record<string, unknown>): boolean {
-  return data.selectedTemplate === templateConfig.id && isRecord(data.profile);
+  return typeof data.selectedTemplate === "string"
+    && findCatalogTemplate(data.selectedTemplate) !== null
+    && isRecord(data.profile);
 }
 
 function readProfile(value: unknown): PortfolioProfile {
@@ -126,7 +128,7 @@ function toUserPortfolio(id: string, data: Record<string, unknown>): UserPortfol
   return {
     id,
     ownerId: text(data.ownerId),
-    selectedTemplate: templateConfig.id,
+    selectedTemplate: text(data.selectedTemplate),
     profile: readProfile(data.profile),
     socialLinks: readSocialLinks(data.socialLinks),
     projects: readProjects(data.projects),
@@ -168,8 +170,16 @@ export async function getPortfolio(portfolioId: string): Promise<UserPortfolio |
  * Create one template portfolio for the signed-in user.
  * The owner id always comes from Firebase Auth.
  */
-export async function createPortfolio(account: UserProfile | null): Promise<UserPortfolio> {
+export async function createPortfolio(
+  account: UserProfile | null,
+  templateId: string
+): Promise<UserPortfolio> {
   const ownerId = requireUid();
+  const template = templateForCreation(templateId);
+  if (!template) {
+    throw new Error("That template is not available.");
+  }
+
   const existing = await findOwnedDocument(ownerId);
   if (existing) {
     const data = existing.data();
@@ -179,7 +189,7 @@ export async function createPortfolio(account: UserProfile | null): Promise<User
     throw new Error("This account already has a workspace portfolio. It was left unchanged.");
   }
 
-  const content = seedPortfolioFromAccount(account);
+  const content = seedPortfolioFromAccount(account, template.id);
   const portfolioRef = doc(collection(db, "portfolios"));
   const portfolioId = portfolioRef.id;
   await setDoc(portfolioRef, firestorePayload(portfolioId, ownerId, content, true));
@@ -201,9 +211,16 @@ export async function updatePortfolio(
     throw new Error("You don't have permission to change this portfolio.");
   }
 
+  const selectedTemplate = findCatalogTemplate(content.selectedTemplate)
+    ? content.selectedTemplate
+    : current.selectedTemplate;
+  if (!findCatalogTemplate(selectedTemplate)) {
+    throw new Error("This portfolio template is not available.");
+  }
+
   const next: UserPortfolioContent = {
     ...content,
-    selectedTemplate: templateConfig.id,
+    selectedTemplate,
     publishing: { status: "draft" },
   };
   await updateDoc(doc(db, "portfolios", portfolioId), firestorePayload(portfolioId, ownerId, next, false));

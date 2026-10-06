@@ -5,9 +5,14 @@ import { SplashScreen } from "./components/splash/SplashScreen";
 import { AuthScreen } from "./components/auth/AuthScreen";
 import { OnboardingScreen } from "./components/onboarding/OnboardingScreen";
 import { TemplateDiscovery } from "./components/discover/TemplateDiscovery";
+import { isTemplateDiscoveryPath, TEMPLATE_DISCOVERY_PATH } from "./components/discover/templateDiscoveryPath";
 import { PortfolioAppView } from "./components/portfolio/PortfolioAppView";
 import { Button } from "./components/ui/Button";
-import { isWdkTemplatePreviewPath } from "./preview/templatePreviewPath";
+import { isWdkTemplatePreviewPath, WDK_TEMPLATE_PREVIEW_PATH } from "./preview/templatePreviewPath";
+import { isPortfolioEditorPath } from "./components/portfolio-editor/portfolioEditorPath";
+import { PortfolioEditor } from "./components/portfolio-editor/PortfolioEditor";
+import { isPortfolioWorkspacePath, PORTFOLIO_WORKSPACE_PATH } from "./components/portfolio-workspace/portfolioWorkspacePath";
+import { PortfolioWorkspace } from "./components/portfolio-workspace/PortfolioWorkspace";
 import type { AppRoute } from "./types";
 
 const WdkTemplatePreview = lazy(() =>
@@ -59,7 +64,15 @@ function AppContent() {
   const handleSplashComplete = () => {
     setHasCompletedSplash(true);
     const initialPath = window.location.pathname || "/";
-    if (isWdkTemplatePreviewPath(initialPath)) {
+    if (
+      isWdkTemplatePreviewPath(initialPath) ||
+      isPortfolioEditorPath(initialPath) ||
+      isPortfolioWorkspacePath(initialPath)
+    ) {
+      navigateTo(initialPath);
+      return;
+    }
+    if (isTemplateDiscoveryPath(initialPath)) {
       navigateTo(initialPath);
       return;
     }
@@ -73,8 +86,10 @@ function AppContent() {
       }
     } else if (authPhase === "ONBOARDING_REQUIRED") {
       navigateTo("/onboarding");
+    } else if (initialPath === "/discover") {
+      navigateTo(TEMPLATE_DISCOVERY_PATH);
     } else if (authPhase === "TEMPLATE_DISCOVERY") {
-      navigateTo("/discover");
+      navigateTo(TEMPLATE_DISCOVERY_PATH);
     } else if (authPhase === "READY" || userAccount?.onboardingCompleted) {
       if (
         initialPath === "/" ||
@@ -97,20 +112,45 @@ function AppContent() {
 
     if (isWdkTemplatePreviewPath(currentRoute)) return;
 
+    if (currentRoute === "/discover") {
+      if (authPhase === "SIGNED_OUT" || !user) {
+        navigateTo("/auth");
+      } else if (authPhase === "ONBOARDING_REQUIRED") {
+        navigateTo("/onboarding");
+      } else {
+        navigateTo(TEMPLATE_DISCOVERY_PATH);
+      }
+      return;
+    }
+
     if (authPhase === "SIGNED_OUT" || !user) {
-      if (currentRoute === "/app" || currentRoute === "/onboarding" || currentRoute === "/discover" || currentRoute === "/") {
+      if (
+        currentRoute === "/app" ||
+        currentRoute === "/onboarding" ||
+        currentRoute === "/discover" ||
+        currentRoute === "/" ||
+        isPortfolioEditorPath(currentRoute) ||
+        isPortfolioWorkspacePath(currentRoute) ||
+        isTemplateDiscoveryPath(currentRoute)
+      ) {
         navigateTo("/auth");
       }
     } else if (authPhase === "ONBOARDING_REQUIRED") {
-      if (currentRoute === "/app" || currentRoute === "/auth" || currentRoute === "/discover" || currentRoute === "/") {
+      if (
+        currentRoute === "/app" ||
+        currentRoute === "/auth" ||
+        currentRoute === "/discover" ||
+        currentRoute === "/" ||
+        isTemplateDiscoveryPath(currentRoute)
+      ) {
         navigateTo("/onboarding");
       }
     } else if (authPhase === "TEMPLATE_DISCOVERY") {
       if (currentRoute === "/app" || currentRoute === "/auth" || currentRoute === "/onboarding" || currentRoute === "/") {
-        navigateTo("/discover");
+        navigateTo(TEMPLATE_DISCOVERY_PATH);
       }
     } else if (authPhase === "READY") {
-      if (currentRoute === "/auth" || currentRoute === "/onboarding" || currentRoute === "/discover" || currentRoute === "/") {
+      if (currentRoute === "/auth" || currentRoute === "/onboarding" || currentRoute === "/") {
         navigateTo("/app");
       }
     }
@@ -172,16 +212,49 @@ function AppContent() {
           >
             <PortfolioAppView />
           </motion.div>
-        ) : currentRoute === "/discover" && user && authPhase === "TEMPLATE_DISCOVERY" ? (
+        ) : (isTemplateDiscoveryPath(currentRoute) || currentRoute === "/discover") && !user ? (
+          <div className="flex min-h-screen items-center justify-center bg-[#F3FAF9] font-sans text-[#243838]">
+            <p className="text-sm font-medium text-[#5C7372]">Loading templates…</p>
+          </div>
+        ) : (isTemplateDiscoveryPath(currentRoute) || currentRoute === "/discover") && user ? (
           <motion.div
-            key="discover-route"
+            key="template-discovery-route"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
             className="w-full min-h-screen"
           >
-            <TemplateDiscovery account={userAccount} onSignOut={() => void signOutUser()} />
+            <TemplateDiscovery onOpenPath={navigateTo} />
+          </motion.div>
+        ) : (isPortfolioWorkspacePath(currentRoute) || isPortfolioEditorPath(currentRoute)) && !user ? (
+          <div className="flex min-h-screen items-center justify-center bg-[#F3FAF9] font-sans text-[#243838]">
+            <p className="text-sm font-medium text-[#5C7372]">Loading your portfolio…</p>
+          </div>
+        ) : isPortfolioWorkspacePath(currentRoute) && user ? (
+          <motion.div
+            key="portfolio-workspace-route"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full min-h-screen"
+          >
+            <PortfolioWorkspace onOpenPath={navigateTo} />
+          </motion.div>
+        ) : isPortfolioEditorPath(currentRoute) && user ? (
+          <motion.div
+            key="portfolio-editor-route"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full min-h-screen"
+          >
+            <PortfolioEditor
+              onWorkspace={() => navigateTo(PORTFOLIO_WORKSPACE_PATH)}
+              onPreview={() => navigateTo(WDK_TEMPLATE_PREVIEW_PATH)}
+            />
           </motion.div>
         ) : currentRoute === "/onboarding" && user && authPhase === "ONBOARDING_REQUIRED" ? (
           <motion.div
@@ -192,7 +265,7 @@ function AppContent() {
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
             className="w-full min-h-screen"
           >
-            <OnboardingScreen onDiscover={() => navigateTo("/discover")} />
+            <OnboardingScreen onDiscover={() => navigateTo(TEMPLATE_DISCOVERY_PATH)} />
           </motion.div>
         ) : (
           <motion.div
