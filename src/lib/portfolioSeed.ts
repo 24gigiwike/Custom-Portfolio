@@ -1,4 +1,3 @@
-import { templateConfig } from "../templates/wdk-premium-portfolio-1/data/template-config";
 import type { UserProfile } from "../types";
 import type { PortfolioPublishing, UserPortfolioContent } from "../types/userPortfolio";
 
@@ -12,7 +11,10 @@ function text(value: string | null | undefined): string {
  * Initial portfolio content from the public professional profile.
  * Date of birth, login email, and portfolio goals stay off this object.
  */
-export function seedPortfolioFromAccount(account: UserProfile | null): UserPortfolioContent {
+export function seedPortfolioFromAccount(
+  account: UserProfile | null,
+  templateId: string
+): UserPortfolioContent {
   const firstName = text(account?.accountPrivate?.firstName);
   const lastName = text(account?.accountPrivate?.lastName);
   const brandName = [firstName, lastName].filter(Boolean).join(" ") || text(account?.displayName);
@@ -23,7 +25,7 @@ export function seedPortfolioFromAccount(account: UserProfile | null): UserPortf
   const capabilityTags = (professional?.categories || []).map((item) => item.trim()).filter(Boolean);
 
   return {
-    selectedTemplate: templateConfig.id,
+    selectedTemplate: templateId,
     profile: {
       brandName,
       logo: "",

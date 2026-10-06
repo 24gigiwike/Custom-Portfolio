@@ -4,7 +4,7 @@ import { userFacingWriteError } from "../../lib/accountLoad";
 import { useAuth } from "../../lib/authContext";
 import { portfolioTemplateInfo, publishingStatusLabel } from "../../lib/portfolioTemplate";
 import { getPortfolioByOwner, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
-import { WDK_TEMPLATE_PREVIEW_PATH } from "../../preview/templatePreviewPath";
+import { TEMPLATE_DISCOVERY_PATH } from "../discover/templateDiscoveryPath";
 import type { UserPortfolio } from "../../types/userPortfolio";
 import { Button } from "../ui/Button";
 import { PORTFOLIO_EDITOR_PATH } from "../portfolio-editor/portfolioEditorPath";
@@ -51,7 +51,7 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
   const openPreview = () => {
     if (template?.previewPath) onOpenPath(template.previewPath);
   };
-  const openCreateFlow = () => onOpenPath(WDK_TEMPLATE_PREVIEW_PATH);
+  const openCreateFlow = () => onOpenPath(TEMPLATE_DISCOVERY_PATH);
 
   const accountName = userAccount?.accountPrivate?.firstName || user?.displayName || "";
   const portfolioName = portfolio?.profile.brandName.trim() || "";
@@ -120,10 +120,10 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
         ) : lookup?.status === "missing" ? (
           <Status
             title="Create your portfolio first."
-            body="Choose a starting point from the template preview. This workspace does not create a portfolio on its own."
+            body="Choose a template first. This workspace does not create a portfolio on its own."
             action={
               <Button id="portfolio-workspace-create" onClick={openCreateFlow}>
-                Go to template preview
+                Find a template
               </Button>
             }
           />

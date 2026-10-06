@@ -9,8 +9,11 @@ import {
   type OwnedPortfolioLookup,
 } from "../lib/userPortfolio";
 import { toWdkPremiumPortfolioData } from "../lib/wdkPortfolioAdapter";
+import { catalogTemplateForPreviewPath } from "../lib/templateCatalog";
 import { PORTFOLIO_EDITOR_PATH } from "../components/portfolio-editor/portfolioEditorPath";
 import { PORTFOLIO_WORKSPACE_PATH } from "../components/portfolio-workspace/portfolioWorkspacePath";
+import { TEMPLATE_DISCOVERY_PATH } from "../components/discover/templateDiscoveryPath";
+import { WDK_TEMPLATE_PREVIEW_PATH } from "./templatePreviewPath";
 import type { UserPortfolio } from "../types/userPortfolio";
 import { Button } from "../components/ui/Button";
 import { wdkFictionalPortfolioData } from "./wdkFictionalPortfolioData";
@@ -37,17 +40,28 @@ function fixtureData(): PortfolioData | null {
   return null;
 }
 
+function choiceError(error: unknown): string {
+  const guarded = userFacingWriteError(error, "");
+  if (guarded) return guarded;
+  const raw = error instanceof Error ? error.message : "";
+  if (
+    raw === "That template is not available." ||
+    raw === "This account already has a workspace portfolio. It was left unchanged." ||
+    raw === "You need to be signed in to use your portfolio."
+  ) {
+    return raw;
+  }
+  return "Your portfolio could not be created.";
+}
+
 export const WdkTemplatePreview: React.FC = () => {
   useFontAwesomeKit();
-  const fixture = fixtureData();
-  if (fixture) {
-    return <WdkPremiumPortfolio data={fixture} />;
-  }
-  return <PersistedPortfolioPreview />;
+  return <PersistedPortfolioPreview fixture={fixtureData()} />;
 };
 
-const PersistedPortfolioPreview: React.FC = () => {
+const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null }> = ({ fixture }) => {
   const { user, userAccount, authPhase, accountError } = useAuth();
+  const template = catalogTemplateForPreviewPath(WDK_TEMPLATE_PREVIEW_PATH);
   const [lookup, setLookup] = useState<OwnedPortfolioLookup | null>(null);
   const [portfolio, setPortfolio] = useState<UserPortfolio | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,26 +91,26 @@ const PersistedPortfolioPreview: React.FC = () => {
     };
   }, [user, authPhase]);
 
-  const create = () => {
+  const useTemplate = () => {
+    if (!template) {
+      setError("That template is not available.");
+      return;
+    }
     setIsCreating(true);
     setError(null);
-    void createPortfolio(userAccount)
-      .then((created) => {
-        setPortfolio(created);
-        setLookup({ status: "ready", portfolio: created });
-        openAppPath(PORTFOLIO_WORKSPACE_PATH);
-      })
+    void createPortfolio(userAccount, template.id)
+      .then(() => openAppPath(PORTFOLIO_WORKSPACE_PATH))
       .catch((createError) => {
-        setError(userFacingWriteError(createError, "Your portfolio could not be created."));
+        setError(choiceError(createError));
       })
       .finally(() => setIsCreating(false));
   };
 
-  if (authPhase === "AUTH_LOADING" || authPhase === "ACCOUNT_LOADING") {
+  if (!fixture && (authPhase === "AUTH_LOADING" || authPhase === "ACCOUNT_LOADING")) {
     return <PreviewStatus title="Loading your portfolio." body="This stays on your account." />;
   }
 
-  if (!user || authPhase === "SIGNED_OUT") {
+  if (!fixture && (!user || authPhase === "SIGNED_OUT")) {
     return (
       <PreviewStatus
         title="Sign in to open your portfolio."
@@ -107,7 +121,30 @@ const PersistedPortfolioPreview: React.FC = () => {
     );
   }
 
-  if (authPhase === "ACCOUNT_ERROR") {
+  if (fixture && (!user || authPhase === "SIGNED_OUT" || authPhase === "AUTH_LOADING")) {
+    return (
+      <DesignPreview
+        data={fixture}
+        note="This is a template preview."
+        actionLabel="Sign in to use this template"
+        onAction={() => window.location.assign("/auth")}
+      />
+    );
+  }
+
+  if (fixture && (authPhase === "ACCOUNT_LOADING" || isLoading)) {
+    return (
+      <DesignPreview
+        data={fixture}
+        note="This is a template preview."
+        actionLabel="Use this template"
+        onAction={() => undefined}
+        isLoading
+      />
+    );
+  }
+
+  if (!fixture && authPhase === "ACCOUNT_ERROR") {
     return (
       <PreviewStatus
         title="Your account could not be loaded."
@@ -116,36 +153,28 @@ const PersistedPortfolioPreview: React.FC = () => {
     );
   }
 
-  if (isLoading && !portfolio) {
+  if (!fixture && isLoading && !portfolio) {
     return <PreviewStatus title="Loading your portfolio." body="This stays on your account." />;
   }
 
-  if (error) {
+  if (!fixture && error && !portfolio) {
     return <PreviewStatus title="Something went wrong." body={error} />;
   }
 
-  if (portfolio) {
+  if (!fixture && portfolio) {
     return (
       <>
-        <div className="fixed right-4 top-4 z-[80] flex max-w-[calc(100%-2rem)] flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            id="portfolio-preview-workspace"
-            onClick={() => openAppPath(PORTFOLIO_WORKSPACE_PATH)}
-            className="rounded-full border border-[#D5E6E5] bg-white/95 px-4 py-2 text-sm font-bold tracking-[-0.02em] text-[#243838] shadow-[0_8px_20px_rgba(36,56,56,0.08)]"
-          >
-            Workspace
-          </button>
-          <button
-            type="button"
-            id="portfolio-preview-edit"
-            onClick={() => openAppPath(PORTFOLIO_EDITOR_PATH)}
-            className="rounded-full border border-[#D5E6E5] bg-white/95 px-4 py-2 text-sm font-bold tracking-[-0.02em] text-[#243838] shadow-[0_8px_20px_rgba(36,56,56,0.08)]"
-          >
-            Edit portfolio
-          </button>
-        </div>
+        <OwnedPreviewActions />
         <WdkPremiumPortfolio data={toWdkPremiumPortfolioData(portfolio)} />
+      </>
+    );
+  }
+
+  if (fixture && portfolio) {
+    return (
+      <>
+        <OwnedPreviewActions />
+        <WdkPremiumPortfolio data={fixture} />
       </>
     );
   }
@@ -160,15 +189,78 @@ const PersistedPortfolioPreview: React.FC = () => {
   }
 
   return (
-    <PreviewStatus
-      title="Create your portfolio."
-      body="This starts a draft from your professional profile. It is not published."
-      actionLabel="Create portfolio"
-      onAction={create}
+    <DesignPreview
+      data={fixture ?? wdkSamplePortfolioData}
+      note="This is the template. Your portfolio starts when you use it."
+      actionLabel="Use this template"
+      onAction={useTemplate}
       isLoading={isCreating}
+      error={error}
+      onTemplates={() => openAppPath(TEMPLATE_DISCOVERY_PATH)}
     />
   );
 };
+
+function OwnedPreviewActions() {
+  return (
+    <div className="fixed right-4 top-4 z-[80] flex max-w-[calc(100%-2rem)] flex-wrap justify-end gap-2">
+      <button
+        type="button"
+        id="portfolio-preview-workspace"
+        onClick={() => openAppPath(PORTFOLIO_WORKSPACE_PATH)}
+        className="rounded-full border border-[#D5E6E5] bg-white/95 px-4 py-2 text-sm font-bold tracking-[-0.02em] text-[#243838] shadow-[0_8px_20px_rgba(36,56,56,0.08)]"
+      >
+        Workspace
+      </button>
+      <button
+        type="button"
+        id="portfolio-preview-edit"
+        onClick={() => openAppPath(PORTFOLIO_EDITOR_PATH)}
+        className="rounded-full border border-[#D5E6E5] bg-white/95 px-4 py-2 text-sm font-bold tracking-[-0.02em] text-[#243838] shadow-[0_8px_20px_rgba(36,56,56,0.08)]"
+      >
+        Edit portfolio
+      </button>
+    </div>
+  );
+}
+
+function DesignPreview({
+  data,
+  note,
+  actionLabel,
+  onAction,
+  isLoading = false,
+  error,
+  onTemplates,
+}: {
+  data: PortfolioData;
+  note: string;
+  actionLabel: string;
+  onAction: () => void;
+  isLoading?: boolean;
+  error?: string | null;
+  onTemplates?: () => void;
+}) {
+  return (
+    <>
+      <div className="fixed inset-x-0 bottom-0 z-[80] flex flex-wrap items-center justify-between gap-3 border-t border-[#D5E6E5] bg-white/95 px-4 py-3 sm:px-6">
+        <p className="min-w-0 max-w-xl text-sm leading-relaxed text-[#5C7372]">{note}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          {onTemplates && (
+            <button type="button" onClick={onTemplates} className="px-2 text-sm font-bold text-[#3E7574]">
+              Templates
+            </button>
+          )}
+          <Button id="portfolio-preview-action" isLoading={isLoading} onClick={onAction}>
+            {actionLabel}
+          </Button>
+        </div>
+        {error && <p className="w-full text-sm font-medium text-[#B93838]">{error}</p>}
+      </div>
+      <WdkPremiumPortfolio data={data} />
+    </>
+  );
+}
 
 function openAppPath(path: string) {
   try {
