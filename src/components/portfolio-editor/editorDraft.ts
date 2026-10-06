@@ -50,6 +50,12 @@ function isAcceptableHref(value: string): boolean {
   return isHttpUrl(trimmed);
 }
 
+function normalizeWebImage(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || /^https?:\/\//i.test(trimmed)) return trimmed;
+  return withHttpProtocol(trimmed);
+}
+
 function normalizeLogo(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return "";
@@ -154,6 +160,7 @@ export type EditorDraft = {
 export type EditorFieldErrors = {
   brandName?: string;
   headline?: string;
+  heroImage?: string;
   logo?: string;
   ctaHref?: string;
   socialLinks: Record<string, { url?: string }>;
@@ -237,6 +244,7 @@ export function validateEditorDraft(draft: EditorDraft, selectedTemplate: string
   if (areas.includes("profile")) {
     if (!draft.brandName.trim()) errors.brandName = "Please enter the name on your portfolio.";
     if (!draft.headline.trim()) errors.headline = "Please enter a headline.";
+    if (draft.heroImage.trim() && !isHttpUrl(draft.heroImage)) errors.heroImage = "Enter a valid image address.";
     if (!isAcceptableLogo(draft.logo)) errors.logo = "Enter a valid image address.";
     if (!isAcceptableHref(draft.ctaHref)) errors.ctaHref = "Enter a valid link.";
   }
@@ -268,6 +276,7 @@ export function validateEditorDraft(draft: EditorDraft, selectedTemplate: string
   if (
     errors.brandName ||
     errors.headline ||
+    errors.heroImage ||
     errors.logo ||
     errors.ctaHref ||
     errors.formEndpoint ||
@@ -327,8 +336,8 @@ export function applyEditorDraft(
           brandName: draft.brandName.trim(),
           headline: draft.headline.trim(),
           logo: normalizeLogo(draft.logo),
-          heroImage: draft.heroImage.trim(),
-          heroImageMobile: draft.heroImageMobile.trim(),
+          heroImage: normalizeWebImage(draft.heroImage),
+          heroImageMobile: normalizeWebImage(draft.heroImageMobile),
           capabilityTags: linesToList(draft.capabilityTagsText),
           ctaLabel: draft.ctaLabel.trim(),
           ctaHref: normalizeHref(draft.ctaHref),

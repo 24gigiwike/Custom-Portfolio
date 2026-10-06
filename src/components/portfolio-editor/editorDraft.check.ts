@@ -186,12 +186,27 @@ bad.ctaHref = "%%%";
 bad.contact.formEndpoint = "not a form";
 bad.projects[0].url = "bad url";
 bad.logo = "javascript:alert(1)";
+bad.heroImage = "not a url";
 const badErrors = validateEditorDraft(bad, portfolio.selectedTemplate);
 assert.equal(badErrors?.socialLinks[bad.socialLinks[0].id]?.url, "Enter a valid link.");
 assert.equal(badErrors?.ctaHref, "Enter a valid link.");
 assert.equal(badErrors?.formEndpoint, "Enter a valid form address.");
 assert.equal(badErrors?.projects["project-kept"]?.url, "Enter a valid project URL.");
 assert.equal(badErrors?.logo, "Enter a valid image address.");
+assert.equal(badErrors?.heroImage, "Enter a valid image address.");
+
+const linked = draftFromPortfolio(portfolio);
+linked.heroImage = "cdn.example.com/portrait.jpg";
+linked.heroImageMobile = "cdn.example.com/portrait.jpg";
+assert.equal(validateEditorDraft(linked, portfolio.selectedTemplate), null);
+const linkedContent = contentFromDraft(portfolio, linked);
+assert.equal(linkedContent.profile.heroImage, "https://cdn.example.com/portrait.jpg");
+assert.equal(linkedContent.profile.heroImageMobile, "https://cdn.example.com/portrait.jpg");
+assert.equal(linkedContent.selectedTemplate, "wdk-premium-portfolio-1");
+assert.deepEqual(linkedContent.design, { palette: "ocean" });
+assert.deepEqual(linkedContent.profile.capabilityTags, ["Brand", "Web"]);
+assert.deepEqual(linkedContent.projects[0]?.tech, ["Figma", "React"]);
+assert.equal(linkedContent.profile.email, "amina@example.com");
 
 const socialDraft = draftFromPortfolio(portfolio);
 socialDraft.socialLinks[0].url = "instagram.com/amina-studio";

@@ -1,6 +1,8 @@
+import { commaSeparated } from '../presentation/commaList.ts'
 import type { Project } from '../types/portfolio.ts'
 
 export function ProjectCard({ project }: { project: Project }) {
+    const tech = commaSeparated(project.tech)
     return (
         <section className="project-card">
             <div className="project-window">
@@ -12,11 +14,7 @@ export function ProjectCard({ project }: { project: Project }) {
                         <span className="project-number">{project.id}</span>
                         <h2>{project.title}</h2>
                         <p>{project.category}</p>
-                        <div className="project-tech">
-                            {project.tech.map((item) => (
-                                <span key={item}>{item}</span>
-                            ))}
-                        </div>
+                        {tech ? <p className="project-tech">{tech}</p> : null}
                     </div>
                     <a href={project.url} target="_blank" className="project-link">
                         Explore Website

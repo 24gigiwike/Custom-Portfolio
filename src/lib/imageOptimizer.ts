@@ -20,6 +20,51 @@ const MAX_DIMENSION = 2048; // Maximum width or height on longest side for high-
 const COMPRESSION_QUALITY = 0.84; // Quality factor (0.80 - 0.85 delivers artifact-free retina clarity)
 const ALREADY_OPTIMIZED_THRESHOLD_BYTES = 350 * 1024; // 350KB
 
+export type ImagePreparePhase = "preparing" | "optimizing";
+
+export function fittedLongSide(
+  width: number,
+  height: number,
+  maxSide = MAX_DIMENSION
+): { width: number; height: number; resized: boolean } {
+  if (width <= 0 || height <= 0) return { width: 0, height: 0, resized: false };
+  const longest = Math.max(width, height);
+  if (longest <= maxSide) return { width, height, resized: false };
+  const scale = maxSide / longest;
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+    resized: true,
+  };
+}
+
+/** Small raster files that already fit the long-side limit can upload as-is. */
+export function canUploadOriginal(input: { type: string; size: number; width: number; height: number }): boolean {
+  const raster =
+    input.type === "image/jpeg" ||
+    input.type === "image/jpg" ||
+    input.type === "image/png" ||
+    input.type === "image/webp";
+  return (
+    raster &&
+    input.size <= ALREADY_OPTIMIZED_THRESHOLD_BYTES &&
+    input.width > 0 &&
+    input.height > 0 &&
+    input.width <= MAX_DIMENSION &&
+    input.height <= MAX_DIMENSION
+  );
+}
+
+function yieldToPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => setTimeout(resolve, 0));
+      return;
+    }
+    setTimeout(resolve, 0);
+  });
+}
+
 /**
  * Check if the browser supports WebP canvas export
  */
@@ -65,9 +110,37 @@ function loadImageElement(file: File): Promise<{ img: HTMLImageElement; objectUr
  * 3. Otherwise scales down keeping aspect ratio, paints to Canvas, and exports WebP/JPEG.
  * 4. Gracefully falls back to the original file if canvas processing encounters any error.
  */
-export async function optimizeImageForUpload(file: File): Promise<OptimizedImageResult> {
+async function decodeBitmap(file: File): Promise<ImageBitmap> {
+  if (typeof createImageBitmap !== "function") {
+    throw new Error("ImageBitmap decoding is unavailable.");
+  }
+  return createImageBitmap(file);
+}
+
+async function bitmapAtSize(source: ImageBitmap, width: number, height: number): Promise<ImageBitmap> {
+  if (source.width === width && source.height === height) return source;
+  try {
+    const resized = await createImageBitmap(source, {
+      resizeWidth: width,
+      resizeHeight: height,
+      resizeQuality: "high",
+    });
+    source.close();
+    return resized;
+  } catch {
+    return source;
+  }
+}
+
+export async function optimizeImageForUpload(
+  file: File,
+  onPhase?: (phase: ImagePreparePhase) => void
+): Promise<OptimizedImageResult> {
   const originalSize = file.size;
   const isGif = file.type === "image/gif";
+
+  onPhase?.("preparing");
+  await yieldToPaint();
 
   // If it is a GIF (which might be animated) or SVG, do not re-encode via canvas
   if (isGif || file.type === "image/svg+xml") {
@@ -82,24 +155,16 @@ export async function optimizeImageForUpload(file: File): Promise<OptimizedImage
     };
   }
 
-  let loadedImg: HTMLImageElement | null = null;
-  let objectUrlToRevoke: string | null = null;
+  let bitmap: ImageBitmap | null = null;
 
   try {
-    const { img, objectUrl } = await loadImageElement(file);
-    loadedImg = img;
-    objectUrlToRevoke = objectUrl;
+    bitmap = await decodeBitmap(file);
+    const naturalWidth = bitmap.width;
+    const naturalHeight = bitmap.height;
 
-    const naturalWidth = img.naturalWidth || img.width;
-    const naturalHeight = img.naturalHeight || img.height;
-
-    // Check if optimization is necessary
-    const isDimensionSmall = naturalWidth <= MAX_DIMENSION && naturalHeight <= MAX_DIMENSION;
-    const isFileSmall = originalSize <= ALREADY_OPTIMIZED_THRESHOLD_BYTES;
-    const isWebPAlready = file.type === "image/webp";
-
-    if (isDimensionSmall && isFileSmall && isWebPAlready) {
-      // Already optimized WebP with appropriate dimensions
+    if (canUploadOriginal({ type: file.type, size: originalSize, width: naturalWidth, height: naturalHeight })) {
+      bitmap.close();
+      bitmap = null;
       return {
         file,
         originalSize,
@@ -111,57 +176,35 @@ export async function optimizeImageForUpload(file: File): Promise<OptimizedImage
       };
     }
 
-    // Calculate adaptive target dimensions
-    let targetWidth = naturalWidth;
-    let targetHeight = naturalHeight;
+    onPhase?.("optimizing");
+    await yieldToPaint();
 
-    if (naturalWidth > MAX_DIMENSION || naturalHeight > MAX_DIMENSION) {
-      const scale = Math.min(MAX_DIMENSION / naturalWidth, MAX_DIMENSION / naturalHeight);
-      targetWidth = Math.max(1, Math.round(naturalWidth * scale));
-      targetHeight = Math.max(1, Math.round(naturalHeight * scale));
-    }
+    const target = fittedLongSide(naturalWidth, naturalHeight);
+    bitmap = await bitmapAtSize(bitmap, target.width, target.height);
 
-    // Create canvas
     const canvas = document.createElement("canvas");
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
     const ctx = canvas.getContext("2d", { alpha: true });
-    if (!ctx) {
-      throw new Error("Unable to obtain 2D canvas context.");
-    }
-
-    // High quality bicubic smoothing
+    if (!ctx) throw new Error("Unable to obtain 2D canvas context.");
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    bitmap = null;
 
-    // Paint image onto canvas
-    ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-
-    // Target format selection (prefer WebP if supported, fallback to JPEG)
     const supportsWebP = checkWebPSupport();
     const targetMimeType = supportsWebP ? "image/webp" : "image/jpeg";
     const extension = supportsWebP ? ".webp" : ".jpg";
-
     const baseName = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
     const cleanBaseName = baseName.replace(/[^a-zA-Z0-9_-]/g, "_");
     const newFileName = `${cleanBaseName}${extension}`;
 
-    // Convert canvas to Blob
     const blob: Blob | null = await new Promise((resolve) => {
-      canvas.toBlob(
-        (b) => resolve(b),
-        targetMimeType,
-        COMPRESSION_QUALITY
-      );
+      canvas.toBlob((result) => resolve(result), targetMimeType, COMPRESSION_QUALITY);
     });
+    if (!blob) throw new Error("Canvas toBlob failed.");
 
-    if (!blob) {
-      throw new Error("Canvas toBlob failed.");
-    }
-
-    // Check if the optimized blob is actually smaller or if the resize makes it better
-    // If blob is slightly larger than a tiny original file, but was resized, keep the optimized blob
     const optimizedFile = new File([blob], newFileName, {
       type: targetMimeType,
       lastModified: Date.now(),
@@ -171,26 +214,65 @@ export async function optimizeImageForUpload(file: File): Promise<OptimizedImage
       file: optimizedFile,
       originalSize,
       optimizedSize: optimizedFile.size,
-      width: targetWidth,
-      height: targetHeight,
+      width: canvas.width,
+      height: canvas.height,
       format: targetMimeType,
       wasOptimized: true,
     };
   } catch (err) {
-    console.warn("Client-side image optimization fallback triggered:", err);
-    // Safe fallback to original file so upload never fails
+    bitmap?.close();
+    try {
+      return await optimizeWithImageElement(file);
+    } catch (fallbackError) {
+      console.warn("Client-side image optimization fallback triggered:", err, fallbackError);
+      return {
+        file,
+        originalSize,
+        optimizedSize: originalSize,
+        width: 0,
+        height: 0,
+        format: file.type,
+        wasOptimized: false,
+      };
+    }
+  }
+}
+
+async function optimizeWithImageElement(file: File): Promise<OptimizedImageResult> {
+  const originalSize = file.size;
+  const { img, objectUrl } = await loadImageElement(file);
+  try {
+    const naturalWidth = img.naturalWidth || img.width;
+    const naturalHeight = img.naturalHeight || img.height;
+    const target = fittedLongSide(naturalWidth, naturalHeight);
+    const canvas = document.createElement("canvas");
+    canvas.width = target.width || naturalWidth;
+    canvas.height = target.height || naturalHeight;
+    const ctx = canvas.getContext("2d", { alpha: true });
+    if (!ctx) throw new Error("Unable to obtain 2D canvas context.");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const supportsWebP = checkWebPSupport();
+    const targetMimeType = supportsWebP ? "image/webp" : "image/jpeg";
+    const extension = supportsWebP ? ".webp" : ".jpg";
+    const baseName = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
+    const newFileName = `${baseName.replace(/[^a-zA-Z0-9_-]/g, "_")}${extension}`;
+    const blob: Blob | null = await new Promise((resolve) => {
+      canvas.toBlob((result) => resolve(result), targetMimeType, COMPRESSION_QUALITY);
+    });
+    if (!blob) throw new Error("Canvas toBlob failed.");
+    const optimizedFile = new File([blob], newFileName, { type: targetMimeType, lastModified: Date.now() });
     return {
-      file,
+      file: optimizedFile,
       originalSize,
-      optimizedSize: originalSize,
-      width: loadedImg?.naturalWidth || 0,
-      height: loadedImg?.naturalHeight || 0,
-      format: file.type,
-      wasOptimized: false,
+      optimizedSize: optimizedFile.size,
+      width: canvas.width,
+      height: canvas.height,
+      format: targetMimeType,
+      wasOptimized: true,
     };
   } finally {
-    if (objectUrlToRevoke) {
-      URL.revokeObjectURL(objectUrlToRevoke);
-    }
+    URL.revokeObjectURL(objectUrl);
   }
 }
