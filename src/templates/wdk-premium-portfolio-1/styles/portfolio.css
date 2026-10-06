@@ -38,7 +38,8 @@
 }
 
 [data-template="wdk-premium-portfolio-1"] .window-preview {
-    height: 100vh;
+    height: calc(100vh - 16rem);
+    min-height: 20rem;
     overflow: hidden;
     background: #fff;
 }
@@ -51,7 +52,7 @@
 }
 
 [data-template="wdk-premium-portfolio-1"] .window-footer {
-    display: none;
+    display: flex;
     justify-content: space-between;
     align-items: flex-end;
     gap: 2rem;
@@ -60,9 +61,11 @@
 }
 
 [data-template="wdk-premium-portfolio-1"] .project-meta {
-    display: none;
+    display: flex;
+    flex: 1;
     flex-direction: column;
     gap: .8rem;
+    min-width: 0;
 }
 
 [data-template="wdk-premium-portfolio-1"] .project-number {
@@ -89,6 +92,7 @@
     color: #777;
     line-height: 1.6;
     font-size: .95rem;
+    white-space: normal;
     overflow-wrap: break-word;
 }
 
