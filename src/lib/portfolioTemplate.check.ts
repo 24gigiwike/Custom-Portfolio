@@ -6,9 +6,12 @@ import { WDK_TEMPLATE_PREVIEW_PATH } from "../preview/templatePreviewPath";
 import { portfolioTemplateInfo, publishingStatusLabel } from "./portfolioTemplate";
 import {
   catalogTemplateForPreviewPath,
+  contentAreaLabel,
   findCatalogTemplate,
   listCatalogTemplates,
+  templateContentAreas,
   templateForCreation,
+  templateSupportsContentArea,
 } from "./templateCatalog";
 
 const templates = listCatalogTemplates();
@@ -23,6 +26,18 @@ assert.equal(wdk.availability, "available");
 assert.equal(wdk.previewPath, WDK_TEMPLATE_PREVIEW_PATH);
 assert.equal(catalogTemplateForPreviewPath(WDK_TEMPLATE_PREVIEW_PATH)?.id, wdk.id);
 assert.equal(templateForCreation(wdk.id)?.id, wdk.id);
+assert.deepEqual(templateContentAreas(wdk.id), [
+  "profile",
+  "socialLinks",
+  "projects",
+  "contact",
+  "seo",
+]);
+assert.deepEqual(wdk.capabilities.areas, templateContentAreas(wdk.id));
+assert.equal(templateSupportsContentArea(wdk.id, "projects"), true);
+assert.equal(templateSupportsContentArea(wdk.id, "profile"), true);
+assert.equal(contentAreaLabel("socialLinks"), "Social links");
+assert.equal(contentAreaLabel("seo"), "Search and sharing");
 
 const info = portfolioTemplateInfo(wdk.id);
 assert.equal(info.name, wdk.name);
@@ -30,6 +45,11 @@ assert.equal(info.previewPath, wdk.previewPath);
 
 assert.equal(findCatalogTemplate("future-template"), null);
 assert.equal(templateForCreation("future-template"), null);
+assert.equal(templateContentAreas("future-template"), null);
+assert.equal(templateContentAreas("unknown-template"), null);
+assert.equal(templateSupportsContentArea("unknown-template", "projects"), false);
+assert.equal(templateSupportsContentArea("unknown-template", "profile"), false);
+assert.notDeepEqual(templateContentAreas("unknown-template"), templateContentAreas(wdk.id));
 assert.equal(templateForCreation(""), null);
 assert.equal(catalogTemplateForPreviewPath("/template-preview/future-template"), null);
 

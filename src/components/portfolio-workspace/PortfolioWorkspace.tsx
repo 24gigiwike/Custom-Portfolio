@@ -3,6 +3,7 @@ import { brand } from "../../config/branding";
 import { userFacingWriteError } from "../../lib/accountLoad";
 import { useAuth } from "../../lib/authContext";
 import { portfolioTemplateInfo, publishingStatusLabel } from "../../lib/portfolioTemplate";
+import { contentAreaLabel, templateContentAreas, type ContentArea } from "../../lib/templateCatalog";
 import { getPortfolioByOwner, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
 import { TEMPLATE_DISCOVERY_PATH } from "../discover/templateDiscoveryPath";
 import type { UserPortfolio } from "../../types/userPortfolio";
@@ -47,6 +48,7 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
   }, []);
 
   const template = portfolio ? portfolioTemplateInfo(portfolio.selectedTemplate) : null;
+  const contentAreas = portfolio ? templateContentAreas(portfolio.selectedTemplate) : null;
   const openEditor = () => onOpenPath(PORTFOLIO_EDITOR_PATH);
   const openPreview = () => {
     if (template?.previewPath) onOpenPath(template.previewPath);
@@ -133,7 +135,14 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
             body="This page is for the new template portfolio. Your existing workspace was not edited."
           />
         ) : portfolio && template ? (
-          <Overview portfolio={portfolio} templateName={template.name} onEdit={openEditor} onPreview={openPreview} canPreview={Boolean(template.previewPath)} />
+          <Overview
+            portfolio={portfolio}
+            templateName={template.name}
+            contentAreas={contentAreas}
+            onEdit={openEditor}
+            onPreview={openPreview}
+            canPreview={Boolean(template.previewPath)}
+          />
         ) : (
           <Status title="Your portfolio could not be loaded." />
         )}
@@ -145,12 +154,14 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
 function Overview({
   portfolio,
   templateName,
+  contentAreas,
   onEdit,
   onPreview,
   canPreview,
 }: {
   portfolio: UserPortfolio;
   templateName: string;
+  contentAreas: readonly ContentArea[] | null;
   onEdit: () => void;
   onPreview: () => void;
   canPreview: boolean;
@@ -187,6 +198,30 @@ function Overview({
           <dd className="mt-1 text-sm leading-relaxed text-[#5C7372]">This portfolio is not live.</dd>
         </div>
       </dl>
+
+      <section className="mt-12 border-t border-[#D5E6E5] pt-8" aria-labelledby="portfolio-content">
+        <h2 id="portfolio-content" className="text-lg font-bold tracking-[-0.03em]">
+          Portfolio content
+        </h2>
+        {contentAreas ? (
+          <>
+            <p className="mt-2 max-w-lg text-sm leading-relaxed text-[#5C7372]">
+              This template can present these parts of your portfolio.
+            </p>
+            <ul className="mt-6 space-y-3">
+              {contentAreas.map((area) => (
+                <li key={area} className="text-base font-semibold">
+                  {contentAreaLabel(area)}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p className="mt-2 max-w-lg text-sm leading-relaxed text-[#5C7372]">
+            This template is not registered, so its content areas are not listed.
+          </p>
+        )}
+      </section>
 
       <div className="mt-12 border-t border-[#D5E6E5] pt-8">
         <h2 className="text-lg font-bold tracking-[-0.03em]">Next</h2>
