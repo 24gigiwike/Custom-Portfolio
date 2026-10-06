@@ -52,7 +52,7 @@ assert.equal(noMeta.includes(","), false);
 const css = readFileSync(new URL("../styles/portfolio.css", import.meta.url), "utf8");
 const metaRule = css.match(/\.project-meta\s*\{[^}]+\}/)?.[0] ?? "";
 const footerRule = css.match(/\.window-footer\s*\{[^}]+\}/)?.[0] ?? "";
-const techRule = css.match(/\.project-tech\s*\{[^}]+\}/)?.[0] ?? "";
+const techRule = css.match(/\.project-meta \.project-tech\s*\{[^}]+\}/)?.[0] ?? "";
 assert.match(metaRule, /display:\s*flex/);
 assert.doesNotMatch(metaRule, /display:\s*none/);
 assert.match(footerRule, /display:\s*flex/);
