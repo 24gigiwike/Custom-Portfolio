@@ -11,6 +11,8 @@ import { Button } from "./components/ui/Button";
 import { isWdkTemplatePreviewPath } from "./preview/templatePreviewPath";
 import { isPortfolioEditorPath } from "./components/portfolio-editor/portfolioEditorPath";
 import { PortfolioEditor } from "./components/portfolio-editor/PortfolioEditor";
+import { isPortfolioDesignPath } from "./components/portfolio-design/portfolioDesignPath";
+import { PortfolioDesign } from "./components/portfolio-design/PortfolioDesign";
 import { isPortfolioWorkspacePath, PORTFOLIO_WORKSPACE_PATH } from "./components/portfolio-workspace/portfolioWorkspacePath";
 import { PortfolioWorkspace } from "./components/portfolio-workspace/PortfolioWorkspace";
 import type { AppRoute } from "./types";
@@ -67,6 +69,7 @@ function AppContent() {
     if (
       isWdkTemplatePreviewPath(initialPath) ||
       isPortfolioEditorPath(initialPath) ||
+      isPortfolioDesignPath(initialPath) ||
       isPortfolioWorkspacePath(initialPath)
     ) {
       navigateTo(initialPath);
@@ -130,6 +133,7 @@ function AppContent() {
         currentRoute === "/discover" ||
         currentRoute === "/" ||
         isPortfolioEditorPath(currentRoute) ||
+        isPortfolioDesignPath(currentRoute) ||
         isPortfolioWorkspacePath(currentRoute) ||
         isTemplateDiscoveryPath(currentRoute)
       ) {
@@ -227,7 +231,7 @@ function AppContent() {
           >
             <TemplateDiscovery onOpenPath={navigateTo} />
           </motion.div>
-        ) : (isPortfolioWorkspacePath(currentRoute) || isPortfolioEditorPath(currentRoute)) && !user ? (
+        ) : (isPortfolioWorkspacePath(currentRoute) || isPortfolioEditorPath(currentRoute) || isPortfolioDesignPath(currentRoute)) && !user ? (
           <div className="flex min-h-screen items-center justify-center bg-[#F3FAF9] font-sans text-[#243838]">
             <p className="text-sm font-medium text-[#5C7372]">Loading your portfolio…</p>
           </div>
@@ -252,6 +256,21 @@ function AppContent() {
             className="w-full min-h-screen"
           >
             <PortfolioEditor
+              onWorkspace={() => navigateTo(PORTFOLIO_WORKSPACE_PATH)}
+              onPreview={(path) => navigateTo(path)}
+              onDiscover={() => navigateTo(TEMPLATE_DISCOVERY_PATH)}
+            />
+          </motion.div>
+        ) : isPortfolioDesignPath(currentRoute) && user ? (
+          <motion.div
+            key="portfolio-design-route"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full min-h-screen"
+          >
+            <PortfolioDesign
               onWorkspace={() => navigateTo(PORTFOLIO_WORKSPACE_PATH)}
               onPreview={(path) => navigateTo(path)}
               onDiscover={() => navigateTo(TEMPLATE_DISCOVERY_PATH)}

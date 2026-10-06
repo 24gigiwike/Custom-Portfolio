@@ -6,6 +6,7 @@ import type {
   Project as TemplateProject,
   SocialLink,
 } from "../templates/wdk-premium-portfolio-1/types/portfolio";
+import type { PortfolioDesign } from "./portfolioDesign";
 
 /**
  * Persisted portfolio owned by one authenticated user.
@@ -20,6 +21,7 @@ export interface UserPortfolio {
   projects: TemplateProject[];
   contact: PortfolioContact;
   seo: PortfolioSEO;
+  design: PortfolioDesign;
   publishing: PortfolioPublishing;
   createdAt: Timestamp | string | null;
   updatedAt: Timestamp | string | null;

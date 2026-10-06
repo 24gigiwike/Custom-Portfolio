@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { Contact } from '../components/Contact.tsx'
+import { wdkPaletteVariables } from '../design/palettes.ts'
 import { Hero } from '../components/Hero.tsx'
 import { ProjectSpotlight } from '../components/ProjectSpotlight.tsx'
 import { templateConfig } from '../data/template-config.ts'
@@ -12,15 +13,18 @@ import { usePortfolioSeo } from './usePortfolioSeo.ts'
 
 export interface WdkPremiumPortfolioProps {
     data: PortfolioData
+    /** Semantic accent id. Omitted or unknown values use the original template palette. */
+    palette?: string
 }
 
-export function WdkPremiumPortfolio({ data }: WdkPremiumPortfolioProps) {
+export function WdkPremiumPortfolio({ data, palette = "original" }: WdkPremiumPortfolioProps) {
     useLenis()
     usePortfolioSeo(data.seo)
 
     const style = {
         '--hero-image': `url("${data.profile.heroImage}")`,
         '--hero-image-mobile': `url("${data.profile.heroImageMobile}")`,
+        ...wdkPaletteVariables(palette),
     } as CSSProperties
 
     return (

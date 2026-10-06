@@ -16,7 +16,7 @@
 [data-template="wdk-premium-portfolio-1"] .eyebrow {
     font-size: 12px;
     letter-spacing: 4px;
-    color: #e09ae9;
+    color: var(--wdk-accent-deep);
     margin-bottom: 25px;
     font-weight: 600;
 }
@@ -89,7 +89,7 @@
 
 [data-template="wdk-premium-portfolio-1"] .submit-button {
     margin-top: 20px;
-    background: linear-gradient(to right, #e8c9fc, #e4cce7, #f7d7fe);
+    background: linear-gradient(to right, var(--wdk-accent-soft), var(--wdk-accent-mid), var(--wdk-accent-bright));
     color: #000000;
     border: none;
     padding: 18px 35px;
@@ -103,7 +103,7 @@
 }
 
 [data-template="wdk-premium-portfolio-1"] .submit-button:hover {
-    background: linear-gradient(to right, #e8c9fc, #e4cce7, #f7d7fe);
+    background: linear-gradient(to right, var(--wdk-accent-soft), var(--wdk-accent-mid), var(--wdk-accent-bright));
 }
 
 [data-template="wdk-premium-portfolio-1"] .submit-button span {

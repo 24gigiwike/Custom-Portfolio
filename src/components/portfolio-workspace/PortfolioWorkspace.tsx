@@ -8,6 +8,7 @@ import { getPortfolioByOwner, type OwnedPortfolioLookup } from "../../lib/userPo
 import { TEMPLATE_DISCOVERY_PATH } from "../discover/templateDiscoveryPath";
 import type { UserPortfolio } from "../../types/userPortfolio";
 import { Button } from "../ui/Button";
+import { PORTFOLIO_DESIGN_PATH } from "../portfolio-design/portfolioDesignPath";
 import { PORTFOLIO_EDITOR_PATH } from "../portfolio-editor/portfolioEditorPath";
 
 type PortfolioWorkspaceProps = {
@@ -50,6 +51,7 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
   const template = portfolio ? portfolioTemplateInfo(portfolio.selectedTemplate) : null;
   const contentAreas = portfolio ? templateContentAreas(portfolio.selectedTemplate) : null;
   const openEditor = () => onOpenPath(PORTFOLIO_EDITOR_PATH);
+  const openDesign = () => onOpenPath(PORTFOLIO_DESIGN_PATH);
   const openPreview = () => {
     if (template?.previewPath) onOpenPath(template.previewPath);
   };
@@ -89,6 +91,15 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
               disabled={!portfolio}
             >
               Edit
+            </button>
+            <button
+              type="button"
+              id="portfolio-workspace-design"
+              className="font-bold text-[#3E7574] disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={openDesign}
+              disabled={!portfolio}
+            >
+              Design
             </button>
             <button
               type="button"

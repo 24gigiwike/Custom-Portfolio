@@ -287,6 +287,7 @@ function portfolioContent(portfolio: UserPortfolio): UserPortfolioContent {
     projects: portfolio.projects,
     contact: portfolio.contact,
     seo: portfolio.seo,
+    design: portfolio.design,
     publishing: portfolio.publishing,
   };
 }
@@ -346,6 +347,7 @@ export function applyEditorDraft(
         }
       : portfolio.contact,
     seo: portfolio.seo,
+    design: portfolio.design,
     publishing: { status: "draft" },
   };
 }
