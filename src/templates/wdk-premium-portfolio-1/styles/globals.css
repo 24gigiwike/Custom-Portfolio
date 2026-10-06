@@ -12,6 +12,11 @@ body:has([data-template="wdk-premium-portfolio-1"]) {
 }
 
 [data-template="wdk-premium-portfolio-1"] {
+    --wdk-accent: #e4afeb;
+    --wdk-accent-deep: #e09ae9;
+    --wdk-accent-soft: #e8c9fc;
+    --wdk-accent-mid: #e4cce7;
+    --wdk-accent-bright: #f7d7fe;
     background-color: #F8F5F0;
     overflow-x: hidden;
     min-height: 100vh;
@@ -104,7 +109,7 @@ body:has([data-template="wdk-premium-portfolio-1"]) {
 }
 
 [data-template="wdk-premium-portfolio-1"] button:hover {
-    background: linear-gradient(to right, #e8c9fc, #e4cce7, #f7d7fe);
+    background: linear-gradient(to right, var(--wdk-accent-soft), var(--wdk-accent-mid), var(--wdk-accent-bright));
     color: #000000;
 }
 
@@ -121,7 +126,7 @@ body:has([data-template="wdk-premium-portfolio-1"]) {
 [data-template="wdk-premium-portfolio-1"] b {
     margin-right: 1rem;
     font-family: "Geist", sans-serif;
-    background-color: #e4afeb;
+    background-color: var(--wdk-accent);
     gap: 5px;
     padding: 5px 10px;
     border-radius: 10px;
@@ -162,7 +167,7 @@ body:has([data-template="wdk-premium-portfolio-1"]) {
 
     [data-template="wdk-premium-portfolio-1"] button {
         margin-bottom: 1.5rem;
-        background: linear-gradient(to right, #e8c9fc, #e4cce7, #f7d7fe);
+        background: linear-gradient(to right, var(--wdk-accent-soft), var(--wdk-accent-mid), var(--wdk-accent-bright));
         color: #000000;
     }
 

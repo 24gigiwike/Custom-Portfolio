@@ -23,6 +23,7 @@ import type { UserPortfolio, UserPortfolioContent } from "../types/userPortfolio
 import { auth, db } from "./firebase";
 import { DEFAULT_ENABLED_SECTIONS, DEFAULT_PORTFOLIO_THEME, generateSlug } from "./portfolio";
 import { seedPortfolioFromAccount } from "./portfolioSeed";
+import { normalizePortfolioDesign } from "../types/portfolioDesign";
 import { findCatalogTemplate, templateForCreation } from "./templateCatalog";
 
 const PLATFORMS = new Set<SocialPlatform>(["x", "instagram", "facebook", "youtube", "tiktok", "email"]);
@@ -134,6 +135,7 @@ function toUserPortfolio(id: string, data: Record<string, unknown>): UserPortfol
     projects: readProjects(data.projects),
     contact: readContact(data.contact),
     seo: readSeo(data.seo),
+    design: normalizePortfolioDesign(data.design),
     publishing: { status: "draft" },
     createdAt: (data.createdAt as UserPortfolio["createdAt"]) || null,
     updatedAt: (data.updatedAt as UserPortfolio["updatedAt"]) || null,
@@ -247,6 +249,7 @@ function firestorePayload(
     projects: content.projects,
     contact: content.contact,
     seo: content.seo,
+    design: content.design,
     publishing: { status: "draft" },
     title: content.profile.brandName || "Portfolio",
     slug: generateSlug(content.profile.brandName || "portfolio"),

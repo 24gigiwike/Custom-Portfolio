@@ -8,8 +8,9 @@ import {
   getPortfolioByOwner,
   type OwnedPortfolioLookup,
 } from "../lib/userPortfolio";
-import { toWdkPremiumPortfolioData } from "../lib/wdkPortfolioAdapter";
+import { toWdkPremiumPortfolioData, wdkPaletteForPortfolio } from "../lib/wdkPortfolioAdapter";
 import { catalogTemplateForPreviewPath } from "../lib/templateCatalog";
+import { PORTFOLIO_DESIGN_PATH } from "../components/portfolio-design/portfolioDesignPath";
 import { PORTFOLIO_EDITOR_PATH } from "../components/portfolio-editor/portfolioEditorPath";
 import { PORTFOLIO_WORKSPACE_PATH } from "../components/portfolio-workspace/portfolioWorkspacePath";
 import { TEMPLATE_DISCOVERY_PATH } from "../components/discover/templateDiscoveryPath";
@@ -40,6 +41,11 @@ function fixtureData(): PortfolioData | null {
   return null;
 }
 
+/** Sample previews can show a semantic palette. Saved portfolios ignore this. */
+function fixturePalette(): string {
+  return new URLSearchParams(window.location.search).get("palette") ?? "original";
+}
+
 function choiceError(error: unknown): string {
   const guarded = userFacingWriteError(error, "");
   if (guarded) return guarded;
@@ -56,10 +62,10 @@ function choiceError(error: unknown): string {
 
 export const WdkTemplatePreview: React.FC = () => {
   useFontAwesomeKit();
-  return <PersistedPortfolioPreview fixture={fixtureData()} />;
+  return <PersistedPortfolioPreview fixture={fixtureData()} palette={fixturePalette()} />;
 };
 
-const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null }> = ({ fixture }) => {
+const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palette: string }> = ({ fixture, palette }) => {
   const { user, userAccount, authPhase, accountError } = useAuth();
   const template = catalogTemplateForPreviewPath(WDK_TEMPLATE_PREVIEW_PATH);
   const [lookup, setLookup] = useState<OwnedPortfolioLookup | null>(null);
@@ -125,6 +131,7 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null }> = (
     return (
       <DesignPreview
         data={fixture}
+        palette={palette}
         note="This is a template preview."
         actionLabel="Sign in to use this template"
         onAction={() => window.location.assign("/auth")}
@@ -136,6 +143,7 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null }> = (
     return (
       <DesignPreview
         data={fixture}
+        palette={palette}
         note="This is a template preview."
         actionLabel="Use this template"
         onAction={() => undefined}
@@ -165,7 +173,10 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null }> = (
     return (
       <>
         <OwnedPreviewActions />
-        <WdkPremiumPortfolio data={toWdkPremiumPortfolioData(portfolio)} />
+        <WdkPremiumPortfolio
+          data={toWdkPremiumPortfolioData(portfolio)}
+          palette={wdkPaletteForPortfolio(portfolio)}
+        />
       </>
     );
   }
@@ -174,7 +185,7 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null }> = (
     return (
       <>
         <OwnedPreviewActions />
-        <WdkPremiumPortfolio data={fixture} />
+        <WdkPremiumPortfolio data={fixture} palette={palette} />
       </>
     );
   }
@@ -191,6 +202,7 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null }> = (
   return (
     <DesignPreview
       data={fixture ?? wdkSamplePortfolioData}
+      palette={palette}
       note="This is the template. Your portfolio starts when you use it."
       actionLabel="Use this template"
       onAction={useTemplate}
@@ -220,12 +232,21 @@ function OwnedPreviewActions() {
       >
         Edit portfolio
       </button>
+      <button
+        type="button"
+        id="portfolio-preview-design"
+        onClick={() => openAppPath(PORTFOLIO_DESIGN_PATH)}
+        className="rounded-full border border-[#D5E6E5] bg-white/95 px-4 py-2 text-sm font-bold tracking-[-0.02em] text-[#243838] shadow-[0_8px_20px_rgba(36,56,56,0.08)]"
+      >
+        Design
+      </button>
     </div>
   );
 }
 
 function DesignPreview({
   data,
+  palette = "original",
   note,
   actionLabel,
   onAction,
@@ -234,6 +255,7 @@ function DesignPreview({
   onTemplates,
 }: {
   data: PortfolioData;
+  palette?: string;
   note: string;
   actionLabel: string;
   onAction: () => void;
@@ -257,7 +279,7 @@ function DesignPreview({
         </div>
         {error && <p className="w-full text-sm font-medium text-[#B93838]">{error}</p>}
       </div>
-      <WdkPremiumPortfolio data={data} />
+      <WdkPremiumPortfolio data={data} palette={palette} />
     </>
   );
 }

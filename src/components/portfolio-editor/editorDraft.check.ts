@@ -53,6 +53,7 @@ const portfolio: UserPortfolio = {
     twitterDescription: "Portfolio",
     twitterImage: "",
   },
+  design: { palette: "ocean" },
   publishing: { status: "draft" },
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-02T00:00:00.000Z",
@@ -109,6 +110,7 @@ assert.equal(content.selectedTemplate, "wdk-premium-portfolio-1");
 assert.deepEqual(content.socialLinks, portfolio.socialLinks);
 assert.deepEqual(content.contact, portfolio.contact);
 assert.deepEqual(content.seo, portfolio.seo);
+assert.deepEqual(content.design, { palette: "ocean" });
 assert.deepEqual(content.publishing, { status: "draft" });
 assert.equal("ownerId" in content, false);
 assert.equal("createdAt" in content, false);
@@ -158,6 +160,7 @@ assert.equal(richContent.contact.heading, "Begin a project");
 assert.equal(richContent.contact.description, "A short note is enough.");
 assert.deepEqual(richContent.contact.projectTypes, ["Identity", "Website"]);
 assert.equal(richContent.contact.formEndpoint, "https://formspree.io/f/abc");
+assert.deepEqual(richContent.design, { palette: "ocean" });
 assert.equal(richContent.projects[0].id, "project-kept");
 assert.equal(richContent.projects[0].title, "Northline");
 assert.deepEqual(richContent.seo, portfolio.seo);
@@ -204,6 +207,7 @@ assert.equal(socialOnly.projects[0]?.id, "project-kept");
 assert.equal(socialOnly.contact.description, "Available for selected work.");
 assert.equal(socialOnly.contact.email, "studio@example.com");
 assert.deepEqual(socialOnly.seo, portfolio.seo);
+assert.deepEqual(socialOnly.design, { palette: "ocean" });
 assert.equal(socialOnly.selectedTemplate, portfolio.selectedTemplate);
 
 const profileOnly = applyEditorDraft(portfolio, rich, ["profile", "seo"]);
@@ -213,6 +217,7 @@ assert.deepEqual(profileOnly.socialLinks, portfolio.socialLinks);
 assert.deepEqual(profileOnly.projects, portfolio.projects);
 assert.equal(profileOnly.contact.email, portfolio.contact.email);
 assert.deepEqual(profileOnly.seo, portfolio.seo);
+assert.deepEqual(profileOnly.design, { palette: "ocean" });
 assert.equal(profileOnly.selectedTemplate, portfolio.selectedTemplate);
 
 const unknownPortfolio: UserPortfolio = { ...portfolio, selectedTemplate: "future-template" };
@@ -228,6 +233,7 @@ assert.equal(unknownContent.projects[0]?.title, "Northline");
 assert.equal(unknownContent.contact.heading, "Let's talk");
 assert.equal(unknownContent.selectedTemplate, "future-template");
 assert.deepEqual(unknownContent.seo, portfolio.seo);
+assert.deepEqual(unknownContent.design, { palette: "ocean" });
 assert.deepEqual(unknownContent.publishing, portfolio.publishing);
 assert.equal(validateEditorDraft(unknownDraft, unknownPortfolio.selectedTemplate), null);
 

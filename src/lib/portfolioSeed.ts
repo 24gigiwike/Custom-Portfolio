@@ -1,4 +1,5 @@
 import type { UserProfile } from "../types";
+import { DEFAULT_PORTFOLIO_DESIGN } from "../types/portfolioDesign";
 import type { PortfolioPublishing, UserPortfolioContent } from "../types/userPortfolio";
 
 const EMPTY_PUBLISHING: PortfolioPublishing = { status: "draft" };
@@ -58,6 +59,7 @@ export function seedPortfolioFromAccount(
       twitterDescription: "",
       twitterImage: "",
     },
+    design: { ...DEFAULT_PORTFOLIO_DESIGN },
     publishing: EMPTY_PUBLISHING,
   };
 }
