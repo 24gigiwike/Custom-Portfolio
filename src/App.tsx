@@ -8,7 +8,7 @@ import { TemplateDiscovery } from "./components/discover/TemplateDiscovery";
 import { isTemplateDiscoveryPath, TEMPLATE_DISCOVERY_PATH } from "./components/discover/templateDiscoveryPath";
 import { PortfolioAppView } from "./components/portfolio/PortfolioAppView";
 import { Button } from "./components/ui/Button";
-import { isWdkTemplatePreviewPath, WDK_TEMPLATE_PREVIEW_PATH } from "./preview/templatePreviewPath";
+import { isWdkTemplatePreviewPath } from "./preview/templatePreviewPath";
 import { isPortfolioEditorPath } from "./components/portfolio-editor/portfolioEditorPath";
 import { PortfolioEditor } from "./components/portfolio-editor/PortfolioEditor";
 import { isPortfolioWorkspacePath, PORTFOLIO_WORKSPACE_PATH } from "./components/portfolio-workspace/portfolioWorkspacePath";
@@ -253,7 +253,8 @@ function AppContent() {
           >
             <PortfolioEditor
               onWorkspace={() => navigateTo(PORTFOLIO_WORKSPACE_PATH)}
-              onPreview={() => navigateTo(WDK_TEMPLATE_PREVIEW_PATH)}
+              onPreview={(path) => navigateTo(path)}
+              onDiscover={() => navigateTo(TEMPLATE_DISCOVERY_PATH)}
             />
           </motion.div>
         ) : currentRoute === "/onboarding" && user && authPhase === "ONBOARDING_REQUIRED" ? (
