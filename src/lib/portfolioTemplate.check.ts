@@ -11,6 +11,7 @@ import {
   listCatalogTemplates,
   templateContentAreas,
   templateForCreation,
+  templatePreviewImage,
   templateSupportsContentArea,
 } from "./templateCatalog";
 
@@ -24,6 +25,15 @@ assert.equal(wdk.name, "WDK Premium Portfolio 1");
 assert.equal(wdk.version, "1.0.0");
 assert.equal(wdk.availability, "available");
 assert.equal(wdk.previewPath, WDK_TEMPLATE_PREVIEW_PATH);
+assert.equal(
+  wdk.previewImage.src,
+  "https://res.cloudinary.com/dtkluxukm/image/upload/v1791304280/template_wqijzy.png"
+);
+assert.equal(wdk.previewImage.width, 1352);
+assert.equal(wdk.previewImage.height, 610);
+assert.equal(templatePreviewImage(wdk.id)?.src, wdk.previewImage.src);
+assert.equal(templatePreviewImage("future-template"), null);
+assert.equal(templatePreviewImage("unknown-template"), null);
 assert.equal(catalogTemplateForPreviewPath(WDK_TEMPLATE_PREVIEW_PATH)?.id, wdk.id);
 assert.equal(templateForCreation(wdk.id)?.id, wdk.id);
 assert.deepEqual(templateContentAreas(wdk.id), [

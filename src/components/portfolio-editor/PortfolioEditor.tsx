@@ -4,7 +4,7 @@ import { brand } from "../../config/branding";
 import { portfolioTemplateInfo } from "../../lib/portfolioTemplate";
 import { contentAreaLabel } from "../../lib/templateCatalog";
 import { allocateProjectId } from "../../lib/projects";
-import { uploadPortfolioPortrait } from "../../lib/storage";
+import { uploadPortfolioImage, type ImageUploadStatus, type PortfolioImageFolder } from "../../lib/storage";
 import { getPortfolioByOwner, updatePortfolio, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
 import type { UserPortfolio } from "../../types/userPortfolio";
 import { Button } from "../ui/Button";
@@ -25,6 +25,7 @@ import {
   type EditorProjectDraft,
   type EditorSocialDraft,
 } from "./editorDraft";
+import { ImageField } from "./ImageField";
 
 type PortfolioEditorProps = {
   onPreview: (path: string) => void;
@@ -43,8 +44,8 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
-  const [portraitError, setPortraitError] = useState<string | null>(null);
-  const [portraitProgress, setPortraitProgress] = useState<number | null>(null);
+  const [imageError, setImageError] = useState<{ field: PortfolioImageFolder; message: string } | null>(null);
+  const [imageStatus, setImageStatus] = useState<{ field: PortfolioImageFolder; status: ImageUploadStatus } | null>(null);
 
   const load = () => {
     setIsLoading(true);
@@ -80,38 +81,45 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
     setFieldErrors(null);
   };
 
-  const replacePortrait = async (file: File | undefined) => {
-    if (!file || !portfolio) return;
-    setPortraitError(null);
-    setPortraitProgress(0);
+  const imageBusy =
+    imageStatus?.status.phase === "preparing" ||
+    imageStatus?.status.phase === "optimizing" ||
+    imageStatus?.status.phase === "uploading";
+
+  const uploadImage = async (folder: PortfolioImageFolder, file: File) => {
+    if (!portfolio) return;
+    setImageError(null);
+    setImageStatus({ field: folder, status: { phase: "preparing", percent: null } });
     try {
-      const uploaded = await uploadPortfolioPortrait(portfolio.id, file, setPortraitProgress);
-      setDraft((current) =>
-        current
-          ? {
-              ...current,
-              heroImage: uploaded.downloadUrl,
-              heroImageMobile: uploaded.downloadUrl,
-            }
-          : current
-      );
+      const uploaded = await uploadPortfolioImage(portfolio.id, file, folder, (status) => {
+        setImageStatus({ field: folder, status });
+      });
+      setDraft((current) => {
+        if (!current) return current;
+        if (folder === "portrait") {
+          return { ...current, heroImage: uploaded.downloadUrl, heroImageMobile: uploaded.downloadUrl };
+        }
+        return { ...current, logo: uploaded.downloadUrl };
+      });
       setJustSaved(false);
       setSaveError(null);
       setFieldErrors(null);
     } catch (error: unknown) {
-      setPortraitError(error instanceof Error ? error.message : "Couldn't upload this portrait. Try again.");
-    } finally {
-      setPortraitProgress(null);
+      setImageStatus(null);
+      setImageError({
+        field: folder,
+        message: error instanceof Error ? error.message : "Couldn't upload this image. Try again.",
+      });
     }
   };
 
   const save = async () => {
-    if (!portfolio || !draft || portraitProgress !== null) return;
+    if (!portfolio || !draft || imageBusy) return;
     const errors = validateEditorDraft(draft, portfolio.selectedTemplate);
     setFieldErrors(errors);
     if (errors) {
       const anchor =
-        errors.brandName || errors.headline || errors.logo || errors.ctaHref
+        errors.brandName || errors.headline || errors.heroImage || errors.logo || errors.ctaHref
           ? "editor-profile"
           : Object.keys(errors.socialLinks).length > 0
             ? "editor-socialLinks"
@@ -208,7 +216,7 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
               id="portfolio-editor-workspace"
               variant="ghost"
               className="w-full sm:w-auto"
-              disabled={portraitProgress !== null}
+              disabled={imageBusy}
               onClick={() => leaveEditor(onWorkspace)}
             >
               Workspace
@@ -217,7 +225,7 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
               id="portfolio-editor-preview"
               variant="outline"
               className="w-full sm:w-auto"
-              disabled={portraitProgress !== null || !previewPath}
+              disabled={imageBusy || !previewPath}
               onClick={() => {
                 if (!previewPath) return;
                 leaveEditor(() => onPreview(previewPath));
@@ -229,7 +237,7 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
               id="portfolio-editor-save"
               className="col-span-2 w-full sm:col-span-1 sm:w-auto"
               isLoading={isSaving}
-              disabled={portraitProgress !== null || !canEdit}
+              disabled={imageBusy || !canEdit}
               onClick={() => void save()}
             >
               Save
@@ -281,10 +289,11 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
             <ProfileSection
               draft={draft}
               fieldErrors={fieldErrors}
-              portraitError={portraitError}
-              portraitProgress={portraitProgress}
+              imageError={imageError}
+              imageStatus={imageStatus}
+              imageBusy={imageBusy}
               onChange={updateDraft}
-              onPortrait={(file) => void replacePortrait(file)}
+              onUpload={(folder, file) => void uploadImage(folder, file)}
             />
           )}
 
@@ -311,19 +320,20 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
 function ProfileSection({
   draft,
   fieldErrors,
-  portraitError,
-  portraitProgress,
+  imageError,
+  imageStatus,
+  imageBusy,
   onChange,
-  onPortrait,
+  onUpload,
 }: {
   draft: EditorDraft;
   fieldErrors: EditorFieldErrors | null;
-  portraitError: string | null;
-  portraitProgress: number | null;
+  imageError: { field: PortfolioImageFolder; message: string } | null;
+  imageStatus: { field: PortfolioImageFolder; status: ImageUploadStatus } | null;
+  imageBusy: boolean;
   onChange: (next: EditorDraft) => void;
-  onPortrait: (file: File | undefined) => void;
+  onUpload: (folder: PortfolioImageFolder, file: File) => void;
 }) {
-  const portrait = draft.heroImage || draft.heroImageMobile;
   return (
     <section id="editor-profile" className="scroll-mt-64 mt-12" aria-labelledby="profile-heading">
       <h2 id="profile-heading" className="text-lg font-bold tracking-[-0.03em]">
@@ -357,47 +367,31 @@ function ProfileSection({
           <FieldError message={fieldErrors?.headline} />
         </label>
 
-        <div>
-          <span className="mb-2 block text-sm font-semibold">Portrait</span>
-          <div className="flex flex-wrap items-center gap-4">
-            {portrait ? (
-              <img src={portrait} alt="" className="h-20 w-20 rounded-full object-cover" />
-            ) : (
-              <div className="h-20 w-20 rounded-full bg-[#E7F3F2]" />
-            )}
-            <label className="inline-flex h-11 cursor-pointer items-center rounded-xl border border-[#D5E6E5] bg-white px-5 text-sm font-bold tracking-[-0.02em]">
-              {portraitProgress !== null ? `Uploading ${portraitProgress}%` : portrait ? "Replace portrait" : "Add portrait"}
-              <input
-                id="portfolio-portrait"
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                className="sr-only"
-                disabled={portraitProgress !== null}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = "";
-                  onPortrait(file);
-                }}
-              />
-            </label>
-          </div>
-          <FieldError message={portraitError ?? undefined} />
-        </div>
+        <ImageField
+          id="portfolio-portrait"
+          label="Portrait"
+          hint="Shown large beside your introduction. A device photo is prepared before it uploads."
+          value={draft.heroImage || draft.heroImageMobile}
+          error={fieldErrors?.heroImage || (imageError?.field === "portrait" ? imageError.message : undefined)}
+          status={imageStatus?.field === "portrait" ? imageStatus.status : null}
+          disabled={imageBusy && imageStatus?.field !== "portrait"}
+          shape="portrait"
+          onUpload={(file) => onUpload("portrait", file)}
+          onValueChange={(value) => onChange({ ...draft, heroImage: value, heroImageMobile: value })}
+        />
 
-        <label className="block">
-          <span className="mb-2 block text-sm font-semibold">Logo</span>
-          <input
-            id="portfolio-logo"
-            className={fieldClass}
-            value={draft.logo}
-            inputMode="url"
-            autoComplete="off"
-            placeholder="https://"
-            onChange={(event) => onChange({ ...draft, logo: event.target.value })}
-          />
-          <p className="mt-2 text-sm leading-relaxed text-[#5C7372]">The mark shown beside your name. Leave this empty to skip it.</p>
-          <FieldError message={fieldErrors?.logo} />
-        </label>
+        <ImageField
+          id="portfolio-logo"
+          label="Logo"
+          hint="The mark shown beside your name. Leave this empty to skip it."
+          value={draft.logo}
+          error={fieldErrors?.logo || (imageError?.field === "logo" ? imageError.message : undefined)}
+          status={imageStatus?.field === "logo" ? imageStatus.status : null}
+          disabled={imageBusy && imageStatus?.field !== "logo"}
+          shape="logo"
+          onUpload={(file) => onUpload("logo", file)}
+          onValueChange={(value) => onChange({ ...draft, logo: value })}
+        />
 
         <label className="block">
           <span className="mb-2 block text-sm font-semibold">Capabilities</span>

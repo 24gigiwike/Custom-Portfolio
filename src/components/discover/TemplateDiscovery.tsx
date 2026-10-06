@@ -7,6 +7,31 @@ import { createPortfolio, getPortfolioByOwner, type OwnedPortfolioLookup } from 
 import { PORTFOLIO_WORKSPACE_PATH } from "../portfolio-workspace/portfolioWorkspacePath";
 import { Button } from "../ui/Button";
 
+function TemplatePreviewImage({ template }: { template: CatalogTemplate }) {
+  const [failed, setFailed] = useState(false);
+  const image = template.previewImage;
+  return (
+    <div
+      className="overflow-hidden rounded-2xl bg-[#E7F3F2]"
+      style={{ aspectRatio: `${image.width} / ${image.height}` }}
+    >
+      {failed ? (
+        <p className="flex h-full items-center px-6 text-sm font-medium text-[#5C7372]">Preview image unavailable.</p>
+      ) : (
+        <img
+          src={image.src}
+          alt={image.alt}
+          width={image.width}
+          height={image.height}
+          className="h-full w-full object-contain"
+          decoding="async"
+          onError={() => setFailed(true)}
+        />
+      )}
+    </div>
+  );
+}
+
 function selectionError(error: unknown): string {
   const guarded = userFacingWriteError(error, "");
   if (guarded) return guarded;
@@ -75,7 +100,7 @@ export function TemplateDiscovery({ onOpenPath }: TemplateDiscoveryProps) {
   return (
     <div id="template-discovery" className="min-h-screen overflow-x-hidden bg-[#F3FAF9] font-sans text-[#243838]">
       <header className="border-b border-[#D5E6E5] bg-white">
-        <div className="mx-auto flex w-full max-w-3xl items-start justify-between gap-4 px-5 py-5 sm:px-8">
+        <div className="mx-auto flex w-full max-w-4xl items-start justify-between gap-4 px-5 py-5 sm:px-8">
           <div className="min-w-0">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">{brand.name}</p>
             <p className="mt-1 truncate text-sm font-semibold">Find a template</p>
@@ -86,7 +111,7 @@ export function TemplateDiscovery({ onOpenPath }: TemplateDiscoveryProps) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8 sm:py-16">
+      <main className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8 sm:py-16">
         <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">Templates</p>
         <h1 className="mt-3 max-w-xl break-words text-4xl font-bold leading-[1.05] tracking-[-0.045em] sm:text-5xl">
           {name ? `${name}, choose a starting point.` : "Choose a starting point."}
@@ -98,8 +123,9 @@ export function TemplateDiscovery({ onOpenPath }: TemplateDiscoveryProps) {
         {isLoading ? (
           <p className="mt-12 text-sm font-medium text-[#5C7372]">Loading templates…</p>
         ) : template ? (
-          <article className="mt-12 border-t border-[#D5E6E5] pt-8">
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#3E7574]">Available now</p>
+          <article className="mt-12">
+            <TemplatePreviewImage template={template} />
+            <p className="mt-8 text-[11px] font-bold uppercase tracking-[0.16em] text-[#3E7574]">Available now</p>
             <h2 className="mt-3 break-words text-3xl font-bold tracking-[-0.04em]">{template.name}</h2>
             <p className="mt-4 max-w-xl text-base leading-relaxed text-[#5C7372]">{template.description}</p>
             <p className="mt-4 max-w-xl text-base leading-relaxed">{template.fit}</p>

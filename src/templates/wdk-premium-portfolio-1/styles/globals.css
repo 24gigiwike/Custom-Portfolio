@@ -114,22 +114,16 @@ body:has([data-template="wdk-premium-portfolio-1"]) {
 }
 
 [data-template="wdk-premium-portfolio-1"] h3 {
+    display: block;
+    max-width: 100%;
     font-family: "Geist", sans-serif;
     font-size: 0.8rem;
     color: #000000;
-    line-height: 1.5;
+    line-height: 1.6;
     font-weight: lighter;
     margin-top: -1rem;
     margin-bottom: 2rem;
-}
-
-[data-template="wdk-premium-portfolio-1"] b {
-    margin-right: 1rem;
-    font-family: "Geist", sans-serif;
-    background-color: var(--wdk-accent);
-    gap: 5px;
-    padding: 5px 10px;
-    border-radius: 10px;
+    overflow-wrap: break-word;
 }
 
 @media (max-width: 768px) {

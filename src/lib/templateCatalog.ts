@@ -7,6 +7,27 @@ import { PORTFOLIO_PALETTE_IDS } from "../types/portfolioDesign";
 export type TemplateAvailability = "available";
 
 /**
+ * Discovery images should stay near this proportion.
+ * The current WDK asset is 1352×610, about 2.22:1.
+ * Future templates can use their own pixel size inside a similar frame.
+ */
+export const TEMPLATE_PREVIEW_ASPECT_RATIO = 1352 / 610;
+
+export type TemplatePreviewImage = {
+  src: string;
+  width: number;
+  height: number;
+  alt: string;
+};
+
+const WDK_PREVIEW_IMAGE: TemplatePreviewImage = {
+  src: "https://res.cloudinary.com/dtkluxukm/image/upload/v1791304280/template_wqijzy.png",
+  width: 1352,
+  height: 610,
+  alt: "Preview of WDK Premium Portfolio 1, with a portrait, headline, and project work.",
+};
+
+/**
  * Content areas a template can present.
  * These name areas of UserPortfolio, not the user's saved values.
  */
@@ -104,6 +125,7 @@ export type CatalogTemplate = {
   description: string;
   fit: string;
   previewPath: string;
+  previewImage: TemplatePreviewImage;
   availability: TemplateAvailability;
   capabilities: TemplateCapabilities;
   design: TemplateDesignCapabilities;
@@ -117,6 +139,7 @@ const catalog: CatalogTemplate[] = [
     description: templateConfig.description,
     fit: "A personal portfolio for an independent designer or creative professional.",
     previewPath: WDK_TEMPLATE_PREVIEW_PATH,
+    previewImage: WDK_PREVIEW_IMAGE,
     availability: "available",
     capabilities: { areas: WDK_CONTENT_AREAS },
     design: WDK_DESIGN_CAPABILITIES,
@@ -129,6 +152,11 @@ export function listCatalogTemplates(): CatalogTemplate[] {
 
 export function findCatalogTemplate(id: string): CatalogTemplate | null {
   return catalog.find((template) => template.id === id) ?? null;
+}
+
+/** Preview image for a registered template. Unknown ids do not borrow WDK's image. */
+export function templatePreviewImage(selectedTemplate: string): TemplatePreviewImage | null {
+  return findCatalogTemplate(selectedTemplate)?.previewImage ?? null;
 }
 
 export function catalogTemplateForPreviewPath(path: string): CatalogTemplate | null {
