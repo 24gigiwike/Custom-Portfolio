@@ -109,7 +109,20 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
     if (!portfolio || !draft || portraitProgress !== null) return;
     const errors = validateEditorDraft(draft, portfolio.selectedTemplate);
     setFieldErrors(errors);
-    if (errors) return;
+    if (errors) {
+      const anchor =
+        errors.brandName || errors.headline || errors.logo || errors.ctaHref
+          ? "editor-profile"
+          : Object.keys(errors.socialLinks).length > 0
+            ? "editor-socialLinks"
+            : Object.keys(errors.projects).length > 0
+              ? "editor-projects"
+              : errors.formEndpoint
+                ? "editor-contact"
+                : null;
+      if (anchor) document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
 
     setIsSaving(true);
     setSaveError(null);
@@ -246,11 +259,20 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
           {hasUnsavedChanges && <p className="mt-4 text-sm font-medium text-[#5C7372]">Save to update the preview.</p>}
           {saveError && <p className="mt-4 break-words text-sm font-medium text-[#B93838]">{saveError}</p>}
 
-          {!canEdit && (
+          {editorAreas === null && (
             <section className="mt-10 max-w-xl">
               <h2 className="text-lg font-bold tracking-[-0.03em]">This template cannot be edited here yet.</h2>
               <p className="mt-3 text-sm leading-relaxed text-[#5C7372]">
-                The selected template is not registered for content editing, so these fields were left unchanged.
+                The selected template is not registered, so its content was left unchanged.
+              </p>
+            </section>
+          )}
+
+          {editorAreas?.length === 0 && (
+            <section className="mt-10 max-w-xl">
+              <h2 className="text-lg font-bold tracking-[-0.03em]">Nothing here is editable yet.</h2>
+              <p className="mt-3 text-sm leading-relaxed text-[#5C7372]">
+                This template does not present portfolio content that can be edited from here.
               </p>
             </section>
           )}
