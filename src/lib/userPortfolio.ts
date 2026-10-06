@@ -10,23 +10,13 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import type {
-  PortfolioContact,
-  PortfolioProfile,
-  PortfolioSEO,
-  Project as TemplateProject,
-  SocialLink,
-  SocialPlatform,
-} from "../templates/wdk-premium-portfolio-1/types/portfolio";
 import type { UserProfile } from "../types";
 import type { UserPortfolio, UserPortfolioContent } from "../types/userPortfolio";
 import { auth, db } from "./firebase";
 import { DEFAULT_ENABLED_SECTIONS, DEFAULT_PORTFOLIO_THEME, generateSlug } from "./portfolio";
+import { normalizeUserPortfolio } from "./normalizeUserPortfolio";
 import { seedPortfolioFromAccount } from "./portfolioSeed";
-import { normalizePortfolioDesign } from "../types/portfolioDesign";
 import { findCatalogTemplate, templateForCreation } from "./templateCatalog";
-
-const PLATFORMS = new Set<SocialPlatform>(["x", "instagram", "facebook", "youtube", "tiktok", "email"]);
 
 export type OwnedPortfolioLookup =
   | { status: "missing" }
@@ -41,105 +31,10 @@ function requireUid(): string {
   return uid;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function text(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function stringList(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string");
-}
-
-function isTemplateRecord(data: Record<string, unknown>): boolean {
-  return typeof data.selectedTemplate === "string"
-    && findCatalogTemplate(data.selectedTemplate) !== null
-    && isRecord(data.profile);
-}
-
-function readProfile(value: unknown): PortfolioProfile {
-  const profile = isRecord(value) ? value : {};
-  return {
-    brandName: text(profile.brandName),
-    logo: text(profile.logo),
-    heroImage: text(profile.heroImage),
-    heroImageMobile: text(profile.heroImageMobile),
-    headline: text(profile.headline),
-    capabilityTags: stringList(profile.capabilityTags),
-    ctaLabel: text(profile.ctaLabel),
-    ctaHref: text(profile.ctaHref),
-    email: text(profile.email),
-  };
-}
-
-function readSocialLinks(value: unknown): SocialLink[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((item) => {
-    if (!isRecord(item) || typeof item.platform !== "string" || typeof item.url !== "string") return [];
-    if (!PLATFORMS.has(item.platform as SocialPlatform)) return [];
-    return [{ platform: item.platform as SocialPlatform, url: item.url }];
-  });
-}
-
-function readProjects(value: unknown): TemplateProject[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((item) => {
-    if (!isRecord(item) || typeof item.id !== "string" || typeof item.title !== "string") return [];
-    return [{
-      id: item.id,
-      title: item.title,
-      category: text(item.category),
-      url: text(item.url),
-      tech: stringList(item.tech),
-    }];
-  });
-}
-
-function readContact(value: unknown): PortfolioContact {
-  const contact = isRecord(value) ? value : {};
-  return {
-    email: text(contact.email),
-    eyebrow: text(contact.eyebrow),
-    heading: text(contact.heading),
-    description: text(contact.description),
-    projectTypes: stringList(contact.projectTypes),
-    formEndpoint: text(contact.formEndpoint),
-  };
-}
-
-function readSeo(value: unknown): PortfolioSEO {
-  const seo = isRecord(value) ? value : {};
-  return {
-    title: text(seo.title),
-    description: text(seo.description),
-    canonicalUrl: text(seo.canonicalUrl),
-    ogTitle: text(seo.ogTitle),
-    ogDescription: text(seo.ogDescription),
-    ogImage: text(seo.ogImage),
-    twitterTitle: text(seo.twitterTitle),
-    twitterDescription: text(seo.twitterDescription),
-    twitterImage: text(seo.twitterImage),
-  };
-}
-
-function toUserPortfolio(id: string, data: Record<string, unknown>): UserPortfolio {
-  return {
-    id,
-    ownerId: text(data.ownerId),
-    selectedTemplate: text(data.selectedTemplate),
-    profile: readProfile(data.profile),
-    socialLinks: readSocialLinks(data.socialLinks),
-    projects: readProjects(data.projects),
-    contact: readContact(data.contact),
-    seo: readSeo(data.seo),
-    design: normalizePortfolioDesign(data.design),
-    publishing: { status: "draft" },
-    createdAt: (data.createdAt as UserPortfolio["createdAt"]) || null,
-    updatedAt: (data.updatedAt as UserPortfolio["updatedAt"]) || null,
-  };
+function readyPortfolio(id: string, data: Record<string, unknown>, ownerId: string): UserPortfolio | null {
+  const portfolio = normalizeUserPortfolio(id, data);
+  if (!portfolio || portfolio.ownerId !== ownerId) return null;
+  return portfolio;
 }
 
 async function findOwnedDocument(ownerId: string) {
@@ -152,20 +47,16 @@ export async function getPortfolioByOwner(): Promise<OwnedPortfolioLookup> {
   const ownerId = requireUid();
   const existing = await findOwnedDocument(ownerId);
   if (!existing) return { status: "missing" };
-  const data = existing.data();
-  if (!isTemplateRecord(data) || data.ownerId !== ownerId) {
-    return { status: "legacy", id: existing.id };
-  }
-  return { status: "ready", portfolio: toUserPortfolio(existing.id, data) };
+  const portfolio = readyPortfolio(existing.id, existing.data(), ownerId);
+  if (!portfolio) return { status: "legacy", id: existing.id };
+  return { status: "ready", portfolio };
 }
 
 export async function getPortfolio(portfolioId: string): Promise<UserPortfolio | null> {
   const ownerId = requireUid();
   const snap = await getDoc(doc(db, "portfolios", portfolioId));
   if (!snap.exists()) return null;
-  const data = snap.data();
-  if (data.ownerId !== ownerId || !isTemplateRecord(data)) return null;
-  return toUserPortfolio(snap.id, data);
+  return readyPortfolio(snap.id, snap.data(), ownerId);
 }
 
 /**
@@ -184,10 +75,8 @@ export async function createPortfolio(
 
   const existing = await findOwnedDocument(ownerId);
   if (existing) {
-    const data = existing.data();
-    if (isTemplateRecord(data) && data.ownerId === ownerId) {
-      return toUserPortfolio(existing.id, data);
-    }
+    const portfolio = readyPortfolio(existing.id, existing.data(), ownerId);
+    if (portfolio) return portfolio;
     throw new Error("This account already has a workspace portfolio. It was left unchanged.");
   }
 

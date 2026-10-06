@@ -26,9 +26,12 @@
 
 [data-template="wdk-premium-portfolio-1"] .project-window {
     width: 100%;
+    height: calc(100vh - 8.5rem);
     margin: 0 auto;
     border-radius: 28px;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
     transition: .5s ease;
 }
 
@@ -38,7 +41,9 @@
 }
 
 [data-template="wdk-premium-portfolio-1"] .window-preview {
-    height: 100vh;
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 16rem;
     overflow: hidden;
     background: #fff;
 }
@@ -51,7 +56,7 @@
 }
 
 [data-template="wdk-premium-portfolio-1"] .window-footer {
-    display: none;
+    display: flex;
     justify-content: space-between;
     align-items: flex-end;
     gap: 2rem;
@@ -60,9 +65,11 @@
 }
 
 [data-template="wdk-premium-portfolio-1"] .project-meta {
-    display: none;
+    display: flex;
+    flex: 1;
     flex-direction: column;
     gap: .8rem;
+    min-width: 0;
 }
 
 [data-template="wdk-premium-portfolio-1"] .project-number {
@@ -84,11 +91,12 @@
     line-height: 1.6;
 }
 
-[data-template="wdk-premium-portfolio-1"] .project-tech {
+[data-template="wdk-premium-portfolio-1"] .project-meta .project-tech {
     margin: .5rem 0 0;
     color: #777;
     line-height: 1.6;
     font-size: .95rem;
+    white-space: normal;
     overflow-wrap: break-word;
 }
 
@@ -110,15 +118,20 @@
 
 @media (max-width: 992px) {
     [data-template="wdk-premium-portfolio-1"] .window-preview {
-        height: 60vh;
+        height: auto;
+        min-height: 14rem;
     }
 
     [data-template="wdk-premium-portfolio-1"] .window-footer {
         display: flex;
-        justify-content: space-between;
-        align-items: flex-end;
-        gap: 2rem;
-        padding: 2.5rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1.25rem;
+        padding: 1.5rem 1.25rem 1.75rem;
+    }
+
+    [data-template="wdk-premium-portfolio-1"] .project-meta {
+        width: 100%;
     }
 
     [data-template="wdk-premium-portfolio-1"] .project-card {
@@ -127,16 +140,21 @@
 }
 
 @media (max-width: 768px) {
+    [data-template="wdk-premium-portfolio-1"] .project-window {
+        height: calc(100vh - 13rem);
+    }
+
     [data-template="wdk-premium-portfolio-1"] .window-preview {
-        height: 60vh;
+        height: auto;
+        min-height: 12rem;
     }
 
     [data-template="wdk-premium-portfolio-1"] .window-footer {
         display: flex;
-        justify-content: space-between;
-        align-items: flex-end;
-        gap: 2rem;
-        padding: 2.5rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1.25rem;
+        padding: 1.5rem 1.25rem 1.75rem;
     }
 
     [data-template="wdk-premium-portfolio-1"] .project-card {
@@ -146,15 +164,16 @@
 
 @media (max-width: 480px) {
     [data-template="wdk-premium-portfolio-1"] .window-preview {
-        height: 60vh;
+        height: auto;
+        min-height: 12rem;
     }
 
     [data-template="wdk-premium-portfolio-1"] .window-footer {
         display: flex;
-        justify-content: space-between;
-        align-items: flex-end;
-        gap: 2rem;
-        padding: 2.5rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1.25rem 1rem 1.5rem;
     }
 
     [data-template="wdk-premium-portfolio-1"] .project-card {
