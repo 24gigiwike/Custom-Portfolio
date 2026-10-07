@@ -13,6 +13,7 @@ import { PORTFOLIO_DESIGN_PATH } from "../portfolio-design/portfolioDesignPath";
 import { PORTFOLIO_EDITOR_PATH } from "../portfolio-editor/portfolioEditorPath";
 import { PORTFOLIO_PUBLISH_PATH } from "../portfolio-publish/portfolioPublishPath";
 import { PORTFOLIO_REVIEW_PATH } from "../portfolio-review/portfolioReviewPath";
+import { publicPortfolioUrl } from "../public/publicPortfolioPath";
 
 type PortfolioWorkspaceProps = {
   onOpenPath: (path: string) => void;
@@ -220,9 +221,19 @@ function Overview({
           <dt className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#3E7574]">Status</dt>
           <dd className="mt-2 text-lg font-semibold">{status}</dd>
           <dd className="mt-1 text-sm leading-relaxed text-[#5C7372]">
-            {isPortfolioPublished(portfolio.publishing)
-              ? "Published. A public address is not available yet."
-              : "This portfolio is not live."}
+            {isPortfolioPublished(portfolio.publishing) ? (
+              <a
+                id="portfolio-workspace-view"
+                href={publicPortfolioUrl(portfolio.id)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-[#3E7574] underline-offset-4 hover:underline"
+              >
+                View Portfolio
+              </a>
+            ) : (
+              "This portfolio is not live."
+            )}
           </dd>
         </div>
       </dl>

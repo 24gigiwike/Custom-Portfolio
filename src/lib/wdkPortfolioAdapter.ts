@@ -1,12 +1,27 @@
 import { templateSupportsDesignControl } from "./templateCatalog";
-import type { PortfolioData } from "../templates/wdk-premium-portfolio-1/types/portfolio";
+import type {
+  PortfolioContact,
+  PortfolioData,
+  PortfolioProfile,
+  PortfolioSEO,
+  Project,
+  SocialLink,
+} from "../templates/wdk-premium-portfolio-1/types/portfolio";
 import { DEFAULT_PORTFOLIO_DESIGN, portfolioPaletteId, type PortfolioPaletteId } from "../types/portfolioDesign";
-import type { UserPortfolio } from "../types/userPortfolio";
+
+/** Presentation fields the template can render. Private CMS fields are not part of this. */
+export type WdkPresentationSource = {
+  profile: PortfolioProfile;
+  socialLinks: SocialLink[];
+  projects: Project[];
+  contact: PortfolioContact;
+  seo: PortfolioSEO;
+};
 
 /**
  * Presentation boundary. The template receives PortfolioData and nothing about Firebase.
  */
-export function toWdkPremiumPortfolioData(portfolio: UserPortfolio): PortfolioData {
+export function toWdkPremiumPortfolioData(portfolio: WdkPresentationSource): PortfolioData {
   return {
     profile: portfolio.profile,
     socialLinks: portfolio.socialLinks,
@@ -20,7 +35,7 @@ export function toWdkPremiumPortfolioData(portfolio: UserPortfolio): PortfolioDa
  * Semantic accent for WDK. Unsupported templates and unknown ids use the original palette.
  */
 export function wdkPaletteForPortfolio(
-  portfolio: Pick<UserPortfolio, "selectedTemplate"> & { design?: { palette?: unknown } | null }
+  portfolio: { selectedTemplate: string; design?: { palette?: unknown } | null }
 ): PortfolioPaletteId {
   if (!templateSupportsDesignControl(portfolio.selectedTemplate, "palette")) {
     return DEFAULT_PORTFOLIO_DESIGN.palette;

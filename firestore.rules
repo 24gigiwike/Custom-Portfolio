@@ -19,7 +19,7 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Portfolio document rules
+    // Portfolio document rules. Anonymous reads stay denied, including after publication.
     match /portfolios/{portfolioId} {
       allow read: if isSignedIn() && resource.data.ownerId == request.auth.uid;
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
@@ -40,6 +40,78 @@ service cloud.firestore {
         allow create: if isSignedIn() && request.auth.uid == parentOwnerId();
         allow update, delete: if isSignedIn() && request.auth.uid == parentOwnerId();
       }
+    }
+
+    // Public presentation. The document id is the private portfolio id.
+    // Rules read the private portfolio only to check ownership and publication.
+    // They do not make that private document readable.
+    match /publicPortfolios/{publicId} {
+      function privatePortfolioAfter() {
+        return getAfter(/databases/$(database)/documents/portfolios/$(publicId));
+      }
+
+      function privatePortfolio() {
+        return get(/databases/$(database)/documents/portfolios/$(publicId));
+      }
+
+      function isPublished(portfolioData) {
+        return portfolioData.keys().hasAny(["publishing"])
+          ? portfolioData.publishing.status == "published"
+          : portfolioData.published == true;
+      }
+
+      function presentationKeys() {
+        return [
+          "publicId",
+          "selectedTemplate",
+          "profile",
+          "socialLinks",
+          "projects",
+          "contact",
+          "seo",
+          "design",
+          "publishedAt",
+          "updatedAt"
+        ];
+      }
+
+      allow read: if resource.data.publicId == publicId
+        && isPublished(privatePortfolio().data);
+
+      allow create, update: if isSignedIn()
+        && privatePortfolioAfter().data.ownerId == request.auth.uid
+        && isPublished(privatePortfolioAfter().data)
+        && request.resource.data.publicId == publicId
+        && request.resource.data.keys().hasOnly(presentationKeys())
+        && request.resource.data.selectedTemplate is string
+        && request.resource.data.profile is map
+        && request.resource.data.profile.keys().hasOnly([
+          "brandName", "logo", "heroImage", "heroImageMobile", "headline",
+          "capabilityTags", "ctaLabel", "ctaHref", "email"
+        ])
+        && request.resource.data.socialLinks is list
+        && request.resource.data.projects is list
+        && request.resource.data.contact is map
+        && request.resource.data.contact.keys().hasOnly([
+          "email", "eyebrow", "heading", "description", "projectTypes", "formEndpoint"
+        ])
+        && request.resource.data.seo is map
+        && request.resource.data.seo.keys().hasOnly([
+          "title", "description", "canonicalUrl", "ogTitle", "ogDescription",
+          "ogImage", "twitterTitle", "twitterDescription", "twitterImage"
+        ])
+        && request.resource.data.design is map
+        && request.resource.data.design.keys().hasOnly(["palette"])
+        && request.resource.data.updatedAt == request.time
+        && (
+          request.resource.data.publishedAt == null
+          || request.resource.data.publishedAt is timestamp
+          || request.resource.data.publishedAt is string
+        );
+
+      allow delete: if isSignedIn()
+        && privatePortfolioAfter().data.ownerId == request.auth.uid
+        && !isPublished(privatePortfolioAfter().data);
     }
 
     // Default deny all other collections

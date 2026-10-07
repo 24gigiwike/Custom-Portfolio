@@ -8,7 +8,6 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
-  updateDoc,
   where,
 } from "firebase/firestore";
 import type { UserProfile } from "../types";
@@ -18,6 +17,7 @@ import { DEFAULT_ENABLED_SECTIONS, DEFAULT_PORTFOLIO_THEME, generateSlug } from 
 import { normalizeUserPortfolio } from "./normalizeUserPortfolio";
 import { seedPortfolioFromAccount } from "./portfolioSeed";
 import { findCatalogTemplate, templateForCreation } from "./templateCatalog";
+import { userFacingWriteError } from "./accountLoad";
 import {
   contentPreservingPublishing,
   planPublish,
@@ -26,6 +26,12 @@ import {
   publishPlanMessage,
   unpublishDocumentFields,
 } from "./portfolioPublishing";
+import {
+  publicDeliveryForSavedContent,
+  publicDeliveryForUnpublish,
+  publicPortfolioFromUserPortfolio,
+  type PublicPortfolioFields,
+} from "./publicPortfolio";
 import {
   classifyStoredTemplate,
   planTemplateUse,
@@ -172,23 +178,34 @@ export async function updatePortfolio(
   content: UserPortfolioContent
 ): Promise<UserPortfolio> {
   const ownerId = requireUid();
-  const current = await getPortfolio(portfolioId);
-  if (!current || current.ownerId !== ownerId) {
-    throw new Error("You don't have permission to change this portfolio.");
-  }
+  const portfolioRef = doc(db, "portfolios", portfolioId);
+  const publicRef = doc(db, "publicPortfolios", portfolioId);
 
-  const selectedTemplate = findCatalogTemplate(content.selectedTemplate)
-    ? content.selectedTemplate
-    : current.selectedTemplate;
-  if (!findCatalogTemplate(selectedTemplate)) {
-    throw new Error("This portfolio template is not available.");
-  }
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(portfolioRef);
+      const current = snap.exists() ? readyPortfolio(snap.id, snap.data(), ownerId) : null;
+      if (!current) throw new Error("You don't have permission to change this portfolio.");
 
-  const next = contentPreservingPublishing(current, {
-    ...content,
-    selectedTemplate,
-  });
-  await updateDoc(doc(db, "portfolios", portfolioId), firestorePayload(portfolioId, ownerId, next, false));
+      const selectedTemplate = findCatalogTemplate(content.selectedTemplate)
+        ? content.selectedTemplate
+        : current.selectedTemplate;
+      if (!findCatalogTemplate(selectedTemplate)) {
+        throw new Error("This portfolio template is not available.");
+      }
+
+      const next = contentPreservingPublishing(current, { ...content, selectedTemplate });
+      const delivery = publicDeliveryForSavedContent(current, next);
+      if (delivery.action === "reject") throw new Error("Your portfolio could not be updated.");
+
+      transaction.update(portfolioRef, firestorePayload(portfolioId, ownerId, next, false));
+      if (delivery.action === "upsert") {
+        transaction.set(publicRef, publicDocument(delivery.fields, current.publishing.publishedAt ?? null));
+      }
+    });
+  } catch (error) {
+    rethrowPortfolioWrite(error, "Your portfolio could not be updated.");
+  }
 
   const saved = await getPortfolio(portfolioId);
   if (!saved) {
@@ -198,56 +215,142 @@ export async function updatePortfolio(
 }
 
 /**
- * Mark the existing portfolio published.
- * This does not create a document, change content, or open a public URL.
+ * Publish the existing portfolio and write its public presentation together.
+ * Neither change is kept if the other cannot be written.
  */
 export async function publishPortfolio(portfolioId: string): Promise<UserPortfolio> {
   const actorId = requireUid();
   const portfolioRef = doc(db, "portfolios", portfolioId);
-  await runTransaction(db, async (transaction) => {
-    const snap = await transaction.get(portfolioRef);
-    const plan = planPublish({
-      actorId,
-      owned: snap.exists() ? { id: snap.id, data: snap.data() } : null,
+  const publicRef = doc(db, "publicPortfolios", portfolioId);
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(portfolioRef);
+      const plan = planPublish({
+        actorId,
+        owned: snap.exists() ? { id: snap.id, data: snap.data() } : null,
+      });
+      if (plan.action === "reject") throw new Error(publishPlanMessage(plan.reason));
+      const current = snap.exists() ? readyPortfolio(snap.id, snap.data(), actorId) : null;
+      if (!current) throw new Error(publishPlanMessage("failed"));
+
+      if (plan.action === "already-published") {
+        const fields = publicPortfolioFromUserPortfolio(current);
+        if (!fields || fields.publicId !== portfolioId) throw new Error(publishPlanMessage("failed"));
+        transaction.set(publicRef, publicDocument(fields, current.publishing.publishedAt ?? null));
+        return;
+      }
+
+      if (plan.action !== "publish" || plan.portfolioId !== portfolioId) return;
+      const publishedAt = plan.publishedAt ?? serverTimestamp();
+      const fields = publicPortfolioFromUserPortfolio({
+        ...current,
+        publishing: { status: "published", publishedAt: plan.publishedAt ?? null },
+      });
+      if (!fields || fields.publicId !== portfolioId) throw new Error(publishPlanMessage("failed"));
+      transaction.update(portfolioRef, {
+        ...publishDocumentFields(publishedAt),
+        updatedAt: serverTimestamp(),
+      });
+      transaction.set(publicRef, publicDocument(fields, publishedAt));
     });
-    if (plan.action === "reject") throw new Error(publishPlanMessage(plan.reason));
-    if (plan.action !== "publish" || plan.portfolioId !== portfolioId) return;
-    const publishedAt = plan.publishedAt ?? serverTimestamp();
-    transaction.update(portfolioRef, {
-      ...publishDocumentFields(publishedAt),
-      updatedAt: serverTimestamp(),
-    });
-  });
+  } catch (error) {
+    rethrowPortfolioWrite(error, publishPlanMessage("failed"));
+  }
 
   const published = await getPortfolio(portfolioId);
-  if (!published || published.id !== portfolioId) throw new Error(publishPlanMessage("failed"));
+  if (!published || published.id !== portfolioId || published.publishing.status !== "published") {
+    throw new Error(publishPlanMessage("failed"));
+  }
   return published;
 }
 
 /**
- * Return a published portfolio to draft.
+ * Return a published portfolio to draft and remove its public presentation.
  * The first publication time and the portfolio content stay in place.
  */
 export async function unpublishPortfolio(portfolioId: string): Promise<UserPortfolio> {
   const actorId = requireUid();
   const portfolioRef = doc(db, "portfolios", portfolioId);
-  await runTransaction(db, async (transaction) => {
-    const snap = await transaction.get(portfolioRef);
-    const plan = planUnpublish({
-      actorId,
-      owned: snap.exists() ? { id: snap.id, data: snap.data() } : null,
+  const publicRef = doc(db, "publicPortfolios", portfolioId);
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(portfolioRef);
+      const plan = planUnpublish({
+        actorId,
+        owned: snap.exists() ? { id: snap.id, data: snap.data() } : null,
+      });
+      if (plan.action === "reject") throw new Error(publishPlanMessage(plan.reason));
+      const removal = publicDeliveryForUnpublish(portfolioId);
+      if (removal.action !== "remove" || removal.publicId !== portfolioId) {
+        throw new Error(publishPlanMessage("failed"));
+      }
+      if (plan.action === "already-draft") {
+        transaction.delete(publicRef);
+        return;
+      }
+      if (plan.action !== "unpublish" || plan.portfolioId !== portfolioId) return;
+      transaction.update(portfolioRef, {
+        ...unpublishDocumentFields(plan.publishedAt),
+        updatedAt: serverTimestamp(),
+      });
+      transaction.delete(publicRef);
     });
-    if (plan.action === "reject") throw new Error(publishPlanMessage(plan.reason));
-    if (plan.action !== "unpublish" || plan.portfolioId !== portfolioId) return;
-    transaction.update(portfolioRef, {
-      ...unpublishDocumentFields(plan.publishedAt),
-      updatedAt: serverTimestamp(),
-    });
-  });
+  } catch (error) {
+    rethrowPortfolioWrite(error, publishPlanMessage("failed"));
+  }
 
   const draft = await getPortfolio(portfolioId);
-  if (!draft || draft.id !== portfolioId) throw new Error(publishPlanMessage("failed"));
+  if (!draft || draft.id !== portfolioId || draft.publishing.status !== "draft") {
+    throw new Error(publishPlanMessage("failed"));
+  }
   return draft;
+}
+
+/**
+ * Write the public presentation for a portfolio that is already published.
+ * Draft portfolios are left private. A failed write does not change publishing status.
+ */
+export async function syncPublishedPortfolio(portfolioId: string): Promise<void> {
+  const actorId = requireUid();
+  const portfolioRef = doc(db, "portfolios", portfolioId);
+  const publicRef = doc(db, "publicPortfolios", portfolioId);
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(portfolioRef);
+      const current = snap.exists() ? readyPortfolio(snap.id, snap.data(), actorId) : null;
+      if (!current) throw new Error("You don't have permission to change this portfolio.");
+      if (current.publishing.status !== "published") return;
+      const fields = publicPortfolioFromUserPortfolio(current);
+      if (!fields || fields.publicId !== portfolioId) throw new Error("The public page could not be updated.");
+      transaction.set(publicRef, publicDocument(fields, current.publishing.publishedAt ?? null));
+    });
+  } catch (error) {
+    rethrowPortfolioWrite(error, "The public page could not be updated.");
+  }
+}
+
+function rethrowPortfolioWrite(error: unknown, fallback: string): never {
+  if (error instanceof Error) {
+    const code = "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+    if (!code && !/firebase|firestore/i.test(error.message)) throw error;
+  }
+  throw new Error(userFacingWriteError(error, fallback));
+}
+
+/** Public document written beside the private portfolio. The two writes share one transaction. */
+function publicDocument(fields: PublicPortfolioFields, publishedAt: unknown) {
+  return {
+    publicId: fields.publicId,
+    selectedTemplate: fields.selectedTemplate,
+    profile: fields.profile,
+    socialLinks: fields.socialLinks,
+    projects: fields.projects,
+    contact: fields.contact,
+    seo: fields.seo,
+    design: fields.design,
+    publishedAt: publishedAt ?? null,
+    updatedAt: serverTimestamp(),
+  };
 }
 
 function firestorePayload(
