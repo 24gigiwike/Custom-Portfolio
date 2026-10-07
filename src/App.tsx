@@ -19,11 +19,18 @@ import { isFramedPortfolioReview, isPortfolioReviewPath } from "./components/por
 import { PortfolioReview } from "./components/portfolio-review/PortfolioReview";
 import { isPortfolioWorkspacePath, PORTFOLIO_WORKSPACE_PATH } from "./components/portfolio-workspace/portfolioWorkspacePath";
 import { PortfolioWorkspace } from "./components/portfolio-workspace/PortfolioWorkspace";
+import { isPublicPortfolioPath, publicPortfolioIdFromPath } from "./components/public/publicPortfolioPath";
 import type { AppRoute } from "./types";
 
 const WdkTemplatePreview = lazy(() =>
   import("./preview/WdkTemplatePreview").then((module) => ({
     default: module.WdkTemplatePreview,
+  })),
+);
+
+const PublicPortfolioView = lazy(() =>
+  import("./components/public/PublicPortfolioView").then((module) => ({
+    default: module.PublicPortfolioView,
   })),
 );
 
@@ -38,7 +45,9 @@ function AppContent() {
     signOutUser,
   } = useAuth();
   const [isRetryingAccount, setIsRetryingAccount] = useState(false);
-  const [hasCompletedSplash, setHasCompletedSplash] = useState(() => isFramedPortfolioReview(window.location.search));
+  const [hasCompletedSplash, setHasCompletedSplash] = useState(
+    () => isFramedPortfolioReview(window.location.search) || isPublicPortfolioPath(window.location.pathname)
+  );
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
     const path = window.location.pathname;
     return path || "/";
@@ -70,6 +79,10 @@ function AppContent() {
   const handleSplashComplete = () => {
     setHasCompletedSplash(true);
     const initialPath = window.location.pathname || "/";
+    if (isPublicPortfolioPath(initialPath)) {
+      navigateTo(initialPath);
+      return;
+    }
     if (
       isWdkTemplatePreviewPath(initialPath) ||
       isPortfolioEditorPath(initialPath) ||
@@ -115,6 +128,8 @@ function AppContent() {
 
   // Route protection & state synchronization
   useEffect(() => {
+    if (isPublicPortfolioPath(currentRoute)) return;
+
     if (!hasCompletedSplash || isAuthLoading || authPhase === "AUTH_LOADING" || authPhase === "ACCOUNT_LOADING") return;
 
     if (authPhase === "ACCOUNT_ERROR") return;
@@ -167,6 +182,15 @@ function AppContent() {
       }
     }
   }, [user, userAccount, authPhase, hasCompletedSplash, isAuthLoading, currentRoute]);
+
+  const publicPortfolioId = publicPortfolioIdFromPath(currentRoute);
+  if (publicPortfolioId) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-[#F8F5F0]" />}>
+        <PublicPortfolioView publicId={publicPortfolioId} />
+      </Suspense>
+    );
+  }
 
   // If splash is not yet completed, show original SplashScreen
   if (!hasCompletedSplash) {

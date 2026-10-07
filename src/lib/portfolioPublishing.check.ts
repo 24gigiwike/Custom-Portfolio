@@ -188,8 +188,13 @@ assert.equal(designed.publishing.status, "published");
 assert.equal(designed.publishing.publishedAt, "2024-07-01");
 
 const rules = readFileSync(new URL("../../firestore.rules", import.meta.url), "utf8");
-assert.match(rules, /allow read: if isSignedIn\(\) && resource\.data\.ownerId == request\.auth\.uid;/);
-assert.equal(rules.includes("published"), false);
+const privatePortfolioRules = rules.slice(
+  rules.indexOf("match /portfolios/{portfolioId}"),
+  rules.indexOf("match /publicPortfolios/{publicId}")
+);
+assert.match(privatePortfolioRules, /allow read: if isSignedIn\(\) && resource\.data\.ownerId == request\.auth\.uid;/);
+assert.equal(privatePortfolioRules.includes("published"), false);
+assert.equal(privatePortfolioRules.includes("allow read: if true"), false);
 assert.equal(isPortfolioPublishPath(PORTFOLIO_PUBLISH_PATH), true);
 assert.equal(isPortfolioPublishPath("/portfolio"), false);
 assert.equal(isPortfolioPublishPath("/p/ada"), false);

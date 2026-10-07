@@ -2,8 +2,9 @@ import React, { useEffect, useState } from "react";
 import { brand } from "../../config/branding";
 import { userFacingWriteError } from "../../lib/accountLoad";
 import { useAuth } from "../../lib/authContext";
-import { publishChoiceError, publishEntry } from "../../lib/portfolioPublishing";
-import { getPortfolioByOwner, publishPortfolio, unpublishPortfolio, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
+import { isPortfolioPublished, publishChoiceError, publishEntry } from "../../lib/portfolioPublishing";
+import { publicPortfolioUrl } from "../public/publicPortfolioPath";
+import { getPortfolioByOwner, publishPortfolio, syncPublishedPortfolio, unpublishPortfolio, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
 import type { UserPortfolio } from "../../types/userPortfolio";
 import { TEMPLATE_DISCOVERY_PATH } from "../discover/templateDiscoveryPath";
 import { PORTFOLIO_DESIGN_PATH } from "../portfolio-design/portfolioDesignPath";
@@ -30,9 +31,16 @@ export function PortfolioPublish({ onOpenPath }: PortfolioPublishProps) {
     setIsLoading(true);
     setLoadError(null);
     void getPortfolioByOwner()
-      .then((result) => {
+      .then(async (result) => {
         setLookup(result);
         setConfirmUnpublish(false);
+        if (result.status === "ready" && isPortfolioPublished(result.portfolio.publishing)) {
+          try {
+            await syncPublishedPortfolio(result.portfolio.id);
+          } catch (error: unknown) {
+            setActionError(publishChoiceError(error, "The public page could not be updated."));
+          }
+        }
       })
       .catch((error: unknown) => {
         setLookup(null);
@@ -137,6 +145,7 @@ export function PortfolioPublish({ onOpenPath }: PortfolioPublishProps) {
           <Status title="This template cannot be published." body="The portfolio was left unchanged." />
         ) : entry?.kind === "published" ? (
           <PublishedState
+            publicUrl={publicPortfolioUrl(entry.portfolio.id)}
             confirming={confirmUnpublish}
             busy={busy}
             isUnpublishing={isUnpublishing}
@@ -187,7 +196,7 @@ function DraftState({
         {ready ? "Ready to publish" : "Not ready to publish"}
       </h1>
       <p className="mt-4 text-base leading-relaxed text-[#5C7372]">
-        Mark your portfolio as published and prepare it for public availability. A public address is not available yet.
+        Publish makes this portfolio available at a public address. You can still edit it afterward.
       </p>
       {blockers.length > 0 && (
         <ul className="mt-8 divide-y divide-[#D5E6E5] border-y border-[#D5E6E5]">
@@ -216,6 +225,7 @@ function DraftState({
 }
 
 function PublishedState({
+  publicUrl,
   confirming,
   busy,
   isUnpublishing,
@@ -224,6 +234,7 @@ function PublishedState({
   onCancel,
   onConfirm,
 }: {
+  publicUrl: string;
   confirming: boolean;
   busy: boolean;
   isUnpublishing: boolean;
@@ -232,19 +243,61 @@ function PublishedState({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "manual">("idle");
+
+  const copyLink = () => {
+    const write = navigator.clipboard?.writeText(publicUrl);
+    if (!write) {
+      setCopyState("manual");
+      return;
+    }
+    void write.then(
+      () => setCopyState("copied"),
+      () => setCopyState("manual")
+    );
+  };
+
   return (
     <div className="max-w-xl">
       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">Published</p>
-      <h1 className="mt-3 text-4xl font-bold tracking-[-0.045em] sm:text-5xl">Your portfolio is published.</h1>
+      <h1 className="mt-3 text-4xl font-bold tracking-[-0.045em] sm:text-5xl">Your portfolio is live</h1>
       <p className="mt-4 text-base leading-relaxed text-[#5C7372]">
-        Public sharing will be configured in the next publishing stage. You can still edit the portfolio.
+        Anyone with this address can view the published portfolio. You can still edit it.
       </p>
+      <label className="mt-8 block text-[11px] font-bold uppercase tracking-[0.16em] text-[#3E7574]" htmlFor="portfolio-public-url">
+        Public address
+      </label>
+      <input
+        id="portfolio-public-url"
+        readOnly
+        value={publicUrl}
+        onFocus={(event) => event.currentTarget.select()}
+        className="mt-2 w-full rounded-xl border border-[#D5E6E5] bg-white px-4 py-3 text-sm font-medium text-[#243838]"
+      />
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+        <a
+          id="portfolio-view-public"
+          href={publicUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex h-11 items-center justify-center rounded-xl bg-[#6DAEAD] px-5 text-sm font-bold text-white"
+        >
+          View Portfolio
+        </a>
+        <Button id="portfolio-copy-link" variant="outline" onClick={copyLink}>
+          Copy Link
+        </Button>
+      </div>
+      {copyState === "copied" && <p className="mt-3 text-sm font-medium text-[#3E7574]">Link copied.</p>}
+      {copyState === "manual" && (
+        <p className="mt-3 text-sm font-medium text-[#5C7372]">Select the address above and copy it.</p>
+      )}
       {error && <p className="mt-6 text-sm font-medium text-[#B93838]">{error}</p>}
       {confirming ? (
         <div className="mt-10 border-t border-[#D5E6E5] pt-8">
           <h2 className="text-2xl font-bold tracking-[-0.04em]">Unpublish this portfolio?</h2>
           <p className="mt-3 text-base leading-relaxed text-[#5C7372]">
-            It returns to a draft. Your content, design, and template stay where they are.
+            It returns to a draft, and the public address stops showing it. Your content, design, and template stay where they are.
           </p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <Button id="portfolio-unpublish-confirm" isLoading={isUnpublishing} disabled={busy} onClick={onConfirm}>
