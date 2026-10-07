@@ -9,10 +9,11 @@ import {
   useCatalogTemplate,
   type OwnedPortfolioLookup,
 } from "../lib/userPortfolio";
-import { toWdkPremiumPortfolioData, wdkPaletteForPortfolio } from "../lib/wdkPortfolioAdapter";
+import { savedPortfolioPresentation } from "../lib/portfolioReview";
 import { catalogTemplateForPreviewPath } from "../lib/templateCatalog";
 import { PORTFOLIO_DESIGN_PATH } from "../components/portfolio-design/portfolioDesignPath";
 import { PORTFOLIO_EDITOR_PATH } from "../components/portfolio-editor/portfolioEditorPath";
+import { isFramedPortfolioReview, PORTFOLIO_REVIEW_PATH } from "../components/portfolio-review/portfolioReviewPath";
 import { PORTFOLIO_WORKSPACE_PATH } from "../components/portfolio-workspace/portfolioWorkspacePath";
 import { TEMPLATE_DISCOVERY_PATH } from "../components/discover/templateDiscoveryPath";
 import { WDK_TEMPLATE_PREVIEW_PATH } from "./templatePreviewPath";
@@ -49,10 +50,21 @@ function fixturePalette(): string {
 
 export const WdkTemplatePreview: React.FC = () => {
   useFontAwesomeKit();
-  return <PersistedPortfolioPreview fixture={fixtureData()} palette={fixturePalette()} />;
+  const framed = isFramedPortfolioReview(window.location.search);
+  return (
+    <PersistedPortfolioPreview
+      fixture={framed ? null : fixtureData()}
+      palette={fixturePalette()}
+      framed={framed}
+    />
+  );
 };
 
-const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palette: string }> = ({ fixture, palette }) => {
+const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palette: string; framed: boolean }> = ({
+  fixture,
+  palette,
+  framed,
+}) => {
   const { user, userAccount, authPhase, accountError } = useAuth();
   const template = catalogTemplateForPreviewPath(WDK_TEMPLATE_PREVIEW_PATH);
   const [lookup, setLookup] = useState<OwnedPortfolioLookup | null>(null);
@@ -157,13 +169,19 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palet
   }
 
   if (!fixture && portfolio) {
+    const presentation = savedPortfolioPresentation(portfolio);
+    if (!presentation) {
+      return (
+        <PreviewStatus
+          title="This template cannot be reviewed yet."
+          body="The portfolio was left unchanged."
+        />
+      );
+    }
     return (
       <>
-        <OwnedPreviewActions />
-        <WdkPremiumPortfolio
-          data={toWdkPremiumPortfolioData(portfolio)}
-          palette={wdkPaletteForPortfolio(portfolio)}
-        />
+        {!framed && <OwnedPreviewActions />}
+        <WdkPremiumPortfolio data={presentation.data} palette={presentation.palette} />
       </>
     );
   }
@@ -186,6 +204,15 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palet
     );
   }
 
+  if (framed) {
+    return (
+      <PreviewStatus
+        title="Choose a template before reviewing your portfolio."
+        body="This preview uses a saved portfolio. It does not create one or assign a template."
+      />
+    );
+  }
+
   return (
     <DesignPreview
       data={fixture ?? wdkSamplePortfolioData}
@@ -203,6 +230,14 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palet
 function OwnedPreviewActions() {
   return (
     <div className="fixed right-4 top-4 z-[80] flex max-w-[calc(100%-2rem)] flex-wrap justify-end gap-2">
+      <button
+        type="button"
+        id="portfolio-preview-review"
+        onClick={() => openAppPath(PORTFOLIO_REVIEW_PATH)}
+        className="rounded-full border border-[#D5E6E5] bg-white/95 px-4 py-2 text-sm font-bold tracking-[-0.02em] text-[#243838] shadow-[0_8px_20px_rgba(36,56,56,0.08)]"
+      >
+        Review
+      </button>
       <button
         type="button"
         id="portfolio-preview-workspace"

@@ -21,8 +21,13 @@ export function SocialLinks({ links }: { links: SocialLink[] }) {
         <div className="socials">
             {links.map((link) => {
                 const icon = iconClass(link.platform)
+                const external = /^https?:\/\//i.test(link.url)
                 return (
-                    <a href={link.url} key={`${link.platform}-${link.url}`}>
+                    <a
+                        href={link.url}
+                        key={`${link.platform}-${link.url}`}
+                        {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
+                    >
                         {icon ? <i className={icon} /> : link.platform}
                     </a>
                 )

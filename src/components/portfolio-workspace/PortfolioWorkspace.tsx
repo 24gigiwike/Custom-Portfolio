@@ -10,6 +10,7 @@ import type { UserPortfolio } from "../../types/userPortfolio";
 import { Button } from "../ui/Button";
 import { PORTFOLIO_DESIGN_PATH } from "../portfolio-design/portfolioDesignPath";
 import { PORTFOLIO_EDITOR_PATH } from "../portfolio-editor/portfolioEditorPath";
+import { PORTFOLIO_REVIEW_PATH } from "../portfolio-review/portfolioReviewPath";
 
 type PortfolioWorkspaceProps = {
   onOpenPath: (path: string) => void;
@@ -52,9 +53,7 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
   const contentAreas = portfolio ? templateContentAreas(portfolio.selectedTemplate) : null;
   const openEditor = () => onOpenPath(PORTFOLIO_EDITOR_PATH);
   const openDesign = () => onOpenPath(PORTFOLIO_DESIGN_PATH);
-  const openPreview = () => {
-    if (template?.previewPath) onOpenPath(template.previewPath);
-  };
+  const openReview = () => onOpenPath(PORTFOLIO_REVIEW_PATH);
   const openCreateFlow = () => onOpenPath(TEMPLATE_DISCOVERY_PATH);
 
   const accountName = userAccount?.accountPrivate?.firstName || user?.displayName || "";
@@ -103,11 +102,11 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
             </button>
             <button
               type="button"
-              className="font-bold text-[#3E7574] disabled:cursor-not-allowed disabled:opacity-40"
-              onClick={openPreview}
-              disabled={!template?.previewPath}
+              id="portfolio-workspace-review"
+              className="font-bold text-[#3E7574]"
+              onClick={openReview}
             >
-              Preview
+              Review
             </button>
             <span className="font-bold text-[#8AA6A5]" aria-disabled="true">
               Publish
@@ -161,8 +160,7 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
             templateName={template.name}
             contentAreas={contentAreas}
             onEdit={openEditor}
-            onPreview={openPreview}
-            canPreview={Boolean(template.previewPath)}
+            onReview={openReview}
           />
         ) : (
           <Status title="Your portfolio could not be loaded." />
@@ -177,15 +175,13 @@ function Overview({
   templateName,
   contentAreas,
   onEdit,
-  onPreview,
-  canPreview,
+  onReview,
 }: {
   portfolio: UserPortfolio;
   templateName: string;
   contentAreas: readonly ContentArea[] | null;
   onEdit: () => void;
-  onPreview: () => void;
-  canPreview: boolean;
+  onReview: () => void;
 }) {
   const name = portfolio.profile.brandName.trim() || "Untitled portfolio";
   const headline = portfolio.profile.headline.trim();
@@ -247,14 +243,14 @@ function Overview({
       <div className="mt-12 border-t border-[#D5E6E5] pt-8">
         <h2 className="text-lg font-bold tracking-[-0.03em]">Next</h2>
         <p className="mt-2 max-w-lg text-sm leading-relaxed text-[#5C7372]">
-          Edit the public name, headline, portrait, and projects. Preview uses the last saved version.
+          Edit the public name, headline, portrait, and projects. Review uses the last saved version.
         </p>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <Button id="portfolio-workspace-edit" onClick={onEdit}>
             Edit portfolio
           </Button>
-          <Button id="portfolio-workspace-preview" variant="outline" onClick={onPreview} disabled={!canPreview}>
-            Preview portfolio
+          <Button id="portfolio-workspace-review-action" variant="outline" onClick={onReview}>
+            Review portfolio
           </Button>
         </div>
       </div>

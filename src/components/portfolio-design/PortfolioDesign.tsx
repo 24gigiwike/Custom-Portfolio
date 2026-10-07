@@ -6,6 +6,7 @@ import { templateDesignCapabilities } from "../../lib/templateCatalog";
 import { getPortfolioByOwner, updatePortfolio, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
 import type { PortfolioPaletteId } from "../../types/portfolioDesign";
 import type { UserPortfolio } from "../../types/userPortfolio";
+import { PORTFOLIO_REVIEW_PATH } from "../portfolio-review/portfolioReviewPath";
 import { Button } from "../ui/Button";
 
 type PortfolioDesignProps = {
@@ -122,7 +123,6 @@ export function PortfolioDesign({ onPreview, onWorkspace, onDiscover }: Portfoli
   const capabilities = templateDesignCapabilities(portfolio.selectedTemplate);
   const paletteControl = capabilities?.controls.find((control) => control.id === "palette") ?? null;
   const canEdit = paletteControl !== null;
-  const previewPath = portfolioTemplateInfo(portfolio.selectedTemplate).previewPath;
   const template = portfolioTemplateInfo(portfolio.selectedTemplate);
   const hasUnsavedChanges = palette !== savedPalette;
   const leave = (go: () => void) => {
@@ -147,16 +147,12 @@ export function PortfolioDesign({ onPreview, onWorkspace, onDiscover }: Portfoli
               Workspace
             </Button>
             <Button
-              id="portfolio-design-preview"
+              id="portfolio-design-review"
               variant="outline"
               className="w-full sm:w-auto"
-              disabled={!previewPath}
-              onClick={() => {
-                if (!previewPath) return;
-                leave(() => onPreview(previewPath));
-              }}
+              onClick={() => leave(() => onPreview(PORTFOLIO_REVIEW_PATH))}
             >
-              Preview
+              Review
             </Button>
             <Button
               id="portfolio-design-save"

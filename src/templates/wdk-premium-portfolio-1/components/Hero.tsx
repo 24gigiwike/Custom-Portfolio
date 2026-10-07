@@ -22,7 +22,10 @@ export function Hero({ profile, socialLinks }: HeroProps) {
                     <MultilineText text={profile.headline} />
                 </h1>
                 <CapabilityTags tags={profile.capabilityTags} />
-                <a href={profile.ctaHref}>
+                <a
+                    href={profile.ctaHref}
+                    {...(/^https?:\/\//i.test(profile.ctaHref) ? { target: '_blank', rel: 'noreferrer' } : {})}
+                >
                     <Button>{profile.ctaLabel}</Button>
                 </a>
             </div>
