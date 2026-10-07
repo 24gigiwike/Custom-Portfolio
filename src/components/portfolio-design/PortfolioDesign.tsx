@@ -93,6 +93,19 @@ export function PortfolioDesign({ onPreview, onWorkspace, onDiscover }: Portfoli
     );
   }
 
+  if (lookup?.status === "legacy" && lookup.reason === "unselected") {
+    return (
+      <Status
+        title="Choose a template to continue building your portfolio."
+        body="Your existing portfolio stays in place until you choose one."
+      >
+        <Button id="portfolio-design-browse" onClick={onDiscover}>
+          Browse Templates
+        </Button>
+      </Status>
+    );
+  }
+
   if (lookup?.status === "legacy") {
     return (
       <Status

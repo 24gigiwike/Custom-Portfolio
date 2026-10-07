@@ -140,6 +140,16 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
               </Button>
             }
           />
+        ) : lookup?.status === "legacy" && lookup.reason === "unselected" ? (
+          <Status
+            title="Choose a template to continue building your portfolio."
+            body="Your existing portfolio stays in place until you choose one."
+            action={
+              <Button id="portfolio-workspace-browse" onClick={openCreateFlow}>
+                Browse Templates
+              </Button>
+            }
+          />
         ) : lookup?.status === "legacy" ? (
           <Status
             title="Your workspace portfolio was left unchanged."
