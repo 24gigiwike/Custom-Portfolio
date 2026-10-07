@@ -12,6 +12,7 @@ import { getPortfolioByOwner, type OwnedPortfolioLookup } from "../../lib/userPo
 import { TEMPLATE_DISCOVERY_PATH } from "../discover/templateDiscoveryPath";
 import { PORTFOLIO_DESIGN_PATH } from "../portfolio-design/portfolioDesignPath";
 import { PORTFOLIO_EDITOR_PATH } from "../portfolio-editor/portfolioEditorPath";
+import { PORTFOLIO_PUBLISH_PATH } from "../portfolio-publish/portfolioPublishPath";
 import { PORTFOLIO_WORKSPACE_PATH } from "../portfolio-workspace/portfolioWorkspacePath";
 import { Button } from "../ui/Button";
 import { reviewFramePath } from "./portfolioReviewPath";
@@ -72,10 +73,9 @@ export function PortfolioReview({ onOpenPath }: PortfolioReviewProps) {
             <span className="font-bold text-[#243838] underline decoration-[#6DAEAD] decoration-2 underline-offset-8">
               Review
             </span>
-            <span className="font-bold text-[#8AA6A5]" aria-disabled="true">
+            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_PUBLISH_PATH)}>
               Publish
-              <span className="ml-2 text-[11px] font-bold uppercase tracking-[0.14em]">Later</span>
-            </span>
+            </button>
           </nav>
         </div>
       </header>
@@ -131,6 +131,8 @@ export function PortfolioReview({ onOpenPath }: PortfolioReviewProps) {
             onEdit={() => onOpenPath(PORTFOLIO_EDITOR_PATH)}
             onDesign={() => onOpenPath(PORTFOLIO_DESIGN_PATH)}
             onFullPreview={entry.previewPath ? () => onOpenPath(entry.previewPath as string) : null}
+            readyToPublish={!entry.assessment.items.some((item) => item.importance === "important" && item.status === "attention")}
+            onPublish={() => onOpenPath(PORTFOLIO_PUBLISH_PATH)}
           />
         ) : (
           <section className="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8">
@@ -152,6 +154,8 @@ function ReviewBody({
   onEdit,
   onDesign,
   onFullPreview,
+  readyToPublish,
+  onPublish,
 }: {
   title: string;
   summary: string;
@@ -162,6 +166,8 @@ function ReviewBody({
   onEdit: () => void;
   onDesign: () => void;
   onFullPreview: (() => void) | null;
+  readyToPublish: boolean;
+  onPublish: () => void;
 }) {
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "ArrowRight" || event.key === "ArrowDown") {
@@ -253,7 +259,17 @@ function ReviewBody({
             </button>
           )}
         </div>
-        <p className="mt-8 text-sm font-medium text-[#8AA6A5]">Publishing is not available yet.</p>
+        {readyToPublish ? (
+          <div className="mt-8">
+            <Button id="portfolio-review-publish" variant="outline" onClick={onPublish}>
+              Continue to Publish
+            </Button>
+          </div>
+        ) : (
+          <p className="mt-8 max-w-xl text-sm leading-relaxed text-[#5C7372]">
+            Publishing stays unavailable until the items above are in place.
+          </p>
+        )}
       </section>
     </>
   );
