@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { brand } from "../../config/branding";
 import { userFacingWriteError } from "../../lib/accountLoad";
 import { useAuth } from "../../lib/authContext";
+import { isPortfolioPublished } from "../../lib/portfolioPublishing";
 import { portfolioTemplateInfo, publishingStatusLabel } from "../../lib/portfolioTemplate";
 import { contentAreaLabel, templateContentAreas, type ContentArea } from "../../lib/templateCatalog";
 import { getPortfolioByOwner, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
@@ -10,6 +11,7 @@ import type { UserPortfolio } from "../../types/userPortfolio";
 import { Button } from "../ui/Button";
 import { PORTFOLIO_DESIGN_PATH } from "../portfolio-design/portfolioDesignPath";
 import { PORTFOLIO_EDITOR_PATH } from "../portfolio-editor/portfolioEditorPath";
+import { PORTFOLIO_PUBLISH_PATH } from "../portfolio-publish/portfolioPublishPath";
 import { PORTFOLIO_REVIEW_PATH } from "../portfolio-review/portfolioReviewPath";
 
 type PortfolioWorkspaceProps = {
@@ -54,6 +56,7 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
   const openEditor = () => onOpenPath(PORTFOLIO_EDITOR_PATH);
   const openDesign = () => onOpenPath(PORTFOLIO_DESIGN_PATH);
   const openReview = () => onOpenPath(PORTFOLIO_REVIEW_PATH);
+  const openPublish = () => onOpenPath(PORTFOLIO_PUBLISH_PATH);
   const openCreateFlow = () => onOpenPath(TEMPLATE_DISCOVERY_PATH);
 
   const accountName = userAccount?.accountPrivate?.firstName || user?.displayName || "";
@@ -108,10 +111,14 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
             >
               Review
             </button>
-            <span className="font-bold text-[#8AA6A5]" aria-disabled="true">
+            <button
+              type="button"
+              id="portfolio-workspace-publish"
+              className="font-bold text-[#3E7574]"
+              onClick={openPublish}
+            >
               Publish
-              <span className="ml-2 text-[11px] font-bold uppercase tracking-[0.14em]">Later</span>
-            </span>
+            </button>
           </nav>
         </div>
       </header>
@@ -212,7 +219,11 @@ function Overview({
         <div>
           <dt className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#3E7574]">Status</dt>
           <dd className="mt-2 text-lg font-semibold">{status}</dd>
-          <dd className="mt-1 text-sm leading-relaxed text-[#5C7372]">This portfolio is not live.</dd>
+          <dd className="mt-1 text-sm leading-relaxed text-[#5C7372]">
+            {isPortfolioPublished(portfolio.publishing)
+              ? "Published. A public address is not available yet."
+              : "This portfolio is not live."}
+          </dd>
         </div>
       </dl>
 

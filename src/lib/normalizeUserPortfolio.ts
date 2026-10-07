@@ -6,7 +6,7 @@ import type {
   SocialLink,
   SocialPlatform,
 } from "../templates/wdk-premium-portfolio-1/types/portfolio";
-import type { UserPortfolio, UserPortfolioContent } from "../types/userPortfolio";
+import type { PortfolioPublishing, UserPortfolio, UserPortfolioContent } from "../types/userPortfolio";
 import { normalizePortfolioDesign } from "../types/portfolioDesign";
 import { findCatalogTemplate } from "./templateCatalog";
 
@@ -105,6 +105,27 @@ function readContact(data: Record<string, unknown>): PortfolioContact {
   };
 }
 
+function readPublishedAt(value: unknown): PortfolioPublishing["publishedAt"] {
+  if (typeof value === "string" && value.trim()) return value;
+  if (typeof value === "object" && value !== null) return value as PortfolioPublishing["publishedAt"];
+  return null;
+}
+
+/**
+ * publishing.status is canonical.
+ * A legacy document with no publishing object and published === true is published.
+ * An explicit draft or published status wins over the boolean mirror.
+ * Anything else is a draft. This does not write.
+ */
+export function readPublishing(data: Record<string, unknown>): PortfolioPublishing {
+  const publishing = isRecord(data.publishing) ? data.publishing : null;
+  const explicit = publishing?.status === "published" || publishing?.status === "draft" ? publishing.status : null;
+  const status = explicit ?? (data.published === true ? "published" : "draft");
+  const publishedAt = publishing ? readPublishedAt(publishing.publishedAt) : null;
+  if (publishedAt) return { status, publishedAt };
+  return { status };
+}
+
 function readSeo(value: unknown): PortfolioSEO {
   const seo = isRecord(value) ? value : {};
   return {
@@ -136,7 +157,7 @@ export function portfolioContentForTemplate(
     contact: readContact(data),
     seo: readSeo(data.seo),
     design: normalizePortfolioDesign(data.design),
-    publishing: { status: "draft" },
+    publishing: readPublishing(data),
   };
 }
 

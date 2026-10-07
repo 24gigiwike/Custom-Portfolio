@@ -357,7 +357,7 @@ export function applyEditorDraft(
       : portfolio.contact,
     seo: portfolio.seo,
     design: portfolio.design,
-    publishing: { status: "draft" },
+    publishing: portfolio.publishing,
   };
 }
 

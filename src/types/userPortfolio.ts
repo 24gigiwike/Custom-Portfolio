@@ -27,8 +27,15 @@ export interface UserPortfolio {
   updatedAt: Timestamp | string | null;
 }
 
+export type PublishingStatus = "draft" | "published";
+
+/**
+ * Canonical publishing state for the current portfolio.
+ * publishedAt is the first successful publication, kept after unpublish.
+ */
 export interface PortfolioPublishing {
-  status: "draft";
+  status: PublishingStatus;
+  publishedAt?: Timestamp | string | null;
 }
 
 export type UserPortfolioContent = Omit<UserPortfolio, "id" | "ownerId" | "createdAt" | "updatedAt">;

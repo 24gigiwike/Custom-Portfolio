@@ -19,7 +19,7 @@ export function contentWithDesign(portfolio: UserPortfolio, palette: string): Us
     contact: portfolio.contact,
     seo: portfolio.seo,
     design: { palette: allowed ? portfolioPaletteId(palette) : portfolio.design.palette },
-    publishing: { status: "draft" },
+    publishing: portfolio.publishing,
   };
 }
 

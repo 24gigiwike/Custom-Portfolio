@@ -19,6 +19,14 @@ import { normalizeUserPortfolio } from "./normalizeUserPortfolio";
 import { seedPortfolioFromAccount } from "./portfolioSeed";
 import { findCatalogTemplate, templateForCreation } from "./templateCatalog";
 import {
+  contentPreservingPublishing,
+  planPublish,
+  planUnpublish,
+  publishDocumentFields,
+  publishPlanMessage,
+  unpublishDocumentFields,
+} from "./portfolioPublishing";
+import {
   classifyStoredTemplate,
   planTemplateUse,
   reconcileAdoption,
@@ -176,11 +184,10 @@ export async function updatePortfolio(
     throw new Error("This portfolio template is not available.");
   }
 
-  const next: UserPortfolioContent = {
+  const next = contentPreservingPublishing(current, {
     ...content,
     selectedTemplate,
-    publishing: { status: "draft" },
-  };
+  });
   await updateDoc(doc(db, "portfolios", portfolioId), firestorePayload(portfolioId, ownerId, next, false));
 
   const saved = await getPortfolio(portfolioId);
@@ -188,6 +195,59 @@ export async function updatePortfolio(
     throw new Error("Your portfolio was saved, but it could not be read back.");
   }
   return saved;
+}
+
+/**
+ * Mark the existing portfolio published.
+ * This does not create a document, change content, or open a public URL.
+ */
+export async function publishPortfolio(portfolioId: string): Promise<UserPortfolio> {
+  const actorId = requireUid();
+  const portfolioRef = doc(db, "portfolios", portfolioId);
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(portfolioRef);
+    const plan = planPublish({
+      actorId,
+      owned: snap.exists() ? { id: snap.id, data: snap.data() } : null,
+    });
+    if (plan.action === "reject") throw new Error(publishPlanMessage(plan.reason));
+    if (plan.action !== "publish" || plan.portfolioId !== portfolioId) return;
+    const publishedAt = plan.publishedAt ?? serverTimestamp();
+    transaction.update(portfolioRef, {
+      ...publishDocumentFields(publishedAt),
+      updatedAt: serverTimestamp(),
+    });
+  });
+
+  const published = await getPortfolio(portfolioId);
+  if (!published || published.id !== portfolioId) throw new Error(publishPlanMessage("failed"));
+  return published;
+}
+
+/**
+ * Return a published portfolio to draft.
+ * The first publication time and the portfolio content stay in place.
+ */
+export async function unpublishPortfolio(portfolioId: string): Promise<UserPortfolio> {
+  const actorId = requireUid();
+  const portfolioRef = doc(db, "portfolios", portfolioId);
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(portfolioRef);
+    const plan = planUnpublish({
+      actorId,
+      owned: snap.exists() ? { id: snap.id, data: snap.data() } : null,
+    });
+    if (plan.action === "reject") throw new Error(publishPlanMessage(plan.reason));
+    if (plan.action !== "unpublish" || plan.portfolioId !== portfolioId) return;
+    transaction.update(portfolioRef, {
+      ...unpublishDocumentFields(plan.publishedAt),
+      updatedAt: serverTimestamp(),
+    });
+  });
+
+  const draft = await getPortfolio(portfolioId);
+  if (!draft || draft.id !== portfolioId) throw new Error(publishPlanMessage("failed"));
+  return draft;
 }
 
 function firestorePayload(
@@ -206,7 +266,7 @@ function firestorePayload(
     contact: content.contact,
     seo: content.seo,
     design: content.design,
-    publishing: { status: "draft" },
+    publishing: content.publishing,
     title: content.profile.brandName || "Portfolio",
     slug: generateSlug(content.profile.brandName || "portfolio"),
     profession: content.profile.headline || content.profile.capabilityTags[0] || "",
@@ -217,7 +277,7 @@ function firestorePayload(
     stylePreset: "MINIMAL",
     theme: DEFAULT_PORTFOLIO_THEME,
     enabledSections: DEFAULT_ENABLED_SECTIONS,
-    published: false,
+    published: content.publishing.status === "published",
     updatedAt: serverTimestamp(),
   };
   if (includeCreatedAt) {
