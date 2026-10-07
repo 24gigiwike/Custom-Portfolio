@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { brand } from "../../config/branding";
-import { portfolioTemplateInfo } from "../../lib/portfolioTemplate";
 import { contentAreaLabel } from "../../lib/templateCatalog";
 import { allocateProjectId } from "../../lib/projects";
 import { uploadPortfolioImage, type ImageUploadStatus, type PortfolioImageFolder } from "../../lib/storage";
@@ -25,6 +24,7 @@ import {
   type EditorProjectDraft,
   type EditorSocialDraft,
 } from "./editorDraft";
+import { PORTFOLIO_REVIEW_PATH } from "../portfolio-review/portfolioReviewPath";
 import { ImageField } from "./ImageField";
 
 type PortfolioEditorProps = {
@@ -202,7 +202,6 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
   }
 
   const editorAreas = editorAreasForTemplate(portfolio.selectedTemplate);
-  const previewPath = portfolioTemplateInfo(portfolio.selectedTemplate).previewPath;
   const hasUnsavedChanges = !draftsMatch(draft, savedDraft);
   const canEdit = editorAreas !== null && editorAreas.length > 0;
   const leaveEditor = (go: () => void) => {
@@ -235,16 +234,13 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
               Workspace
             </Button>
             <Button
-              id="portfolio-editor-preview"
+              id="portfolio-editor-review"
               variant="outline"
               className="w-full sm:w-auto"
-              disabled={imageBusy || !previewPath}
-              onClick={() => {
-                if (!previewPath) return;
-                leaveEditor(() => onPreview(previewPath));
-              }}
+              disabled={imageBusy}
+              onClick={() => leaveEditor(() => onPreview(PORTFOLIO_REVIEW_PATH))}
             >
-              Preview
+              Review
             </Button>
             <Button
               id="portfolio-editor-save"

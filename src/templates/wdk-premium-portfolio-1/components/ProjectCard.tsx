@@ -21,7 +21,7 @@ export function ProjectCard({ project }: { project: Project }) {
                         {tech ? <p className="project-tech">{tech}</p> : null}
                     </div>
                     ) : null}
-                    <a href={project.url} target="_blank" className="project-link">
+                    <a href={project.url} target="_blank" rel="noreferrer" className="project-link">
                         Explore Website
                         <span>↗</span>
                     </a>
