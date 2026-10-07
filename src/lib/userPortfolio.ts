@@ -5,6 +5,7 @@ import {
   getDocs,
   limit,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -17,11 +18,22 @@ import { DEFAULT_ENABLED_SECTIONS, DEFAULT_PORTFOLIO_THEME, generateSlug } from 
 import { normalizeUserPortfolio } from "./normalizeUserPortfolio";
 import { seedPortfolioFromAccount } from "./portfolioSeed";
 import { findCatalogTemplate, templateForCreation } from "./templateCatalog";
+import {
+  classifyStoredTemplate,
+  planTemplateUse,
+  reconcileAdoption,
+  templateChoiceMessage,
+  templateUpdateFailureMessage,
+} from "./templateAdoption";
 
 export type OwnedPortfolioLookup =
   | { status: "missing" }
-  | { status: "legacy"; id: string }
+  | { status: "legacy"; id: string; reason: "unselected" | "unknown" }
   | { status: "ready"; portfolio: UserPortfolio };
+
+function catalogTemplateIdForUse(id: string): string | null {
+  return templateForCreation(id)?.id ?? null;
+}
 
 function requireUid(): string {
   const uid = auth.currentUser?.uid;
@@ -47,9 +59,64 @@ export async function getPortfolioByOwner(): Promise<OwnedPortfolioLookup> {
   const ownerId = requireUid();
   const existing = await findOwnedDocument(ownerId);
   if (!existing) return { status: "missing" };
-  const portfolio = readyPortfolio(existing.id, existing.data(), ownerId);
-  if (!portfolio) return { status: "legacy", id: existing.id };
-  return { status: "ready", portfolio };
+  const data = existing.data();
+  const portfolio = readyPortfolio(existing.id, data, ownerId);
+  if (portfolio) return { status: "ready", portfolio };
+  const stored = classifyStoredTemplate(data, catalogTemplateIdForUse);
+  if (stored.kind === "unselected") return { status: "legacy", id: existing.id, reason: "unselected" };
+  return { status: "legacy", id: existing.id, reason: "unknown" };
+}
+
+/**
+ * Use This Template.
+ * No portfolio creates one. A template-less portfolio adopts onto the same document.
+ * An existing catalog template is opened and is not replaced.
+ */
+export async function useCatalogTemplate(
+  account: UserProfile | null,
+  templateId: string
+): Promise<UserPortfolio> {
+  const ownerId = requireUid();
+  const existing = await findOwnedDocument(ownerId);
+  const plan = planTemplateUse({
+    owned: existing ? { id: existing.id, data: existing.data() } : null,
+    requestedTemplateId: templateId,
+    ownerId,
+    resolveCatalogTemplate: catalogTemplateIdForUse,
+  });
+
+  if (plan.action === "reject") throw new Error(templateChoiceMessage(plan.reason));
+  if (plan.action === "create") return createPortfolio(account, templateId);
+  if (plan.action === "open") {
+    const portfolio = await getPortfolio(plan.portfolioId);
+    if (!portfolio) throw new Error(templateUpdateFailureMessage());
+    return portfolio;
+  }
+
+  const portfolioId = plan.portfolioId;
+  await runTransaction(db, async (transaction) => {
+    const portfolioRef = doc(db, "portfolios", portfolioId);
+    const snap = await transaction.get(portfolioRef);
+    const next = planTemplateUse({
+      owned: snap.exists() ? { id: snap.id, data: snap.data() } : null,
+      requestedTemplateId: templateId,
+      ownerId,
+      resolveCatalogTemplate: catalogTemplateIdForUse,
+    });
+    const decision = reconcileAdoption(next, portfolioId);
+    if (decision.outcome === "reject") throw new Error(decision.message);
+    if (decision.outcome === "unchanged") return;
+    transaction.update(portfolioRef, {
+      ...decision.fields,
+      updatedAt: serverTimestamp(),
+    });
+  });
+
+  const adopted = await getPortfolio(portfolioId);
+  if (!adopted || adopted.id !== portfolioId) {
+    throw new Error(templateUpdateFailureMessage());
+  }
+  return adopted;
 }
 
 export async function getPortfolio(portfolioId: string): Promise<UserPortfolio | null> {

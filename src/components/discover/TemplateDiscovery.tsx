@@ -2,8 +2,9 @@ import React, { useEffect, useState } from "react";
 import { brand } from "../../config/branding";
 import { userFacingWriteError } from "../../lib/accountLoad";
 import { useAuth } from "../../lib/authContext";
+import { templateChoiceError } from "../../lib/templateAdoption";
 import { listCatalogTemplates, type CatalogTemplate } from "../../lib/templateCatalog";
-import { createPortfolio, getPortfolioByOwner, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
+import { getPortfolioByOwner, useCatalogTemplate, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
 import { PORTFOLIO_WORKSPACE_PATH } from "../portfolio-workspace/portfolioWorkspacePath";
 import { Button } from "../ui/Button";
 
@@ -32,19 +33,6 @@ function TemplatePreviewImage({ template }: { template: CatalogTemplate }) {
   );
 }
 
-function selectionError(error: unknown): string {
-  const guarded = userFacingWriteError(error, "");
-  if (guarded) return guarded;
-  const raw = error instanceof Error ? error.message : "";
-  if (
-    raw === "That template is not available." ||
-    raw === "This account already has a workspace portfolio. It was left unchanged." ||
-    raw === "You need to be signed in to use your portfolio."
-  ) {
-    return raw;
-  }
-  return "Your portfolio could not be created.";
-}
 
 type TemplateDiscoveryProps = {
   onOpenPath: (path: string) => void;
@@ -79,23 +67,19 @@ export function TemplateDiscovery({ onOpenPath }: TemplateDiscoveryProps) {
   }, []);
 
   const choose = (selected: CatalogTemplate) => {
-    if (lookup?.status === "ready") {
-      onOpenPath(PORTFOLIO_WORKSPACE_PATH);
-      return;
-    }
     setIsChoosing(true);
     setError(null);
-    void createPortfolio(userAccount, selected.id)
+    void useCatalogTemplate(userAccount, selected.id)
       .then(() => onOpenPath(PORTFOLIO_WORKSPACE_PATH))
       .catch((chooseError: unknown) => {
-        setError(selectionError(chooseError));
+        setError(templateChoiceError(chooseError, "Your portfolio could not be created."));
       })
       .finally(() => setIsChoosing(false));
   };
 
   const name = userAccount?.accountPrivate?.firstName || user?.displayName;
   const alreadyHasPortfolio = lookup?.status === "ready";
-  const hasLegacyPortfolio = lookup?.status === "legacy";
+  const hasUnknownTemplate = lookup?.status === "legacy" && lookup.reason === "unknown";
 
   return (
     <div id="template-discovery" className="min-h-screen overflow-x-hidden bg-[#F3FAF9] font-sans text-[#243838]">
@@ -136,9 +120,9 @@ export function TemplateDiscovery({ onOpenPath }: TemplateDiscoveryProps) {
                 You already have a draft portfolio. Using this template again will not create another one.
               </p>
             )}
-            {hasLegacyPortfolio && (
+            {hasUnknownTemplate && (
               <p className="mt-8 max-w-xl text-sm leading-relaxed text-[#5C7372]">
-                This account already has a workspace portfolio. It was left unchanged.
+                This portfolio already uses a template that is not available. It was left unchanged.
               </p>
             )}
             {error && <p className="mt-8 text-sm font-medium text-[#B93838]">{error}</p>}
@@ -151,7 +135,7 @@ export function TemplateDiscovery({ onOpenPath }: TemplateDiscoveryProps) {
               >
                 Preview
               </Button>
-              {!hasLegacyPortfolio && (
+              {!hasUnknownTemplate && (
                 <Button
                   id="template-use"
                   isLoading={isChoosing}

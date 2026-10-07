@@ -6,7 +6,7 @@ import type {
   SocialLink,
   SocialPlatform,
 } from "../templates/wdk-premium-portfolio-1/types/portfolio";
-import type { UserPortfolio } from "../types/userPortfolio";
+import type { UserPortfolio, UserPortfolioContent } from "../types/userPortfolio";
 import { normalizePortfolioDesign } from "../types/portfolioDesign";
 import { findCatalogTemplate } from "./templateCatalog";
 
@@ -121,6 +121,26 @@ function readSeo(value: unknown): PortfolioSEO {
 }
 
 /**
+ * Current portfolio fields from a stored document and an already chosen catalog template.
+ * This does not write, and it does not decide that a missing template is WDK.
+ */
+export function portfolioContentForTemplate(
+  data: Record<string, unknown>,
+  selectedTemplate: string
+): UserPortfolioContent {
+  return {
+    selectedTemplate,
+    profile: readProfile(data),
+    socialLinks: readSocialLinks(data.socialLinks),
+    projects: readProjects(data.projects),
+    contact: readContact(data),
+    seo: readSeo(data.seo),
+    design: normalizePortfolioDesign(data.design),
+    publishing: { status: "draft" },
+  };
+}
+
+/**
  * Read a stored portfolio into the current shape.
  * Missing compatible fields receive defaults. This does not write to Firestore.
  * Unknown template ids, and documents with no selected template, return null.
@@ -131,14 +151,7 @@ export function normalizeUserPortfolio(id: string, data: Record<string, unknown>
   return {
     id,
     ownerId: text(data.ownerId),
-    selectedTemplate,
-    profile: readProfile(data),
-    socialLinks: readSocialLinks(data.socialLinks),
-    projects: readProjects(data.projects),
-    contact: readContact(data),
-    seo: readSeo(data.seo),
-    design: normalizePortfolioDesign(data.design),
-    publishing: { status: "draft" },
+    ...portfolioContentForTemplate(data, selectedTemplate),
     createdAt: (data.createdAt as UserPortfolio["createdAt"]) || null,
     updatedAt: (data.updatedAt as UserPortfolio["updatedAt"]) || null,
   };

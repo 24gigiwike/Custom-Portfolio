@@ -3,9 +3,10 @@ import { WdkPremiumPortfolio } from "../templates/wdk-premium-portfolio-1";
 import type { PortfolioData } from "../templates/wdk-premium-portfolio-1";
 import { useAuth } from "../lib/authContext";
 import { userFacingWriteError } from "../lib/accountLoad";
+import { templateChoiceError } from "../lib/templateAdoption";
 import {
-  createPortfolio,
   getPortfolioByOwner,
+  useCatalogTemplate,
   type OwnedPortfolioLookup,
 } from "../lib/userPortfolio";
 import { toWdkPremiumPortfolioData, wdkPaletteForPortfolio } from "../lib/wdkPortfolioAdapter";
@@ -44,20 +45,6 @@ function fixtureData(): PortfolioData | null {
 /** Sample previews can show a semantic palette. Saved portfolios ignore this. */
 function fixturePalette(): string {
   return new URLSearchParams(window.location.search).get("palette") ?? "original";
-}
-
-function choiceError(error: unknown): string {
-  const guarded = userFacingWriteError(error, "");
-  if (guarded) return guarded;
-  const raw = error instanceof Error ? error.message : "";
-  if (
-    raw === "That template is not available." ||
-    raw === "This account already has a workspace portfolio. It was left unchanged." ||
-    raw === "You need to be signed in to use your portfolio."
-  ) {
-    return raw;
-  }
-  return "Your portfolio could not be created.";
 }
 
 export const WdkTemplatePreview: React.FC = () => {
@@ -104,10 +91,10 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palet
     }
     setIsCreating(true);
     setError(null);
-    void createPortfolio(userAccount, template.id)
+    void useCatalogTemplate(userAccount, template.id)
       .then(() => openAppPath(PORTFOLIO_WORKSPACE_PATH))
       .catch((createError) => {
-        setError(choiceError(createError));
+        setError(templateChoiceError(createError, "Your portfolio could not be created."));
       })
       .finally(() => setIsCreating(false));
   };
@@ -190,7 +177,7 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palet
     );
   }
 
-  if (lookup?.status === "legacy") {
+  if (lookup?.status === "legacy" && lookup.reason === "unknown") {
     return (
       <PreviewStatus
         title="This account already has a workspace portfolio."
