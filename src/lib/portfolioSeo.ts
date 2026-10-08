@@ -180,7 +180,7 @@ function listed(values: string[] | undefined): string[] {
   return (values ?? []).map((value) => normalizeSeoText(value)).filter(Boolean);
 }
 
-function showsArea(source: SeoSource, area: "profile" | "projects" | "contact" | "discoverability"): boolean {
+function showsArea(source: SeoSource, area: "profile" | "projects" | "contact"): boolean {
   return templateSupportsContentArea(source.selectedTemplate, area);
 }
 
@@ -190,7 +190,7 @@ function portfolioJsonLd(
 ): string {
   const name = normalizeSeoText(source.profile.brandName);
   if (!name) return "";
-  const facts = showsArea(source, "discoverability") ? normalizeDiscoverability(source.discoverability) : emptyFacts();
+  const identity = normalizeDiscoverability(source.discoverability).identity;
   const headline = showsArea(source, "profile") ? normalizeSeoText(source.profile.headline) : "";
   const summary = showsArea(source, "contact") ? normalizeSeoText(source.contact.description) : "";
   const expertise = showsArea(source, "profile") ? listed(source.profile.capabilityTags) : [];
@@ -222,9 +222,9 @@ function portfolioJsonLd(
   };
   if (resolved.description) page.description = resolved.description;
   if (works.length > 0) page.hasPart = works;
-  if (facts.identity) {
+  if (identity) {
     const entity: Record<string, unknown> = {
-      "@type": facts.identity === "organization" ? "Organization" : "Person",
+      "@type": identity === "organization" ? "Organization" : "Person",
       "@id": entityId,
       name,
       url: resolved.canonicalUrl,
@@ -233,7 +233,6 @@ function portfolioJsonLd(
     else if (headline) entity.description = headline;
     if (resolved.image) entity.image = resolved.image;
     if (expertise.length > 0) entity.knowsAbout = expertise;
-    if (facts.serviceRegion) entity.areaServed = facts.serviceRegion;
     if (services.length > 0) {
       entity.makesOffer = services.map((service) => ({ "@type": "Service", name: service }));
     }
@@ -242,22 +241,7 @@ function portfolioJsonLd(
   } else {
     graph.push(page);
   }
-  if (facts.faqs.length > 0) {
-    graph.push({
-      "@type": "FAQPage",
-      "@id": `${resolved.canonicalUrl}#questions`,
-      mainEntity: facts.faqs.map((faq) => ({
-        "@type": "Question",
-        name: faq.question,
-        acceptedAnswer: { "@type": "Answer", text: faq.answer },
-      })),
-    });
-  }
   return escapeJsonLd(JSON.stringify({ "@context": "https://schema.org", "@graph": graph }));
-}
-
-function emptyFacts(): PortfolioDiscoverability {
-  return { identity: "", serviceRegion: "", faqs: [] };
 }
 
 export function resolvedToPortfolioSeo(resolved: ResolvedPortfolioSeo): PortfolioSEO {
@@ -313,18 +297,21 @@ export function templateOffersSeo(selectedTemplate: string): boolean {
   return templateSupportsContentArea(selectedTemplate, "seo");
 }
 
+/**
+ * Discoverability is stored with SEO. WDK does not present it as a section.
+ * The editor stays available for templates that already offer search metadata.
+ */
 export function templateOffersDiscoverability(selectedTemplate: string): boolean {
-  return templateSupportsContentArea(selectedTemplate, "discoverability");
+  return templateOffersSeo(selectedTemplate);
 }
 
-/** Visible public facts for the initial HTML. The same facts are shown by a supporting template. */
+/** Public text the selected template already shows. Hidden discoverability fields are left out. */
 export function renderPortfolioFacts(source: SeoSource): string {
   const name = normalizeSeoText(source.profile.brandName);
   const headline = showsArea(source, "profile") ? normalizeSeoText(source.profile.headline) : "";
   const summary = showsArea(source, "contact") ? normalizeSeoText(source.contact.description) : "";
   const expertise = showsArea(source, "profile") ? listed(source.profile.capabilityTags) : [];
   const services = showsArea(source, "contact") ? listed(source.contact.projectTypes) : [];
-  const facts = showsArea(source, "discoverability") ? normalizeDiscoverability(source.discoverability) : emptyFacts();
   const projects = showsArea(source, "projects")
     ? source.projects.flatMap((project) => {
         const title = normalizeSeoText(project.title);
@@ -342,7 +329,6 @@ export function renderPortfolioFacts(source: SeoSource): string {
     summary ? `<p>${escapeHtml(summary)}</p>` : "",
     expertise.length ? `<h2>Expertise</h2><ul>${expertise.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "",
     services.length ? `<h2>Services</h2><ul>${services.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "",
-    facts.serviceRegion ? `<p>${escapeHtml(facts.serviceRegion)}</p>` : "",
     projects.length
       ? `<h2>Selected work</h2><ul>${projects
           .map((project) =>
@@ -351,11 +337,6 @@ export function renderPortfolioFacts(source: SeoSource): string {
               : `<li>${escapeHtml(project.title)}</li>`
           )
           .join("")}</ul>`
-      : "",
-    facts.faqs.length
-      ? `<section aria-label="Questions"><h2>Questions</h2>${facts.faqs
-          .map((faq) => `<h3>${escapeHtml(faq.question)}</h3><p>${escapeHtml(faq.answer)}</p>`)
-          .join("")}</section>`
       : "",
     `</article>`,
   ];

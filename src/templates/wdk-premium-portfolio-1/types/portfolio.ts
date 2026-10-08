@@ -1,5 +1,3 @@
-import type { PortfolioDiscoverability } from "../../../types/discoverability";
-
 export type SocialPlatform =
     | "x"
     | "instagram"
@@ -60,5 +58,4 @@ export type PortfolioData = {
     projects: Project[];
     contact: PortfolioContact;
     seo: PortfolioSEO;
-    discoverability?: PortfolioDiscoverability;
 };

@@ -130,6 +130,7 @@ assert.equal(presented.projects[0]?.id, "project-kept");
 assert.equal(presented.contact.email, "studio@example.com");
 assert.deepEqual(presented.seo, portfolio.seo);
 assert.equal("design" in presented, false);
+assert.equal("discoverability" in presented, false);
 
 assert.deepEqual(designOptionSwatches("wdk-premium-portfolio-1", "ocean"), [
   WDK_PALETTE_COLORS.ocean.soft,
