@@ -2,10 +2,9 @@ import React, { useEffect, useRef, useState } from "react";
 import { brand } from "../../config/branding";
 import { userFacingWriteError } from "../../lib/accountLoad";
 import { useAuth } from "../../lib/authContext";
-import { isPortfolioPublished } from "../../lib/portfolioPublishing";
-import { portfolioTemplateInfo, publishingStatusLabel } from "../../lib/portfolioTemplate";
 import { contentAreaLabel, templateContentAreas, type ContentArea } from "../../lib/templateCatalog";
 import { getPortfolioByOwner, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
+import { workspaceOverview } from "../../lib/workspaceOverview";
 import { TEMPLATE_DISCOVERY_PATH } from "../discover/templateDiscoveryPath";
 import type { UserPortfolio } from "../../types/userPortfolio";
 import { Button } from "../ui/Button";
@@ -14,7 +13,7 @@ import { PORTFOLIO_EDITOR_PATH } from "../portfolio-editor/portfolioEditorPath";
 import { PORTFOLIO_PUBLISH_PATH } from "../portfolio-publish/portfolioPublishPath";
 import { PORTFOLIO_SEO_PATH } from "../portfolio-seo/portfolioSeoPath";
 import { PORTFOLIO_REVIEW_PATH } from "../portfolio-review/portfolioReviewPath";
-import { publicPortfolioUrl } from "../public/publicPortfolioPath";
+import { PortfolioSectionNav, SignOutControl } from "./PortfolioSectionNav";
 
 type PortfolioWorkspaceProps = {
   onOpenPath: (path: string) => void;
@@ -53,7 +52,6 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
     load();
   }, []);
 
-  const template = portfolio ? portfolioTemplateInfo(portfolio.selectedTemplate) : null;
   const contentAreas = portfolio ? templateContentAreas(portfolio.selectedTemplate) : null;
   const openEditor = () => onOpenPath(PORTFOLIO_EDITOR_PATH);
   const openDesign = () => onOpenPath(PORTFOLIO_DESIGN_PATH);
@@ -77,60 +75,9 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
                 <p className="mt-1 truncate text-xs font-medium text-[#5C7372]">Signed in as {accountName}</p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => void signOutUser()}
-              className="shrink-0 text-sm font-bold text-[#3E7574]"
-            >
-              Sign out
-            </button>
+            <SignOutControl onSignOut={() => void signOutUser()} />
           </div>
-          <nav aria-label="Portfolio" className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
-            <span className="font-bold text-[#243838] underline decoration-[#6DAEAD] decoration-2 underline-offset-8">
-              Overview
-            </span>
-            <button
-              type="button"
-              className="font-bold text-[#3E7574] disabled:cursor-not-allowed disabled:opacity-40"
-              onClick={openEditor}
-              disabled={!portfolio}
-            >
-              Edit
-            </button>
-            <button
-              type="button"
-              id="portfolio-workspace-design"
-              className="font-bold text-[#3E7574] disabled:cursor-not-allowed disabled:opacity-40"
-              onClick={openDesign}
-              disabled={!portfolio}
-            >
-              Design
-            </button>
-            <button
-              type="button"
-              id="portfolio-workspace-review"
-              className="font-bold text-[#3E7574]"
-              onClick={openReview}
-            >
-              Review
-            </button>
-            <button
-              type="button"
-              id="portfolio-workspace-seo"
-              className="font-bold text-[#3E7574]"
-              onClick={openSeo}
-            >
-              SEO
-            </button>
-            <button
-              type="button"
-              id="portfolio-workspace-publish"
-              className="font-bold text-[#3E7574]"
-              onClick={openPublish}
-            >
-              Publish
-            </button>
-          </nav>
+          <PortfolioSectionNav current="overview" onOpenPath={onOpenPath} />
         </div>
       </header>
 
@@ -172,13 +119,15 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
             title="Your workspace portfolio was left unchanged."
             body="This page is for the new template portfolio. Your existing workspace was not edited."
           />
-        ) : portfolio && template ? (
+        ) : portfolio ? (
           <Overview
             portfolio={portfolio}
-            templateName={template.name}
             contentAreas={contentAreas}
             onEdit={openEditor}
+            onDesign={openDesign}
+            onSeo={openSeo}
             onReview={openReview}
+            onPublish={openPublish}
           />
         ) : (
           <Status title="Your portfolio could not be loaded." />
@@ -190,22 +139,37 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
 
 function Overview({
   portfolio,
-  templateName,
   contentAreas,
   onEdit,
+  onDesign,
+  onSeo,
   onReview,
+  onPublish,
 }: {
   portfolio: UserPortfolio;
-  templateName: string;
   contentAreas: readonly ContentArea[] | null;
   onEdit: () => void;
+  onDesign: () => void;
+  onSeo: () => void;
   onReview: () => void;
+  onPublish: () => void;
 }) {
-  const name = portfolio.profile.brandName.trim() || "Untitled portfolio";
+  const summary = workspaceOverview(portfolio);
   const headline = portfolio.profile.headline.trim();
   const portrait = portfolio.profile.heroImage || portfolio.profile.heroImageMobile;
-  const status = publishingStatusLabel(portfolio.publishing.status);
   const projectCount = portfolio.projects.length;
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "manual">("idle");
+  const copyLink = () => {
+    const url = summary.publicUrl;
+    if (!url || !navigator.clipboard?.writeText) {
+      setCopyState("manual");
+      return;
+    }
+    void navigator.clipboard.writeText(url).then(
+      () => setCopyState("copied"),
+      () => setCopyState("manual"),
+    );
+  };
 
   return (
     <div className="max-w-3xl">
@@ -217,7 +181,7 @@ function Overview({
           <div className="h-24 w-24 shrink-0 rounded-full bg-[#E7F3F2] sm:h-28 sm:w-28" />
         )}
         <div className="min-w-0">
-          <h1 className="break-words text-4xl font-bold tracking-[-0.045em] sm:text-5xl">{name}</h1>
+          <h1 className="break-words text-4xl font-bold tracking-[-0.045em] sm:text-5xl">{summary.name}</h1>
           {headline && <p className="mt-3 break-words text-lg font-medium leading-relaxed text-[#5C7372]">{headline}</p>}
         </div>
       </div>
@@ -225,27 +189,53 @@ function Overview({
       <dl className="mt-12 grid gap-8 border-t border-[#D5E6E5] pt-8 sm:grid-cols-2">
         <div>
           <dt className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#3E7574]">Template</dt>
-          <dd className="mt-2 break-words text-lg font-semibold">{templateName}</dd>
+          <dd className="mt-2 break-words text-lg font-semibold">{summary.templateName}</dd>
         </div>
         <div>
           <dt className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#3E7574]">Status</dt>
-          <dd className="mt-2 text-lg font-semibold">{status}</dd>
+          <dd className="mt-2 text-lg font-semibold">{summary.statusLabel}</dd>
           <dd className="mt-1 text-sm leading-relaxed text-[#5C7372]">
-            {isPortfolioPublished(portfolio.publishing) ? (
-              <a
-                id="portfolio-workspace-view"
-                href={publicPortfolioUrl(portfolio.id)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-bold text-[#3E7574] underline-offset-4 hover:underline"
-              >
-                View Portfolio
-              </a>
-            ) : (
-              "This portfolio is not live."
-            )}
+            {summary.publiclyAccessible
+              ? "This portfolio is publicly accessible."
+              : "This portfolio is not publicly accessible."}
           </dd>
         </div>
+        {summary.publicUrl && (
+          <div className="sm:col-span-2">
+            <dt className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#3E7574]">Public address</dt>
+            <dd className="mt-2 break-all text-base font-semibold">{summary.publicUrl}</dd>
+            {summary.publiclyAccessible ? (
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <a
+                  id="portfolio-workspace-view"
+                  href={summary.publicUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-11 items-center justify-center rounded-xl bg-[#6DAEAD] px-5 text-sm font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6DAEAD] focus-visible:ring-offset-2"
+                >
+                  View portfolio
+                </a>
+                <Button id="portfolio-workspace-copy" variant="outline" onClick={copyLink}>
+                  Copy link
+                </Button>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm leading-relaxed text-[#5C7372]">
+                Visitors cannot open this address until you publish.
+              </p>
+            )}
+            {copyState === "copied" && <p className="mt-3 text-sm font-medium text-[#3E7574]" aria-live="polite">Link copied.</p>}
+            {copyState === "manual" && (
+              <p className="mt-3 text-sm font-medium text-[#5C7372]" role="status">Select the address and copy it.</p>
+            )}
+          </div>
+        )}
+        {summary.updatedLabel && (
+          <div>
+            <dt className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#3E7574]">Last saved</dt>
+            <dd className="mt-2 text-lg font-semibold">{summary.updatedLabel}</dd>
+          </div>
+        )}
       </dl>
 
       <section className="mt-12 border-t border-[#D5E6E5] pt-8" aria-labelledby="portfolio-content">
@@ -279,10 +269,19 @@ function Overview({
         </p>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <Button id="portfolio-workspace-edit" onClick={onEdit}>
-            Edit portfolio
+            Edit
+          </Button>
+          <Button id="portfolio-workspace-design" variant="outline" onClick={onDesign}>
+            Design
+          </Button>
+          <Button id="portfolio-workspace-seo" variant="outline" onClick={onSeo}>
+            SEO
           </Button>
           <Button id="portfolio-workspace-review-action" variant="outline" onClick={onReview}>
-            Review portfolio
+            Review
+          </Button>
+          <Button id="portfolio-workspace-publish" variant="outline" onClick={onPublish}>
+            Publish
           </Button>
         </div>
       </div>

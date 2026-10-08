@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState, useEffect, useLayoutEffect } from "react";
+import React, { lazy, Suspense, useState, useEffect, useLayoutEffect, useRef } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AuthProvider, useAuth } from "./lib/authContext";
 import { SplashScreen } from "./components/splash/SplashScreen";
@@ -23,6 +23,13 @@ import { PortfolioReview } from "./components/portfolio-review/PortfolioReview";
 import { isPortfolioWorkspacePath, PORTFOLIO_WORKSPACE_PATH } from "./components/portfolio-workspace/portfolioWorkspacePath";
 import { PortfolioWorkspace } from "./components/portfolio-workspace/PortfolioWorkspace";
 import { isPublicPortfolioPath, publicPortfolioIdFromPath } from "./components/public/publicPortfolioPath";
+import {
+  allocateHistoryIndex,
+  allowHistoryLeave,
+  commitHistoryPop,
+  historyIndexFromState,
+  rememberHistoryIndex,
+} from "./lib/unsavedChanges";
 import type { AppRoute } from "./types";
 
 const WdkTemplatePreview = lazy(() =>
@@ -55,6 +62,17 @@ function AppContent() {
     const path = window.location.pathname;
     return path || "/";
   });
+  const routeRef = useRef(currentRoute);
+  routeRef.current = currentRoute;
+  const historySession = useRef({
+    idx: historyIndexFromState(window.history.state) ?? 0,
+    reverting: false,
+  });
+  const historyReady = useRef(false);
+  if (!historyReady.current) {
+    historyReady.current = true;
+    rememberHistoryIndex(historySession.current.idx);
+  }
 
   useLayoutEffect(() => {
     if (isPublicPortfolioPath(currentRoute) || isWdkTemplatePreviewPath(currentRoute)) return;
@@ -69,11 +87,31 @@ function AppContent() {
     meta.setAttribute("content", robots);
   }, [currentRoute]);
 
+  useLayoutEffect(() => {
+    if (historyIndexFromState(window.history.state) !== null) return;
+    try {
+      const url = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      window.history.replaceState({ ...(window.history.state ?? {}), idx: historySession.current.idx }, "", url);
+    } catch {
+      // In strict iframe sandbox, ignore history errors
+    }
+  }, []);
+
   // Sync browser back/forward history navigation
   useEffect(() => {
     const handlePopState = () => {
-      const path = window.location.pathname;
-      setCurrentRoute(path || "/");
+      const nextPath = window.location.pathname || "/";
+      const nextRoute = commitHistoryPop(
+        historySession.current,
+        { path: nextPath, idx: historyIndexFromState(window.history.state) },
+        routeRef.current,
+        allowHistoryLeave,
+        {
+          go: (delta) => window.history.go(delta),
+          pushState: (idx, path) => window.history.pushState({ idx }, "", path),
+        },
+      );
+      if (nextRoute !== null) setCurrentRoute(nextRoute);
     };
 
     window.addEventListener("popstate", handlePopState);
@@ -82,12 +120,13 @@ function AppContent() {
 
   const navigateTo = (route: AppRoute) => {
     setCurrentRoute(route);
+    if (window.location.pathname === route) return;
+    const idx = allocateHistoryIndex();
     try {
-      if (window.location.pathname !== route) {
-        window.history.pushState(null, "", route);
-      }
+      window.history.pushState({ idx }, "", route);
+      historySession.current.idx = idx;
     } catch {
-      // In strict iframe sandbox, ignore pushState errors
+      rememberHistoryIndex(idx - 1);
     }
   };
 

@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { brand } from "../../config/branding";
-import { userFacingWriteError } from "../../lib/accountLoad";
+import { readableSaveError, userFacingWriteError } from "../../lib/accountLoad";
+import { confirmDiscard, useUnsavedChanges } from "../../lib/unsavedChanges";
 import { useAuth } from "../../lib/authContext";
 import { FAQ_LIMIT, normalizeDiscoverability } from "../../lib/discoverability";
 import {
+  canonicalPortfolioUrl,
   contentWithSeo,
-  portfolioCanonicalUrl,
   portfolioPageDescription,
   portfolioPageTitle,
   templateOffersDiscoverability,
@@ -17,11 +18,7 @@ import { getPortfolioByOwner, updatePortfolio, type OwnedPortfolioLookup } from 
 import type { UserPortfolio } from "../../types/userPortfolio";
 import { TEMPLATE_DISCOVERY_PATH } from "../discover/templateDiscoveryPath";
 import { ImageField } from "../portfolio-editor/ImageField";
-import { PORTFOLIO_DESIGN_PATH } from "../portfolio-design/portfolioDesignPath";
-import { PORTFOLIO_EDITOR_PATH } from "../portfolio-editor/portfolioEditorPath";
-import { PORTFOLIO_PUBLISH_PATH } from "../portfolio-publish/portfolioPublishPath";
-import { PORTFOLIO_REVIEW_PATH } from "../portfolio-review/portfolioReviewPath";
-import { PORTFOLIO_WORKSPACE_PATH } from "../portfolio-workspace/portfolioWorkspacePath";
+import { PortfolioSectionNav, SignOutControl } from "../portfolio-workspace/PortfolioSectionNav";
 import { Button } from "../ui/Button";
 
 type PortfolioSeoProps = {
@@ -45,6 +42,7 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
   const [imageError, setImageError] = useState<string | null>(null);
   const [imageStatus, setImageStatus] = useState<ImageUploadStatus | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
   const [justSaved, setJustSaved] = useState(false);
 
   const apply = (next: UserPortfolio) => {
@@ -89,16 +87,17 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
       })
       .catch((error: unknown) => {
         setImageStatus(null);
-        setImageError(error instanceof Error ? error.message : "Couldn't upload this image. Try again.");
+        setImageError(readableSaveError(error, "Couldn't upload this image. Try again."));
       });
   };
 
   const save = () => {
-    if (!portfolio) return;
+    if (savingRef.current || !portfolio) return;
     if (image.trim() && !image.trim().toLowerCase().startsWith("https://")) {
       setImageError("Use an https image address.");
       return;
     }
+    savingRef.current = true;
     setIsSaving(true);
     setSaveError(null);
     void updatePortfolio(
@@ -115,9 +114,12 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
         setJustSaved(true);
       })
       .catch((error: unknown) => {
-        setSaveError(error instanceof Error ? error.message : "Your portfolio could not be updated.");
+        setSaveError(readableSaveError(error, "Your portfolio could not be updated."));
       })
-      .finally(() => setIsSaving(false));
+      .finally(() => {
+        savingRef.current = false;
+        setIsSaving(false);
+      });
   };
 
   const offersSeo = portfolio ? templateOffersSeo(portfolio.selectedTemplate) : false;
@@ -136,8 +138,10 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
     headline: portfolio?.profile.headline,
     brandName: portfolio?.profile.brandName,
   });
-  const previewUrl = portfolio ? portfolioCanonicalUrl(portfolio.id) : null;
+  const previewUrl = portfolio ? canonicalPortfolioUrl(portfolio.id, portfolio.publicSlug) : null;
   const imageBusy = imageStatus?.phase === "preparing" || imageStatus?.phase === "optimizing" || imageStatus?.phase === "uploading";
+  useUnsavedChanges(dirty);
+  const leave = () => confirmDiscard(dirty);
 
   return (
     <div id="portfolio-seo" className="min-h-screen overflow-x-hidden bg-[#F3FAF9] font-sans text-[#243838]">
@@ -148,18 +152,12 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">{brand.name}</p>
               <p className="mt-1 text-sm font-semibold">Search and sharing</p>
             </div>
-            <button type="button" onClick={() => void signOutUser()} className="shrink-0 text-sm font-bold text-[#3E7574]">
-              Sign out
-            </button>
+            <SignOutControl onSignOut={() => {
+              if (!leave()) return;
+              void signOutUser();
+            }} />
           </div>
-          <nav aria-label="Portfolio" className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
-            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_WORKSPACE_PATH)}>Overview</button>
-            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_EDITOR_PATH)}>Edit</button>
-            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_DESIGN_PATH)}>Design</button>
-            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_REVIEW_PATH)}>Review</button>
-            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_PUBLISH_PATH)}>Publish</button>
-            <span className="font-bold text-[#243838] underline decoration-[#6DAEAD] decoration-2 underline-offset-8">SEO</span>
-          </nav>
+          <PortfolioSectionNav current="seo" onOpenPath={onOpenPath} beforeLeave={leave} />
         </div>
       </header>
       <main className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8 sm:py-14">
@@ -371,9 +369,9 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
                 {previewDescription && <p className="mt-2 break-words text-sm leading-relaxed text-[#4d5156]">{previewDescription}</p>}
               </div>
             </section>
-            {dirty && <p className="mt-6 text-sm font-medium text-[#5C7372]">Save to update the public page.</p>}
-            {justSaved && <p className="mt-6 text-sm font-semibold text-[#3E7574]">Saved</p>}
-            {saveError && <p className="mt-6 text-sm font-medium text-[#B93838]">{saveError}</p>}
+            {dirty && <p className="mt-6 text-sm font-medium text-[#5C7372]">Unsaved changes. Save before leaving.</p>}
+            {justSaved && <p className="mt-6 text-sm font-semibold text-[#3E7574]" aria-live="polite">Saved</p>}
+            {saveError && <p className="mt-6 text-sm font-medium text-[#B93838]" role="alert">{saveError}</p>}
             <div className="mt-8">
               <Button id="portfolio-seo-save" isLoading={isSaving} disabled={imageBusy || !dirty} onClick={save}>
                 Save

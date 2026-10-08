@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
+import { readableSaveError } from "../../lib/accountLoad";
 import { brand } from "../../config/branding";
+import { confirmDiscard, useUnsavedChanges } from "../../lib/unsavedChanges";
 import { contentAreaLabel } from "../../lib/templateCatalog";
 import { allocateProjectId } from "../../lib/projects";
 import { uploadPortfolioImage, type ImageUploadStatus, type PortfolioImageFolder } from "../../lib/storage";
@@ -46,6 +48,7 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
   const [justSaved, setJustSaved] = useState(false);
   const [imageError, setImageError] = useState<{ field: PortfolioImageFolder; message: string } | null>(null);
   const [imageStatus, setImageStatus] = useState<{ field: PortfolioImageFolder; status: ImageUploadStatus } | null>(null);
+  const savingRef = useRef(false);
 
   const load = () => {
     setIsLoading(true);
@@ -108,13 +111,16 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
       setImageStatus(null);
       setImageError({
         field: folder,
-        message: error instanceof Error ? error.message : "Couldn't upload this image. Try again.",
+        message: readableSaveError(error, "Couldn't upload this image. Try again."),
       });
     }
   };
 
+  const hasUnsavedChanges = Boolean(draft && savedDraft && !draftsMatch(draft, savedDraft));
+  useUnsavedChanges(hasUnsavedChanges);
+
   const save = async () => {
-    if (!portfolio || !draft || imageBusy) return;
+    if (savingRef.current || !portfolio || !draft || imageBusy) return;
     const errors = validateEditorDraft(draft, portfolio.selectedTemplate);
     setFieldErrors(errors);
     if (errors) {
@@ -132,6 +138,7 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
       return;
     }
 
+    savingRef.current = true;
     setIsSaving(true);
     setSaveError(null);
     try {
@@ -142,8 +149,9 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
       setSavedDraft(nextDraft);
       setJustSaved(true);
     } catch (error: unknown) {
-      setSaveError(error instanceof Error ? error.message : "Your changes could not be saved. Try again.");
+      setSaveError(readableSaveError(error, "Your changes could not be saved. Try again."));
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -202,12 +210,9 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
   }
 
   const editorAreas = editorAreasForTemplate(portfolio.selectedTemplate);
-  const hasUnsavedChanges = !draftsMatch(draft, savedDraft);
   const canEdit = editorAreas !== null && editorAreas.length > 0;
   const leaveEditor = (go: () => void) => {
-    if (hasUnsavedChanges && !window.confirm("You have unsaved changes. Leave without saving?")) {
-      return;
-    }
+    if (!confirmDiscard(hasUnsavedChanges)) return;
     go();
   };
   const show = (area: EditorArea) => editorAreas?.includes(area) ?? false;
@@ -221,7 +226,7 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">{brand.name}</p>
               <h1 className="mt-1 text-2xl font-bold tracking-[-0.04em]">Edit your portfolio</h1>
             </div>
-            {justSaved && <p className="shrink-0 pt-6 text-sm font-semibold text-[#3E7574]">Saved</p>}
+            {justSaved && <p className="shrink-0 pt-6 text-sm font-semibold text-[#3E7574]" aria-live="polite">Saved</p>}
           </div>
           <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:justify-end">
             <Button
@@ -273,8 +278,8 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
           <p className="max-w-xl text-sm leading-relaxed text-[#5C7372]">
             Edit the content this template presents. The template keeps control of how it looks.
           </p>
-          {hasUnsavedChanges && <p className="mt-4 text-sm font-medium text-[#5C7372]">Save to update the preview.</p>}
-          {saveError && <p className="mt-4 break-words text-sm font-medium text-[#B93838]">{saveError}</p>}
+          {hasUnsavedChanges && <p className="mt-4 text-sm font-medium text-[#5C7372]">Unsaved changes. Save before leaving.</p>}
+          {saveError && <p className="mt-4 break-words text-sm font-medium text-[#B93838]" role="alert">{saveError}</p>}
 
           {editorAreas === null && (
             <section className="mt-10 max-w-xl">

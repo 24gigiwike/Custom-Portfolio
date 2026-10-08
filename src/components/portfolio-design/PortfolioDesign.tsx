@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { readableSaveError } from "../../lib/accountLoad";
 import { brand } from "../../config/branding";
+import { confirmDiscard, useUnsavedChanges } from "../../lib/unsavedChanges";
 import { contentWithDesign, designOptionSwatches } from "../../lib/portfolioDesign";
 import { portfolioTemplateInfo } from "../../lib/portfolioTemplate";
 import { templateDesignCapabilities } from "../../lib/templateCatalog";
@@ -25,6 +27,7 @@ export function PortfolioDesign({ onPreview, onWorkspace, onDiscover }: Portfoli
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+  const savingRef = useRef(false);
 
   const load = () => {
     setIsLoading(true);
@@ -52,8 +55,12 @@ export function PortfolioDesign({ onPreview, onWorkspace, onDiscover }: Portfoli
     load();
   }, []);
 
+  const hasUnsavedChanges = palette !== null && savedPalette !== null && palette !== savedPalette;
+  useUnsavedChanges(hasUnsavedChanges);
+
   const save = async () => {
-    if (!portfolio || !palette) return;
+    if (savingRef.current || !portfolio || !palette) return;
+    savingRef.current = true;
     setIsSaving(true);
     setSaveError(null);
     try {
@@ -63,8 +70,9 @@ export function PortfolioDesign({ onPreview, onWorkspace, onDiscover }: Portfoli
       setSavedPalette(saved.design.palette);
       setJustSaved(true);
     } catch (error: unknown) {
-      setSaveError(error instanceof Error ? error.message : "Your design could not be saved. Try again.");
+      setSaveError(readableSaveError(error, "Your design could not be saved. Try again."));
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -124,9 +132,8 @@ export function PortfolioDesign({ onPreview, onWorkspace, onDiscover }: Portfoli
   const paletteControl = capabilities?.controls.find((control) => control.id === "palette") ?? null;
   const canEdit = paletteControl !== null;
   const template = portfolioTemplateInfo(portfolio.selectedTemplate);
-  const hasUnsavedChanges = palette !== savedPalette;
   const leave = (go: () => void) => {
-    if (hasUnsavedChanges && !window.confirm("You have unsaved design changes. Leave without saving?")) return;
+    if (!confirmDiscard(hasUnsavedChanges)) return;
     go();
   };
 
@@ -140,7 +147,7 @@ export function PortfolioDesign({ onPreview, onWorkspace, onDiscover }: Portfoli
               <h1 className="mt-1 text-2xl font-bold tracking-[-0.04em]">Design</h1>
               <p className="mt-1 break-words text-sm font-semibold text-[#5C7372]">{template.name}</p>
             </div>
-            {justSaved && <p className="shrink-0 pt-6 text-sm font-semibold text-[#3E7574]">Saved</p>}
+            {justSaved && <p className="shrink-0 pt-6 text-sm font-semibold text-[#3E7574]" aria-live="polite">Saved</p>}
           </div>
           <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:justify-end">
             <Button id="portfolio-design-workspace" variant="ghost" className="w-full sm:w-auto" onClick={() => leave(onWorkspace)}>
@@ -171,8 +178,8 @@ export function PortfolioDesign({ onPreview, onWorkspace, onDiscover }: Portfoli
         <p className="max-w-xl text-sm leading-relaxed text-[#5C7372]">
           Choose a direction this template can apply. The layout and type stay with the template.
         </p>
-        {hasUnsavedChanges && <p className="mt-4 text-sm font-medium text-[#5C7372]">Save to update the preview.</p>}
-        {saveError && <p className="mt-4 break-words text-sm font-medium text-[#B93838]">{saveError}</p>}
+        {hasUnsavedChanges && <p className="mt-4 text-sm font-medium text-[#5C7372]">Unsaved changes. Save before leaving.</p>}
+        {saveError && <p className="mt-4 break-words text-sm font-medium text-[#B93838]" role="alert">{saveError}</p>}
 
         {capabilities === null && (
           <section className="mt-10 max-w-xl">
