@@ -118,6 +118,7 @@ export function fieldsForTemplateAdoption(
     projects: content.projects,
     contact: content.contact,
     seo: content.seo,
+    discoverability: content.discoverability,
     design: content.design,
     publishing: { status: "draft" },
   };

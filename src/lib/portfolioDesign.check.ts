@@ -87,6 +87,7 @@ const portfolio: UserPortfolio = {
     twitterDescription: "Portfolio",
     twitterImage: "",
   },
+  discoverability: { identity: "", serviceRegion: "", faqs: [] },
   design: { palette: "original" },
   publishing: { status: "draft" },
   createdAt: null,

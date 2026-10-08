@@ -6,6 +6,7 @@ import type { SeoSource } from "./portfolioSeo";
 import { publicDeliveryForSavedContent } from "./publicPortfolio";
 import {
   applyHead,
+  applyPublicBody,
   contentWithSeo,
   escapeHtml,
   homeRobots,
@@ -19,6 +20,7 @@ import {
   portfolioShareImage,
   renderHeadTags,
   renderUnavailableHead,
+  renderPortfolioFacts,
   resolvePortfolioSeo,
   robotsTxt,
   siteEnvironmentFromHost,
@@ -63,6 +65,7 @@ function source(overrides: Partial<UserPortfolio> = {}): UserPortfolio {
       twitterDescription: "",
       twitterImage: "",
     },
+    discoverability: { identity: "", serviceRegion: "", faqs: [] },
     design: { palette: "ocean" },
     publishing: { status: "published", publishedAt: "2024-07-01" },
     createdAt: null,
@@ -78,10 +81,17 @@ function seoSource(portfolio: UserPortfolio): SeoSource {
     profile: {
       brandName: portfolio.profile.brandName,
       headline: portfolio.profile.headline,
+      capabilityTags: portfolio.profile.capabilityTags,
     },
-    contact: { description: portfolio.contact.description },
-    projects: portfolio.projects.map((project) => ({ title: project.title, url: project.url })),
+    contact: { description: portfolio.contact.description, projectTypes: portfolio.contact.projectTypes },
+    projects: portfolio.projects.map((project) => ({
+      title: project.title,
+      url: project.url,
+      category: project.category,
+      tech: project.tech,
+    })),
     seo: portfolio.seo,
+    discoverability: portfolio.discoverability,
   };
 }
 
@@ -201,6 +211,7 @@ assert.equal(saved.projects[0].title, "Title Sequence");
 assert.equal(saved.design.palette, "ocean");
 assert.equal(saved.publishing.status, "published");
 assert.equal(saved.publishing.publishedAt, "2024-07-01");
+assert.deepEqual(saved.discoverability, named.discoverability);
 const delivery = publicDeliveryForSavedContent(named, saved);
 assert.equal(delivery.action, "upsert");
 if (delivery.action === "upsert") {
@@ -237,6 +248,76 @@ assert.equal(platformTitle("/portfolio/publish"), "Publish Portfolio — Custom 
 assert.equal(platformTitle("/portfolio/seo"), "Portfolio SEO — Custom Portfolio");
 assert.equal(isPortfolioSeoPath(PORTFOLIO_SEO_PATH), true);
 assert.equal(isPortfolioSeoPath("/p/ABC123"), false);
+
+const factual = seoSource(source({
+  profile: {
+    ...named.profile,
+    capabilityTags: ["Motion design"],
+  },
+  contact: { ...named.contact, projectTypes: ["Title sequences"] },
+  discoverability: {
+    identity: "person",
+    serviceRegion: "Lagos",
+    faqs: [
+      { question: "  Do you take commissions?  ", answer: "Yes, for selected films." },
+      { question: "Incomplete", answer: "   " },
+    ],
+  },
+}));
+const person = resolvePortfolioSeo(factual, "production");
+if (!person) throw new Error("expected person metadata");
+assert.equal(person.title, "John Paul — Motion Designer & Animator");
+assert.match(person.jsonLd, /"@type":"Person"/);
+assert.equal(person.jsonLd.includes('"@type":"Organization"'), false);
+assert.match(person.jsonLd, /Motion design/);
+assert.match(person.jsonLd, /Title sequences/);
+assert.match(person.jsonLd, /Do you take commissions\?/);
+assert.match(person.jsonLd, /FAQPage/);
+assert.equal(person.jsonLd.includes("Incomplete"), false);
+assert.equal(person.jsonLd.includes("owner-secret-uid"), false);
+assert.equal(person.jsonLd.includes("studio@"), false);
+
+const organization = resolvePortfolioSeo({
+  ...factual,
+  discoverability: { identity: "organization", serviceRegion: "", faqs: [] },
+}, "production");
+if (!organization) throw new Error("expected organization metadata");
+assert.match(organization.jsonLd, /"@type":"Organization"/);
+assert.equal(organization.jsonLd.includes('"@type":"Person"'), false);
+assert.equal(organization.jsonLd.includes("FAQPage"), false);
+
+const unspecified = resolvePortfolioSeo({
+  ...factual,
+  seo: { ...factual.seo, title: "Kept title" },
+  discoverability: { identity: "", serviceRegion: "Remote", faqs: [] },
+}, "production");
+if (!unspecified) throw new Error("expected unspecified metadata");
+assert.equal(unspecified.title, "Kept title");
+assert.equal(unspecified.jsonLd.includes('"@type":"Person"'), false);
+assert.equal(unspecified.jsonLd.includes('"@type":"Organization"'), false);
+assert.equal(unspecified.jsonLd.includes("FAQPage"), false);
+
+const factsHtml = renderPortfolioFacts(factual);
+assert.match(factsHtml, /<p>John Paul<\/p>/);
+assert.match(factsHtml, /<h1>Motion Designer &amp; Animator<\/h1>/);
+assert.match(factsHtml, /<h3>Do you take commissions\?<\/h3>/);
+assert.match(factsHtml, /Yes, for selected films\./);
+assert.match(factsHtml, /Lagos/);
+assert.equal(factsHtml.includes("<script"), false);
+assert.equal(factsHtml.includes("owner-secret-uid"), false);
+const escapedFacts = renderPortfolioFacts({
+  ...factual,
+  discoverability: {
+    identity: "person",
+    serviceRegion: "",
+    faqs: [{ question: `Cost <script>`, answer: `Use "https" & care` }],
+  },
+});
+assert.match(escapedFacts, /Cost &lt;script&gt;/);
+assert.equal(escapedFacts.includes("<script>"), false);
+const withBody = applyPublicBody(`<div id="root"></div>`, factsHtml);
+assert.match(withBody, /<div id="root"><article>/);
+assert.equal((withBody.match(/<h1>/g) ?? []).length, 1);
 
 const rules = readFileSync(new URL("../../firestore.rules", import.meta.url), "utf8");
 const sitemapRules = rules.slice(rules.indexOf("match /sitemapEntries/{publicId}"), rules.indexOf("match /{document=**}"));

@@ -296,6 +296,7 @@ function portfolioContent(portfolio: UserPortfolio): UserPortfolioContent {
     projects: portfolio.projects,
     contact: portfolio.contact,
     seo: portfolio.seo,
+    discoverability: portfolio.discoverability,
     design: portfolio.design,
     publishing: portfolio.publishing,
   };
@@ -356,6 +357,7 @@ export function applyEditorDraft(
         }
       : portfolio.contact,
     seo: portfolio.seo,
+    discoverability: portfolio.discoverability,
     design: portfolio.design,
     publishing: portfolio.publishing,
   };

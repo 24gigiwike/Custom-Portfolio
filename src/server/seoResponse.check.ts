@@ -41,6 +41,11 @@ const published = documentFor({
     twitterImage: "https://cdn.example.com/share.jpg",
   },
   design: { palette: "ocean" },
+  discoverability: {
+    identity: "person",
+    serviceRegion: "Lagos",
+    faqs: [{ question: "Do you take commissions?", answer: "Yes, for selected films." }],
+  },
   ownerId: "owner-secret-uid",
 });
 
@@ -82,6 +87,10 @@ try {
   assert.match(page.html, /name="twitter:title"/);
   assert.match(page.html, /name="robots" content="index, follow"/);
   assert.match(page.html, /application\/ld\+json/);
+  assert.match(page.html, /<h1>Motion Designer &amp; Animator<\/h1>/);
+  assert.match(page.html, /Do you take commissions\?/);
+  assert.match(page.html, /FAQPage/);
+  assert.match(page.html, /"@type":"Person"/);
   assert.equal(page.html.includes("owner-secret-uid"), false);
   assert.equal(page.html.includes("private-looking@example.com"), false);
   assert.equal(page.html.includes("studio@example.com"), false);
@@ -97,6 +106,7 @@ try {
   assert.match(missing.html, /<title>Portfolio<\/title>/);
   assert.match(missing.html, /noindex, nofollow/);
   assert.equal(missing.html.includes("John Paul"), false);
+  assert.equal(missing.html.includes("Do you take commissions"), false);
   assert.equal(missing.html.includes("Explore the animation"), false);
   assert.equal(missing.html.includes("share.jpg"), false);
 

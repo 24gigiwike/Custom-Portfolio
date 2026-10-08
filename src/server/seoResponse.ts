@@ -3,7 +3,9 @@ import { readPublicPortfolio } from "../lib/publicPortfolio.js";
 import {
   applyHead,
   renderHomeHead,
+  applyPublicBody,
   renderHeadTags,
+  renderPortfolioFacts,
   renderUnavailableHead,
   resolvePublicPortfolioSeo,
   type SiteEnvironment,
@@ -66,7 +68,10 @@ export async function publicPortfolioHtml(
     if (!portfolio) return unavailable;
     const resolved = resolvePublicPortfolioSeo(portfolio, environment);
     if (!resolved) return unavailable;
-    return { status: 200, html: applyHead(shell, renderHeadTags(resolved)) };
+    return {
+      status: 200,
+      html: applyPublicBody(applyHead(shell, renderHeadTags(resolved)), renderPortfolioFacts(portfolio)),
+    };
   } catch {
     return { status: 502, html: unavailable.html };
   }

@@ -6,6 +6,7 @@ import type {
   Project,
   SocialLink,
 } from "../templates/wdk-premium-portfolio-1/types/portfolio";
+import type { PortfolioDiscoverability } from "./discoverability";
 import type { PortfolioDesign } from "./portfolioDesign";
 
 /**
@@ -20,6 +21,7 @@ export interface PublicPortfolio {
   projects: Project[];
   contact: PortfolioContact;
   seo: PortfolioSEO;
+  discoverability: PortfolioDiscoverability;
   design: PortfolioDesign;
   publishedAt: Timestamp | string | null;
   updatedAt: Timestamp | string | null;

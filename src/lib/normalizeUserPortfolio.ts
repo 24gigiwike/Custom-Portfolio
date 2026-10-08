@@ -8,6 +8,7 @@ import type {
 } from "../templates/wdk-premium-portfolio-1/types/portfolio";
 import type { PortfolioPublishing, UserPortfolio, UserPortfolioContent } from "../types/userPortfolio";
 import { normalizePortfolioDesign } from "../types/portfolioDesign";
+import { normalizeDiscoverability } from "./discoverability.js";
 import { findCatalogTemplate } from "./templateCatalog";
 
 const PLATFORMS = new Set<SocialPlatform>(["x", "instagram", "facebook", "youtube", "tiktok", "email"]);
@@ -156,6 +157,7 @@ export function portfolioContentForTemplate(
     projects: readProjects(data.projects),
     contact: readContact(data),
     seo: readSeo(data.seo),
+    discoverability: normalizeDiscoverability(data.discoverability),
     design: normalizePortfolioDesign(data.design),
     publishing: readPublishing(data),
   };

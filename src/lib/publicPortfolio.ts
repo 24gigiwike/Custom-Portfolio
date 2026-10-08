@@ -10,8 +10,10 @@ import type {
 import { templateConfig } from "../templates/wdk-premium-portfolio-1/data/template-config.js";
 import type { PortfolioDesign, PortfolioPaletteId } from "../types/portfolioDesign";
 import { normalizePortfolioDesign } from "../types/portfolioDesign.js";
+import type { PortfolioDiscoverability } from "../types/discoverability";
 import type { PublicPortfolio } from "../types/publicPortfolio";
 import type { UserPortfolio, UserPortfolioContent } from "../types/userPortfolio";
+import { normalizeDiscoverability } from "./discoverability.js";
 import { portfolioPageTitle } from "./portfolioSeo.js";
 import { templateForCreation } from "./templateCatalog.js";
 import { toWdkPremiumPortfolioData, wdkPaletteForPortfolio } from "./wdkPortfolioAdapter.js";
@@ -32,6 +34,7 @@ export type PublicPortfolioFields = {
   projects: Project[];
   contact: PortfolioContact;
   seo: PortfolioSEO;
+  discoverability: PortfolioDiscoverability;
   design: PortfolioDesign;
 };
 
@@ -145,6 +148,7 @@ export function publicPortfolioFromUserPortfolio(portfolio: UserPortfolio): Publ
     projects: publicProjects(portfolio.projects),
     contact: publicContact(portfolio.contact),
     seo: publicSeo(portfolio.seo),
+    discoverability: normalizeDiscoverability(portfolio.discoverability),
     design: { palette: normalizePortfolioDesign(portfolio.design).palette },
   };
 }
@@ -287,6 +291,7 @@ export function readPublicPortfolio(publicId: string, data: Record<string, unkno
     projects: readProjects(data.projects),
     contact,
     seo,
+    discoverability: normalizeDiscoverability(data.discoverability),
     design: normalizePortfolioDesign(data.design),
     publishedAt: readTime(data.publishedAt),
     updatedAt: readTime(data.updatedAt),

@@ -193,6 +193,7 @@ export function savedPortfolioPresentation(
       contact: portfolio.contact,
       projects: portfolio.projects,
       seo: portfolio.seo,
+      discoverability: portfolio.discoverability,
     },
     environment
   );

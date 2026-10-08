@@ -64,6 +64,7 @@ function portfolio(overrides: Partial<UserPortfolio> = {}): UserPortfolio {
       twitterDescription: "",
       twitterImage: "",
     },
+    discoverability: { identity: "", serviceRegion: "", faqs: [] },
     design: { palette: "original" },
     publishing: { status: "draft" },
     createdAt: "2024-01-01",
