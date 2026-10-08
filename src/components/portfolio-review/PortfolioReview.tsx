@@ -13,6 +13,7 @@ import { TEMPLATE_DISCOVERY_PATH } from "../discover/templateDiscoveryPath";
 import { PORTFOLIO_DESIGN_PATH } from "../portfolio-design/portfolioDesignPath";
 import { PORTFOLIO_EDITOR_PATH } from "../portfolio-editor/portfolioEditorPath";
 import { PORTFOLIO_PUBLISH_PATH } from "../portfolio-publish/portfolioPublishPath";
+import { PORTFOLIO_SEO_PATH } from "../portfolio-seo/portfolioSeoPath";
 import { PORTFOLIO_WORKSPACE_PATH } from "../portfolio-workspace/portfolioWorkspacePath";
 import { Button } from "../ui/Button";
 import { reviewFramePath } from "./portfolioReviewPath";
@@ -73,6 +74,9 @@ export function PortfolioReview({ onOpenPath }: PortfolioReviewProps) {
             <span className="font-bold text-[#243838] underline decoration-[#6DAEAD] decoration-2 underline-offset-8">
               Review
             </span>
+            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_SEO_PATH)}>
+              SEO
+            </button>
             <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_PUBLISH_PATH)}>
               Publish
             </button>

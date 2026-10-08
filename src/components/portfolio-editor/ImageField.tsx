@@ -10,7 +10,7 @@ type ImageFieldProps = {
   error?: string;
   status: ImageUploadStatus | null;
   disabled?: boolean;
-  shape: "portrait" | "logo";
+  shape: "portrait" | "logo" | "share";
   onUpload: (file: File) => void;
   onValueChange: (value: string) => void;
 };
@@ -126,13 +126,13 @@ function ModeButton({
   );
 }
 
-function ImagePreview({ src, shape }: { src: string; shape: "portrait" | "logo" }) {
+function ImagePreview({ src, shape }: { src: string; shape: "portrait" | "logo" | "share" }) {
   const [broken, setBroken] = useState(false);
   useEffect(() => {
     setBroken(false);
   }, [src]);
 
-  const frame = shape === "portrait" ? "h-20 w-20 rounded-full" : "h-16 w-28";
+  const frame = shape === "portrait" ? "h-20 w-20 rounded-full" : shape === "share" ? "h-20 w-36 rounded-lg" : "h-16 w-28";
   if (!src) return <div className={`${frame} shrink-0 bg-[#E7F3F2]`} />;
   if (broken) {
     return (
@@ -145,7 +145,7 @@ function ImagePreview({ src, shape }: { src: string; shape: "portrait" | "logo" 
     <img
       src={src}
       alt=""
-      className={`${frame} shrink-0 bg-[#E7F3F2] ${shape === "portrait" ? "object-cover" : "object-contain"}`}
+      className={`${frame} shrink-0 bg-[#E7F3F2] ${shape === "logo" ? "object-contain" : "object-cover"}`}
       onError={() => setBroken(true)}
     />
   );

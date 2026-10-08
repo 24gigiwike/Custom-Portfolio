@@ -205,7 +205,10 @@ const unnamed = portfolio({
 });
 const unnamedFields = publicPortfolioFromUserPortfolio(unnamed);
 if (!unnamedFields) throw new Error("expected projection");
-assert.equal(publicDocumentTitle({ ...unnamedFields, publishedAt: null, updatedAt: null }), "Ada Lovelace");
+assert.equal(
+  publicDocumentTitle({ ...unnamedFields, publishedAt: null, updatedAt: null }),
+  "Ada Lovelace — Analytical engines"
+);
 
 const unpublish = planUnpublish({
   actorId: publishedPortfolio.ownerId,

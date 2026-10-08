@@ -1,8 +1,20 @@
 {
   "rewrites": [
+    { "source": "/", "destination": "/api/site?kind=home" },
+    { "source": "/p/:publicId", "destination": "/api/site?kind=portfolio&publicId=:publicId" },
+    { "source": "/robots.txt", "destination": "/api/site?kind=robots" },
+    { "source": "/sitemap.xml", "destination": "/api/site?kind=sitemap" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "headers": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "source": "/(auth|portfolio|app|onboarding|discover|templates|template-preview)(.*)",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
     }
-  ]
+  ],
+  "functions": {
+    "api/site.ts": {
+      "includeFiles": "dist/index.html"
+    }
+  }
 }

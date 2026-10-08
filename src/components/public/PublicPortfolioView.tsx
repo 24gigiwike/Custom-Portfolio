@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { WdkPremiumPortfolio } from "../../templates/wdk-premium-portfolio-1";
 import { getPublicPortfolio, type PublicPortfolioLookup } from "../../lib/publicPortfolioStore";
-import { publicDocumentTitle, publicPortfolioPresentation } from "../../lib/publicPortfolio";
+import { resolvePublicPortfolioSeo, resolvedToPortfolioSeo, siteEnvironmentFromHost } from "../../lib/portfolioSeo";
+import { publicPortfolioPresentation } from "../../lib/publicPortfolio";
 import type { PublicPortfolio } from "../../types/publicPortfolio";
 
 const FONT_AWESOME_KIT = "https://kit.fontawesome.com/53480876a4.js";
@@ -72,21 +73,19 @@ export function PublicPortfolioView({ publicId }: { publicId: string }) {
 
 function PublishedPortfolio({ portfolio }: { portfolio: PublicPortfolio }) {
   const presentation = publicPortfolioPresentation(portfolio);
-  useDocumentTitle(presentation ? publicDocumentTitle(portfolio) : "Portfolio");
+  const resolved = resolvePublicPortfolioSeo(portfolio, siteEnvironmentFromHost(window.location.hostname));
 
-  if (!presentation) {
+  if (!presentation || !resolved) {
     return <PublicStatus title="This portfolio is not available." titleText="Portfolio" />;
   }
 
-  const data = {
-    ...presentation.data,
-    seo: {
-      ...presentation.data.seo,
-      title: publicDocumentTitle(portfolio),
-    },
-  };
-
-  return <WdkPremiumPortfolio data={data} palette={presentation.palette} />;
+  return (
+    <WdkPremiumPortfolio
+      data={{ ...presentation.data, seo: resolvedToPortfolioSeo(resolved) }}
+      palette={presentation.palette}
+      robots={resolved.robots}
+    />
+  );
 }
 
 function PublicStatus({

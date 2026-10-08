@@ -2,6 +2,7 @@ import type { PortfolioPaletteId } from "../types/portfolioDesign";
 import type { UserPortfolio } from "../types/userPortfolio";
 import { templateContentAreas, templateSupportsDesignControl } from "./templateCatalog";
 import { portfolioTemplateInfo } from "./portfolioTemplate";
+import { resolvePortfolioSeo, resolvedToPortfolioSeo, siteEnvironmentFromHost } from "./portfolioSeo";
 import { toWdkPremiumPortfolioData, wdkPaletteForPortfolio } from "./wdkPortfolioAdapter";
 import type { PortfolioData } from "../templates/wdk-premium-portfolio-1/types/portfolio";
 
@@ -182,8 +183,21 @@ export function savedPortfolioPresentation(
 ): { data: PortfolioData; palette: PortfolioPaletteId } | null {
   if (portfolio.selectedTemplate !== WDK_TEMPLATE_ID) return null;
   if (!templateContentAreas(portfolio.selectedTemplate)) return null;
+  const data = toWdkPremiumPortfolioData(portfolio);
+  const environment = typeof window === "undefined" ? "development" : siteEnvironmentFromHost(window.location.hostname);
+  const resolved = resolvePortfolioSeo(
+    {
+      publicId: portfolio.id,
+      selectedTemplate: portfolio.selectedTemplate,
+      profile: portfolio.profile,
+      contact: portfolio.contact,
+      projects: portfolio.projects,
+      seo: portfolio.seo,
+    },
+    environment
+  );
   return {
-    data: toWdkPremiumPortfolioData(portfolio),
+    data: resolved ? { ...data, seo: resolvedToPortfolioSeo(resolved) } : data,
     palette: wdkPaletteForPortfolio(portfolio),
   };
 }

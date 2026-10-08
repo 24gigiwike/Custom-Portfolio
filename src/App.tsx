@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState, useEffect } from "react";
+import React, { lazy, Suspense, useState, useEffect, useLayoutEffect } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AuthProvider, useAuth } from "./lib/authContext";
 import { SplashScreen } from "./components/splash/SplashScreen";
@@ -15,6 +15,9 @@ import { isPortfolioDesignPath } from "./components/portfolio-design/portfolioDe
 import { PortfolioDesign } from "./components/portfolio-design/PortfolioDesign";
 import { isPortfolioPublishPath } from "./components/portfolio-publish/portfolioPublishPath";
 import { PortfolioPublish } from "./components/portfolio-publish/PortfolioPublish";
+import { isPortfolioSeoPath } from "./components/portfolio-seo/portfolioSeoPath";
+import { PortfolioSeo } from "./components/portfolio-seo/PortfolioSeo";
+import { platformRobots, platformTitle, siteEnvironmentFromHost } from "./lib/portfolioSeo";
 import { isFramedPortfolioReview, isPortfolioReviewPath } from "./components/portfolio-review/portfolioReviewPath";
 import { PortfolioReview } from "./components/portfolio-review/PortfolioReview";
 import { isPortfolioWorkspacePath, PORTFOLIO_WORKSPACE_PATH } from "./components/portfolio-workspace/portfolioWorkspacePath";
@@ -53,6 +56,19 @@ function AppContent() {
     return path || "/";
   });
 
+  useLayoutEffect(() => {
+    if (isPublicPortfolioPath(currentRoute) || isWdkTemplatePreviewPath(currentRoute)) return;
+    document.title = platformTitle(currentRoute);
+    const robots = platformRobots(currentRoute, siteEnvironmentFromHost(window.location.hostname));
+    let meta = document.head.querySelector('meta[name="robots"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.setAttribute("name", "robots");
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute("content", robots);
+  }, [currentRoute]);
+
   // Sync browser back/forward history navigation
   useEffect(() => {
     const handlePopState = () => {
@@ -89,6 +105,7 @@ function AppContent() {
       isPortfolioDesignPath(initialPath) ||
       isPortfolioReviewPath(initialPath) ||
       isPortfolioPublishPath(initialPath) ||
+      isPortfolioSeoPath(initialPath) ||
       isPortfolioWorkspacePath(initialPath)
     ) {
       navigateTo(initialPath);
@@ -157,6 +174,7 @@ function AppContent() {
         isPortfolioDesignPath(currentRoute) ||
         isPortfolioReviewPath(currentRoute) ||
         isPortfolioPublishPath(currentRoute) ||
+        isPortfolioSeoPath(currentRoute) ||
         isPortfolioWorkspacePath(currentRoute) ||
         isTemplateDiscoveryPath(currentRoute)
       ) {
@@ -263,7 +281,7 @@ function AppContent() {
           >
             <TemplateDiscovery onOpenPath={navigateTo} />
           </motion.div>
-        ) : (isPortfolioWorkspacePath(currentRoute) || isPortfolioEditorPath(currentRoute) || isPortfolioDesignPath(currentRoute) || isPortfolioReviewPath(currentRoute) || isPortfolioPublishPath(currentRoute)) && !user ? (
+        ) : (isPortfolioWorkspacePath(currentRoute) || isPortfolioEditorPath(currentRoute) || isPortfolioDesignPath(currentRoute) || isPortfolioReviewPath(currentRoute) || isPortfolioPublishPath(currentRoute) || isPortfolioSeoPath(currentRoute)) && !user ? (
           <div className="flex min-h-screen items-center justify-center bg-[#F3FAF9] font-sans text-[#243838]">
             <p className="text-sm font-medium text-[#5C7372]">Loading your portfolio…</p>
           </div>
@@ -329,6 +347,17 @@ function AppContent() {
             className="w-full min-h-screen"
           >
             <PortfolioPublish onOpenPath={navigateTo} />
+          </motion.div>
+        ) : isPortfolioSeoPath(currentRoute) && user ? (
+          <motion.div
+            key="portfolio-seo-route"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full min-h-screen"
+          >
+            <PortfolioSeo onOpenPath={navigateTo} />
           </motion.div>
         ) : currentRoute === "/onboarding" && user && authPhase === "ONBOARDING_REQUIRED" ? (
           <motion.div

@@ -180,6 +180,7 @@ export async function updatePortfolio(
   const ownerId = requireUid();
   const portfolioRef = doc(db, "portfolios", portfolioId);
   const publicRef = doc(db, "publicPortfolios", portfolioId);
+  const sitemapRef = doc(db, "sitemapEntries", portfolioId);
 
   try {
     await runTransaction(db, async (transaction) => {
@@ -201,6 +202,7 @@ export async function updatePortfolio(
       transaction.update(portfolioRef, firestorePayload(portfolioId, ownerId, next, false));
       if (delivery.action === "upsert") {
         transaction.set(publicRef, publicDocument(delivery.fields, current.publishing.publishedAt ?? null));
+        transaction.set(sitemapRef, sitemapDocument(portfolioId));
       }
     });
   } catch (error) {
@@ -222,6 +224,7 @@ export async function publishPortfolio(portfolioId: string): Promise<UserPortfol
   const actorId = requireUid();
   const portfolioRef = doc(db, "portfolios", portfolioId);
   const publicRef = doc(db, "publicPortfolios", portfolioId);
+  const sitemapRef = doc(db, "sitemapEntries", portfolioId);
   try {
     await runTransaction(db, async (transaction) => {
       const snap = await transaction.get(portfolioRef);
@@ -237,6 +240,7 @@ export async function publishPortfolio(portfolioId: string): Promise<UserPortfol
         const fields = publicPortfolioFromUserPortfolio(current);
         if (!fields || fields.publicId !== portfolioId) throw new Error(publishPlanMessage("failed"));
         transaction.set(publicRef, publicDocument(fields, current.publishing.publishedAt ?? null));
+        transaction.set(sitemapRef, sitemapDocument(portfolioId));
         return;
       }
 
@@ -252,6 +256,7 @@ export async function publishPortfolio(portfolioId: string): Promise<UserPortfol
         updatedAt: serverTimestamp(),
       });
       transaction.set(publicRef, publicDocument(fields, publishedAt));
+      transaction.set(sitemapRef, sitemapDocument(portfolioId));
     });
   } catch (error) {
     rethrowPortfolioWrite(error, publishPlanMessage("failed"));
@@ -272,6 +277,7 @@ export async function unpublishPortfolio(portfolioId: string): Promise<UserPortf
   const actorId = requireUid();
   const portfolioRef = doc(db, "portfolios", portfolioId);
   const publicRef = doc(db, "publicPortfolios", portfolioId);
+  const sitemapRef = doc(db, "sitemapEntries", portfolioId);
   try {
     await runTransaction(db, async (transaction) => {
       const snap = await transaction.get(portfolioRef);
@@ -286,6 +292,7 @@ export async function unpublishPortfolio(portfolioId: string): Promise<UserPortf
       }
       if (plan.action === "already-draft") {
         transaction.delete(publicRef);
+        transaction.delete(sitemapRef);
         return;
       }
       if (plan.action !== "unpublish" || plan.portfolioId !== portfolioId) return;
@@ -294,6 +301,7 @@ export async function unpublishPortfolio(portfolioId: string): Promise<UserPortf
         updatedAt: serverTimestamp(),
       });
       transaction.delete(publicRef);
+      transaction.delete(sitemapRef);
     });
   } catch (error) {
     rethrowPortfolioWrite(error, publishPlanMessage("failed"));
@@ -314,6 +322,7 @@ export async function syncPublishedPortfolio(portfolioId: string): Promise<void>
   const actorId = requireUid();
   const portfolioRef = doc(db, "portfolios", portfolioId);
   const publicRef = doc(db, "publicPortfolios", portfolioId);
+  const sitemapRef = doc(db, "sitemapEntries", portfolioId);
   try {
     await runTransaction(db, async (transaction) => {
       const snap = await transaction.get(portfolioRef);
@@ -323,6 +332,7 @@ export async function syncPublishedPortfolio(portfolioId: string): Promise<void>
       const fields = publicPortfolioFromUserPortfolio(current);
       if (!fields || fields.publicId !== portfolioId) throw new Error("The public page could not be updated.");
       transaction.set(publicRef, publicDocument(fields, current.publishing.publishedAt ?? null));
+      transaction.set(sitemapRef, sitemapDocument(portfolioId));
     });
   } catch (error) {
     rethrowPortfolioWrite(error, "The public page could not be updated.");
@@ -335,6 +345,13 @@ function rethrowPortfolioWrite(error: unknown, fallback: string): never {
     if (!code && !/firebase|firestore/i.test(error.message)) throw error;
   }
   throw new Error(userFacingWriteError(error, fallback));
+}
+
+function sitemapDocument(publicId: string) {
+  return {
+    publicId,
+    updatedAt: serverTimestamp(),
+  };
 }
 
 /** Public document written beside the private portfolio. The two writes share one transaction. */

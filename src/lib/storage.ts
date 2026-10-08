@@ -273,7 +273,7 @@ export async function uploadAccountProfileImage(
   });
 }
 
-export type PortfolioImageFolder = "portrait" | "logo";
+export type PortfolioImageFolder = "portrait" | "logo" | "social";
 
 export type ImageUploadStatus = {
   phase: "preparing" | "optimizing" | "uploading" | "ready";
@@ -284,6 +284,7 @@ export type ImageUploadStatus = {
  * Upload a portfolio image. Firestore stores the download URL only.
  * Portrait: portfolio-assets/{uid}/{portfolioId}/portrait/{timestamp}_{file}
  * Logo: portfolio-assets/{uid}/{portfolioId}/logo/{timestamp}_{file}
+ * Social: portfolio-assets/{uid}/{portfolioId}/social/{timestamp}_{file}
  */
 export async function uploadPortfolioImage(
   portfolioId: string,
@@ -319,7 +320,7 @@ export async function uploadPortfolioImage(
     customMetadata: {
       ownerId: currentUser.uid,
       portfolioId,
-      purpose: folder === "logo" ? "portfolio-logo" : "portfolio-portrait",
+      purpose: folder === "logo" ? "portfolio-logo" : folder === "social" ? "portfolio-social" : "portfolio-portrait",
       originalName: file.name,
     },
   });

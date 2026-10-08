@@ -114,6 +114,33 @@ service cloud.firestore {
         && !isPublished(privatePortfolioAfter().data);
     }
 
+    // Public URL list for the sitemap. Entries exist only while a portfolio is published.
+    // The document stores the public id and nothing about the owner account.
+    match /sitemapEntries/{publicId} {
+      function privatePortfolioAfter() {
+        return getAfter(/databases/$(database)/documents/portfolios/$(publicId));
+      }
+
+      function isPublished(portfolioData) {
+        return portfolioData.keys().hasAny(["publishing"])
+          ? portfolioData.publishing.status == "published"
+          : portfolioData.published == true;
+      }
+
+      allow read: if true;
+
+      allow create, update: if isSignedIn()
+        && privatePortfolioAfter().data.ownerId == request.auth.uid
+        && isPublished(privatePortfolioAfter().data)
+        && request.resource.data.keys().hasOnly(["publicId", "updatedAt"])
+        && request.resource.data.publicId == publicId
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if isSignedIn()
+        && privatePortfolioAfter().data.ownerId == request.auth.uid
+        && !isPublished(privatePortfolioAfter().data);
+    }
+
     // Default deny all other collections
     match /{document=**} {
       allow read, write: if false;
