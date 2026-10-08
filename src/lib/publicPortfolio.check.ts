@@ -66,6 +66,8 @@ function portfolio(overrides: Partial<UserPortfolio> = {}): UserPortfolio {
     },
     discoverability: { identity: "", serviceRegion: "", faqs: [] },
     design: { palette: "ocean" },
+    publicSlug: "",
+    publicSlugAliases: [],
     publishing: { status: "draft", publishedAt: "2024-07-01" },
     createdAt: "2024-01-01",
     updatedAt: "2024-06-01",

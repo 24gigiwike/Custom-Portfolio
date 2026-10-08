@@ -2,8 +2,9 @@ import React, { useEffect, useState } from "react";
 import { brand } from "../../config/branding";
 import { userFacingWriteError } from "../../lib/accountLoad";
 import { useAuth } from "../../lib/authContext";
+import { canonicalPortfolioUrl } from "../../lib/portfolioSeo";
 import { isPortfolioPublished, publishChoiceError, publishEntry } from "../../lib/portfolioPublishing";
-import { publicPortfolioUrl } from "../public/publicPortfolioPath";
+import { PublicSlugForm } from "./PublicSlugForm";
 import { getPortfolioByOwner, publishPortfolio, syncPublishedPortfolio, unpublishPortfolio, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
 import type { UserPortfolio } from "../../types/userPortfolio";
 import { TEMPLATE_DISCOVERY_PATH } from "../discover/templateDiscoveryPath";
@@ -121,7 +122,7 @@ export function PortfolioPublish({ onOpenPath }: PortfolioPublishProps) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8 sm:py-14">
+      <main className="mx-auto flex w-full max-w-5xl flex-col gap-12 px-5 py-10 sm:px-8 sm:py-14">
         {isLoading ? (
           <p className="text-sm font-medium text-[#5C7372]">Loading your portfolio…</p>
         ) : loadError ? (
@@ -147,9 +148,16 @@ export function PortfolioPublish({ onOpenPath }: PortfolioPublishProps) {
           </Status>
         ) : entry?.kind === "unsupported" ? (
           <Status title="This template cannot be published." body="The portfolio was left unchanged." />
-        ) : entry?.kind === "published" ? (
+        ) : entry?.kind === "published" || entry?.kind === "draft" ? (
+          <>
+            <PublicSlugForm
+              portfolio={entry.portfolio}
+              published={entry.kind === "published"}
+              onSaved={remember}
+            />
+            {entry.kind === "published" ? (
           <PublishedState
-            publicUrl={publicPortfolioUrl(entry.portfolio.id)}
+            publicUrl={canonicalPortfolioUrl(entry.portfolio.id, entry.portfolio.publicSlug) ?? ""}
             confirming={confirmUnpublish}
             busy={busy}
             isUnpublishing={isUnpublishing}
@@ -158,7 +166,7 @@ export function PortfolioPublish({ onOpenPath }: PortfolioPublishProps) {
             onCancel={() => setConfirmUnpublish(false)}
             onConfirm={() => unpublish(entry.portfolio.id)}
           />
-        ) : entry?.kind === "draft" ? (
+            ) : (
           <DraftState
             ready={entry.blockers.length === 0}
             blockers={entry.blockers}
@@ -168,6 +176,8 @@ export function PortfolioPublish({ onOpenPath }: PortfolioPublishProps) {
             onPublish={() => publish(entry.portfolio.id)}
             onReview={() => onOpenPath(PORTFOLIO_REVIEW_PATH)}
           />
+            )}
+          </>
         ) : (
           <Status title="Your portfolio could not be loaded." />
         )}
@@ -301,7 +311,7 @@ function PublishedState({
         <div className="mt-10 border-t border-[#D5E6E5] pt-8">
           <h2 className="text-2xl font-bold tracking-[-0.04em]">Unpublish this portfolio?</h2>
           <p className="mt-3 text-base leading-relaxed text-[#5C7372]">
-            It returns to a draft, and the public address stops showing it. Your content, design, and template stay where they are.
+            It returns to a draft, and the public address stops showing it. Your content, design, and address name stay where they are.
           </p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <Button id="portfolio-unpublish-confirm" isLoading={isUnpublishing} disabled={busy} onClick={onConfirm}>

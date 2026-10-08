@@ -105,6 +105,8 @@ assert.deepEqual(templateContentAreas(normalized.selectedTemplate), [
   "seo",
 ]);
 assert.deepEqual(normalized.discoverability, { identity: "", serviceRegion: "", faqs: [] });
+assert.equal(normalized.publicSlug, "");
+assert.deepEqual(normalized.publicSlugAliases, []);
 assert.equal(templateDesignCapabilities(normalized.selectedTemplate)?.controls[0]?.id, "palette");
 assert.ok(templatePreviewImage(normalized.selectedTemplate));
 

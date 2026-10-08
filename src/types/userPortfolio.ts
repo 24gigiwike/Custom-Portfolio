@@ -24,6 +24,10 @@ export interface UserPortfolio {
   seo: PortfolioSEO;
   discoverability: PortfolioDiscoverability;
   design: PortfolioDesign;
+  /** Active public address. Empty means the permanent portfolio id remains the public URL. */
+  publicSlug: string;
+  /** Earlier public addresses that still belong to this portfolio. */
+  publicSlugAliases: string[];
   publishing: PortfolioPublishing;
   createdAt: Timestamp | string | null;
   updatedAt: Timestamp | string | null;

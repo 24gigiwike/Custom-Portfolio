@@ -7,7 +7,6 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  setDoc,
   where,
 } from "firebase/firestore";
 import type { UserProfile } from "../types";
@@ -32,6 +31,14 @@ import {
   publicPortfolioFromUserPortfolio,
   type PublicPortfolioFields,
 } from "./publicPortfolio";
+import { canonicalPortfolioUrl } from "./portfolioSeo";
+import {
+  parsePublicSlug,
+  isSlugChange,
+  planSlugClaim,
+  slugClaimMessage,
+  type SlugRegistryView,
+} from "./portfolioSlug";
 import {
   classifyStoredTemplate,
   planTemplateUse,
@@ -111,6 +118,7 @@ export async function useCatalogTemplate(
   await runTransaction(db, async (transaction) => {
     const portfolioRef = doc(db, "portfolios", portfolioId);
     const snap = await transaction.get(portfolioRef);
+    const identitySnap = await transaction.get(identityRef(portfolioId));
     const next = planTemplateUse({
       owned: snap.exists() ? { id: snap.id, data: snap.data() } : null,
       requestedTemplateId: templateId,
@@ -119,11 +127,15 @@ export async function useCatalogTemplate(
     });
     const decision = reconcileAdoption(next, portfolioId);
     if (decision.outcome === "reject") throw new Error(decision.message);
-    if (decision.outcome === "unchanged") return;
+    if (decision.outcome === "unchanged") {
+      rememberIdentity(transaction, portfolioId, identitySnap);
+      return;
+    }
     transaction.update(portfolioRef, {
       ...decision.fields,
       updatedAt: serverTimestamp(),
     });
+    rememberIdentity(transaction, portfolioId, identitySnap);
   });
 
   const adopted = await getPortfolio(portfolioId);
@@ -164,7 +176,10 @@ export async function createPortfolio(
   const content = seedPortfolioFromAccount(account, template.id);
   const portfolioRef = doc(collection(db, "portfolios"));
   const portfolioId = portfolioRef.id;
-  await setDoc(portfolioRef, firestorePayload(portfolioId, ownerId, content, true));
+  await runTransaction(db, async (transaction) => {
+    transaction.set(portfolioRef, firestorePayload(portfolioId, ownerId, content, true));
+    transaction.set(identityRef(portfolioId), { portfolioId });
+  });
 
   const created = await getPortfolio(portfolioId);
   if (!created) {
@@ -185,6 +200,7 @@ export async function updatePortfolio(
   try {
     await runTransaction(db, async (transaction) => {
       const snap = await transaction.get(portfolioRef);
+      const identitySnap = await transaction.get(identityRef(portfolioId));
       const current = snap.exists() ? readyPortfolio(snap.id, snap.data(), ownerId) : null;
       if (!current) throw new Error("You don't have permission to change this portfolio.");
 
@@ -200,9 +216,10 @@ export async function updatePortfolio(
       if (delivery.action === "reject") throw new Error("Your portfolio could not be updated.");
 
       transaction.update(portfolioRef, firestorePayload(portfolioId, ownerId, next, false));
+      rememberIdentity(transaction, portfolioId, identitySnap);
       if (delivery.action === "upsert") {
         transaction.set(publicRef, publicDocument(delivery.fields, current.publishing.publishedAt ?? null));
-        transaction.set(sitemapRef, sitemapDocument(portfolioId));
+        transaction.set(sitemapRef, sitemapDocument(portfolioId, delivery.fields.publicSlug));
       }
     });
   } catch (error) {
@@ -228,6 +245,7 @@ export async function publishPortfolio(portfolioId: string): Promise<UserPortfol
   try {
     await runTransaction(db, async (transaction) => {
       const snap = await transaction.get(portfolioRef);
+      const identitySnap = await transaction.get(identityRef(portfolioId));
       const plan = planPublish({
         actorId,
         owned: snap.exists() ? { id: snap.id, data: snap.data() } : null,
@@ -235,12 +253,13 @@ export async function publishPortfolio(portfolioId: string): Promise<UserPortfol
       if (plan.action === "reject") throw new Error(publishPlanMessage(plan.reason));
       const current = snap.exists() ? readyPortfolio(snap.id, snap.data(), actorId) : null;
       if (!current) throw new Error(publishPlanMessage("failed"));
+      rememberIdentity(transaction, portfolioId, identitySnap);
 
       if (plan.action === "already-published") {
         const fields = publicPortfolioFromUserPortfolio(current);
         if (!fields || fields.publicId !== portfolioId) throw new Error(publishPlanMessage("failed"));
         transaction.set(publicRef, publicDocument(fields, current.publishing.publishedAt ?? null));
-        transaction.set(sitemapRef, sitemapDocument(portfolioId));
+        transaction.set(sitemapRef, sitemapDocument(portfolioId, fields.publicSlug));
         return;
       }
 
@@ -256,7 +275,7 @@ export async function publishPortfolio(portfolioId: string): Promise<UserPortfol
         updatedAt: serverTimestamp(),
       });
       transaction.set(publicRef, publicDocument(fields, publishedAt));
-      transaction.set(sitemapRef, sitemapDocument(portfolioId));
+      transaction.set(sitemapRef, sitemapDocument(portfolioId, fields.publicSlug));
     });
   } catch (error) {
     rethrowPortfolioWrite(error, publishPlanMessage("failed"));
@@ -281,6 +300,7 @@ export async function unpublishPortfolio(portfolioId: string): Promise<UserPortf
   try {
     await runTransaction(db, async (transaction) => {
       const snap = await transaction.get(portfolioRef);
+      const identitySnap = await transaction.get(identityRef(portfolioId));
       const plan = planUnpublish({
         actorId,
         owned: snap.exists() ? { id: snap.id, data: snap.data() } : null,
@@ -290,6 +310,7 @@ export async function unpublishPortfolio(portfolioId: string): Promise<UserPortf
       if (removal.action !== "remove" || removal.publicId !== portfolioId) {
         throw new Error(publishPlanMessage("failed"));
       }
+      rememberIdentity(transaction, portfolioId, identitySnap);
       if (plan.action === "already-draft") {
         transaction.delete(publicRef);
         transaction.delete(sitemapRef);
@@ -326,17 +347,199 @@ export async function syncPublishedPortfolio(portfolioId: string): Promise<void>
   try {
     await runTransaction(db, async (transaction) => {
       const snap = await transaction.get(portfolioRef);
+      const identitySnap = await transaction.get(identityRef(portfolioId));
       const current = snap.exists() ? readyPortfolio(snap.id, snap.data(), actorId) : null;
       if (!current) throw new Error("You don't have permission to change this portfolio.");
+      rememberIdentity(transaction, portfolioId, identitySnap);
       if (current.publishing.status !== "published") return;
       const fields = publicPortfolioFromUserPortfolio(current);
       if (!fields || fields.publicId !== portfolioId) throw new Error("The public page could not be updated.");
       transaction.set(publicRef, publicDocument(fields, current.publishing.publishedAt ?? null));
-      transaction.set(sitemapRef, sitemapDocument(portfolioId));
+      transaction.set(sitemapRef, sitemapDocument(portfolioId, fields.publicSlug));
     });
   } catch (error) {
     rethrowPortfolioWrite(error, "The public page could not be updated.");
   }
+}
+
+export type SlugAvailability =
+  | { status: "current" }
+  | { status: "empty" }
+  | { status: "invalid" }
+  | { status: "reserved" }
+  | { status: "available" }
+  | { status: "taken" }
+  | { status: "identity" }
+  | { status: "alias-limit" };
+
+/** Advisory read. The save transaction decides whether the address is claimed. */
+export async function previewPublicSlug(portfolio: UserPortfolio, requested: string): Promise<SlugAvailability> {
+  const parsed = parsePublicSlug(requested);
+  if (parsed.ok === false) return { status: parsed.reason };
+  if (parsed.slug === portfolio.publicSlug) return parsed.slug ? { status: "current" } : { status: "empty" };
+  const ownerId = requireUid();
+  if (portfolio.ownerId !== ownerId) return { status: "taken" };
+  let registry: SlugRegistryView = null;
+  let identityReserved = false;
+  if (parsed.slug) {
+    try {
+      const slugSnap = await getDoc(doc(db, "portfolioSlugs", parsed.slug));
+      if (slugSnap.exists()) {
+        const data = slugSnap.data();
+        registry = {
+          portfolioId: typeof data.portfolioId === "string" ? data.portfolioId : "",
+          role: data.role === "alias" ? "alias" : "active",
+        };
+      }
+    } catch (error) {
+      if (permissionDenied(error)) return { status: "taken" };
+      throw error;
+    }
+    const identitySnap = await getDoc(doc(db, "portfolioIds", parsed.slug));
+    identityReserved = identitySnap.exists();
+  }
+  const decision = planSlugClaim({
+    portfolioId: portfolio.id,
+    currentSlug: portfolio.publicSlug,
+    aliases: portfolio.publicSlugAliases,
+    requested: parsed.slug,
+    registry,
+    identityReserved,
+  });
+  if (decision.ok === false) return { status: decision.reason };
+  if (decision.unchanged) return decision.publicSlug ? { status: "current" } : { status: "empty" };
+  return decision.publicSlug ? { status: "available" } : { status: "available" };
+}
+
+/**
+ * Claim, change, or clear the public slug for the signed-in owner's portfolio.
+ * Previous slugs stay registered to this portfolio.
+ */
+export async function savePortfolioSlug(portfolioId: string, requested: string): Promise<UserPortfolio> {
+  const ownerId = requireUid();
+  const parsed = parsePublicSlug(requested);
+  if (parsed.ok === false) throw new Error(slugClaimMessage(parsed.reason));
+
+  const portfolioRef = doc(db, "portfolios", portfolioId);
+  const publicRef = doc(db, "publicPortfolios", portfolioId);
+  const sitemapRef = doc(db, "sitemapEntries", portfolioId);
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(portfolioRef);
+      const identitySnap = await transaction.get(identityRef(portfolioId));
+      const current = snap.exists() ? readyPortfolio(snap.id, snap.data(), ownerId) : null;
+      if (!current) throw new Error("You don't have permission to change this portfolio.");
+
+      let registry: SlugRegistryView = null;
+      let identityReserved = false;
+      if (parsed.slug) {
+        const reservedIdentity = await transaction.get(doc(db, "portfolioIds", parsed.slug));
+        identityReserved = reservedIdentity.exists();
+        try {
+          const slugSnap = await transaction.get(doc(db, "portfolioSlugs", parsed.slug));
+          if (slugSnap.exists()) {
+            const data = slugSnap.data();
+            registry = {
+              portfolioId: typeof data.portfolioId === "string" ? data.portfolioId : "",
+              role: data.role === "alias" ? "alias" : "active",
+            };
+          }
+        } catch (error) {
+          if (permissionDenied(error)) throw new Error(slugClaimMessage("taken"));
+          throw error;
+        }
+      }
+
+      let retireOwned = false;
+      if (current.publicSlug && current.publicSlug !== parsed.slug) {
+        const retireSnap = await transaction.get(doc(db, "portfolioSlugs", current.publicSlug));
+        retireOwned = retireSnap.exists() && retireSnap.data().portfolioId === portfolioId;
+      }
+
+      const decision = planSlugClaim({
+        portfolioId,
+        currentSlug: current.publicSlug,
+        aliases: current.publicSlugAliases,
+        requested: parsed.slug,
+        registry,
+        identityReserved,
+      });
+      if (decision.ok === false) throw new Error(slugClaimMessage(decision.reason));
+      rememberIdentity(transaction, portfolioId, identitySnap);
+      if (!isSlugChange(decision)) return;
+      const aliases = decision.retire && !retireOwned
+        ? decision.aliases.filter((alias) => alias !== decision.retire)
+        : decision.aliases;
+
+      const next: UserPortfolioContent = {
+        selectedTemplate: current.selectedTemplate,
+        profile: current.profile,
+        socialLinks: current.socialLinks,
+        projects: current.projects,
+        contact: current.contact,
+        seo: {
+          ...current.seo,
+          canonicalUrl: canonicalPortfolioUrl(portfolioId, decision.publicSlug) ?? current.seo.canonicalUrl,
+        },
+        discoverability: current.discoverability,
+        design: current.design,
+        publicSlug: decision.publicSlug,
+        publicSlugAliases: [...aliases],
+        publishing: current.publishing,
+      };
+      transaction.update(portfolioRef, firestorePayload(portfolioId, ownerId, next, false));
+      if (decision.activate) {
+        const record = { slug: decision.activate, portfolioId, role: "active" };
+        const slugRef = doc(db, "portfolioSlugs", decision.activate);
+        if (registry && registry.portfolioId === portfolioId) transaction.update(slugRef, record);
+        else transaction.set(slugRef, record);
+      }
+      if (decision.retire && retireOwned) {
+        transaction.update(doc(db, "portfolioSlugs", decision.retire), {
+          slug: decision.retire,
+          portfolioId,
+          role: "alias",
+        });
+      }
+      if (next.publishing.status === "published") {
+        const fields = publicPortfolioFromUserPortfolio({
+          ...current,
+          ...next,
+          id: current.id,
+          ownerId: current.ownerId,
+          createdAt: current.createdAt,
+          updatedAt: current.updatedAt,
+        });
+        if (!fields) throw new Error("That address could not be saved.");
+        transaction.set(publicRef, publicDocument(fields, current.publishing.publishedAt ?? null));
+        transaction.set(sitemapRef, sitemapDocument(portfolioId, fields.publicSlug));
+      }
+    });
+  } catch (error) {
+    if (error instanceof Error && !("code" in error)) throw error;
+    rethrowPortfolioWrite(error, "That address could not be saved.");
+  }
+
+  const saved = await getPortfolio(portfolioId);
+  if (!saved) throw new Error("That address could not be saved.");
+  return saved;
+}
+
+function identityRef(portfolioId: string) {
+  return doc(db, "portfolioIds", portfolioId);
+}
+
+function rememberIdentity(
+  transaction: { set: (ref: ReturnType<typeof identityRef>, data: { portfolioId: string }) => void },
+  portfolioId: string,
+  snap: { exists: () => boolean }
+) {
+  if (!snap.exists()) transaction.set(identityRef(portfolioId), { portfolioId });
+}
+
+function permissionDenied(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error
+    && String((error as { code?: unknown }).code) === "permission-denied";
 }
 
 function rethrowPortfolioWrite(error: unknown, fallback: string): never {
@@ -347,9 +550,10 @@ function rethrowPortfolioWrite(error: unknown, fallback: string): never {
   throw new Error(userFacingWriteError(error, fallback));
 }
 
-function sitemapDocument(publicId: string) {
+function sitemapDocument(publicId: string, slug: string) {
   return {
     publicId,
+    slug,
     updatedAt: serverTimestamp(),
   };
 }
@@ -366,6 +570,7 @@ function publicDocument(fields: PublicPortfolioFields, publishedAt: unknown) {
     seo: fields.seo,
     discoverability: fields.discoverability,
     design: fields.design,
+    publicSlug: fields.publicSlug,
     publishedAt: publishedAt ?? null,
     updatedAt: serverTimestamp(),
   };
@@ -388,8 +593,11 @@ function firestorePayload(
     seo: content.seo,
     discoverability: content.discoverability,
     design: content.design,
+    publicSlug: content.publicSlug,
+    publicSlugAliases: content.publicSlugAliases,
     publishing: content.publishing,
     title: content.profile.brandName || "Portfolio",
+    // Legacy private mirror of the display name. This is not the public address.
     slug: generateSlug(content.profile.brandName || "portfolio"),
     profession: content.profile.headline || content.profile.capabilityTags[0] || "",
     headline: content.profile.headline,

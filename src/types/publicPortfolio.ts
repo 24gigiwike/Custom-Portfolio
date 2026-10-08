@@ -23,6 +23,8 @@ export interface PublicPortfolio {
   seo: PortfolioSEO;
   discoverability: PortfolioDiscoverability;
   design: PortfolioDesign;
+  /** Active public address. Empty means visitors use the permanent portfolio id. */
+  publicSlug: string;
   publishedAt: Timestamp | string | null;
   updatedAt: Timestamp | string | null;
 }

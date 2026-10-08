@@ -62,6 +62,8 @@ export function seedPortfolioFromAccount(
     },
     discoverability: emptyDiscoverability(),
     design: { ...DEFAULT_PORTFOLIO_DESIGN },
+    publicSlug: "",
+    publicSlugAliases: [],
     publishing: EMPTY_PUBLISHING,
   };
 }

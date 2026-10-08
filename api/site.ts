@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { robotsTxt, siteEnvironmentFromHost, sitemapXml } from "../src/lib/portfolioSeo.js";
+import { productionOrigin, robotsTxt, siteEnvironmentFromHost, sitemapXml } from "../src/lib/portfolioSeo.js";
 import { homeHtml, loadSitemapEntries, publicPortfolioHtml } from "../src/server/seoResponse.js";
 
 type HeaderValue = string | string[] | undefined;
@@ -41,7 +41,7 @@ function environmentFor(req: SiteRequest) {
  * Reads only the public Firestore projection with the web API key. No admin credential.
  */
 export default async function handler(req: SiteRequest, res: SiteResponse) {
-  const url = new URL(req.url ?? "/", "https://customportfolio.broadbrand.com.ng");
+  const url = new URL(req.url ?? "/", productionOrigin());
   const kind = url.searchParams.get("kind");
   const environment = environmentFor(req);
 
@@ -71,6 +71,7 @@ export default async function handler(req: SiteRequest, res: SiteResponse) {
     const publicId = url.searchParams.get("publicId") ?? "";
     const result = await publicPortfolioHtml(publicId, shellHtml(), environment);
     res.status(result.status);
+    if (result.location) res.setHeader("location", result.location);
     res.setHeader("content-type", "text/html; charset=utf-8");
     res.setHeader("cache-control", "public, max-age=0, must-revalidate");
     res.end(result.html);

@@ -298,6 +298,8 @@ function portfolioContent(portfolio: UserPortfolio): UserPortfolioContent {
     seo: portfolio.seo,
     discoverability: portfolio.discoverability,
     design: portfolio.design,
+    publicSlug: portfolio.publicSlug,
+    publicSlugAliases: portfolio.publicSlugAliases,
     publishing: portfolio.publishing,
   };
 }
@@ -359,6 +361,8 @@ export function applyEditorDraft(
     seo: portfolio.seo,
     discoverability: portfolio.discoverability,
     design: portfolio.design,
+    publicSlug: portfolio.publicSlug,
+    publicSlugAliases: portfolio.publicSlugAliases,
     publishing: portfolio.publishing,
   };
 }

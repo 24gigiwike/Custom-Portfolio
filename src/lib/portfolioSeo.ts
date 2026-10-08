@@ -5,8 +5,16 @@ import type { PublicPortfolio } from "../types/publicPortfolio";
 import type { UserPortfolio, UserPortfolioContent } from "../types/userPortfolio";
 import { templateForCreation, templateSupportsContentArea } from "./templateCatalog.js";
 
+import { canonicalPublicSegment } from "./portfolioSlug.js";
+
 export const PRODUCT_NAME = "Custom Portfolio";
 export const PRODUCT_DESCRIPTION = "Your work deserves a place of its own.";
+/**
+ * Default public origin. A later domain move sets PORTFOLIO_PUBLIC_ORIGIN
+ * and VITE_PORTFOLIO_PUBLIC_ORIGIN together. Portfolio ids and slugs stay as they are.
+ * Canonical URLs never come from the request Host header.
+ * This build does not redirect the current domain to any other domain.
+ */
 export const PRODUCTION_ORIGIN = "https://customportfolio.broadbrand.com.ng";
 export const PRODUCT_SHARE_IMAGE =
   "https://res.cloudinary.com/dtkluxukm/image/upload/v1787401285/BD_BD_4_gttxlf.png";
@@ -26,6 +34,7 @@ export type SeoSource = {
   projects: { title: string; url: string; category?: string; tech?: string[] }[];
   seo: Pick<PortfolioSEO, "title" | "description" | "ogImage" | "twitterImage">;
   discoverability?: PortfolioDiscoverability;
+  publicSlug?: string;
 };
 
 export type ResolvedPortfolioSeo = {
@@ -49,15 +58,55 @@ export function normalizeSeoText(value: string): string {
 
 export function siteEnvironmentFromHost(hostname: string): SiteEnvironment {
   const host = hostname.trim().toLowerCase().replace(/:\d+$/, "");
-  if (host === "customportfolio.broadbrand.com.ng") return "production";
+  if (host === productionHostname()) return "production";
   if (host.endsWith(".vercel.app")) return "preview";
   return "development";
+}
+
+/** Trusted production origin. Invalid configuration falls back to the current domain. */
+export function productionOrigin(): string {
+  return normalizeProductionOrigin(readServerOrigin()) ?? normalizeProductionOrigin(readClientOrigin()) ?? PRODUCTION_ORIGIN;
+}
+
+function productionHostname(): string {
+  return new URL(productionOrigin()).hostname.toLowerCase();
+}
+
+function readServerOrigin(): string | undefined {
+  if (typeof process === "undefined" || !process.env) return undefined;
+  return process.env.PORTFOLIO_PUBLIC_ORIGIN;
+}
+
+function readClientOrigin(): string | undefined {
+  const env = import.meta.env as { VITE_PORTFOLIO_PUBLIC_ORIGIN?: string } | undefined;
+  return env?.VITE_PORTFOLIO_PUBLIC_ORIGIN;
+}
+
+function normalizeProductionOrigin(value: string | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim().replace(/\/$/, "");
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.username || url.password || url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) return null;
+    if (url.protocol === "https:") return url.origin;
+    const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    if (url.protocol === "http:" && local) return url.origin;
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function portfolioCanonicalUrl(publicId: string): string | null {
   const id = publicId.trim();
   if (!PUBLIC_ID.test(id)) return null;
-  return `${PRODUCTION_ORIGIN}/p/${encodeURIComponent(id)}`;
+  return `${productionOrigin()}/p/${encodeURIComponent(id)}`;
+}
+
+export function canonicalPortfolioUrl(portfolioId: string, publicSlug: string | null | undefined): string | null {
+  const segment = canonicalPublicSegment(portfolioId, publicSlug);
+  return segment ? portfolioCanonicalUrl(segment) : null;
 }
 
 export function portfolioPageTitle(input: {
@@ -138,7 +187,7 @@ export function homeRobots(environment: SiteEnvironment): RobotsDirective {
  */
 export function resolvePortfolioSeo(source: SeoSource, environment: SiteEnvironment): ResolvedPortfolioSeo | null {
   if (!templateForCreation(source.selectedTemplate)) return null;
-  const canonicalUrl = portfolioCanonicalUrl(source.publicId);
+  const canonicalUrl = canonicalPortfolioUrl(source.publicId, source.publicSlug);
   if (!canonicalUrl) return null;
   const title = portfolioPageTitle({
     seoTitle: source.seo.title,
@@ -278,11 +327,13 @@ export function contentWithSeo(
     contact: portfolio.contact,
     discoverability: normalizeDiscoverability(input.discoverability ?? portfolio.discoverability),
     design: portfolio.design,
+    publicSlug: portfolio.publicSlug,
+    publicSlugAliases: portfolio.publicSlugAliases,
     publishing: portfolio.publishing,
     seo: {
       title,
       description,
-      canonicalUrl: portfolioCanonicalUrl(portfolio.id) ?? "",
+      canonicalUrl: canonicalPortfolioUrl(portfolio.id, portfolio.publicSlug) ?? "",
       ogTitle: title,
       ogDescription: description,
       ogImage: image,
@@ -391,11 +442,11 @@ export function renderHomeHead(environment: SiteEnvironment): string {
     title: PRODUCT_NAME,
     description: PRODUCT_DESCRIPTION,
     robots: homeRobots(environment),
-    canonicalUrl: `${PRODUCTION_ORIGIN}/`,
+    canonicalUrl: `${productionOrigin()}/`,
     ogType: "website",
     ogTitle: PRODUCT_NAME,
     ogDescription: PRODUCT_DESCRIPTION,
-    ogUrl: `${PRODUCTION_ORIGIN}/`,
+    ogUrl: `${productionOrigin()}/`,
     ogImage: PRODUCT_SHARE_IMAGE,
     twitterCard: "summary_large_image",
     twitterTitle: PRODUCT_NAME,
@@ -485,14 +536,14 @@ export function robotsTxt(environment: SiteEnvironment): string {
     "Disallow: /templates",
     "Disallow: /template-preview",
     "",
-    `Sitemap: ${PRODUCTION_ORIGIN}/sitemap.xml`,
+    `Sitemap: ${productionOrigin()}/sitemap.xml`,
     "",
   ].join("\n");
 }
 
-export function sitemapXml(entries: { publicId: string; updatedAt?: string }[]): string {
+export function sitemapXml(entries: { publicId: string; slug?: string; updatedAt?: string }[]): string {
   const urls = entries.flatMap((entry) => {
-    const loc = portfolioCanonicalUrl(entry.publicId);
+    const loc = canonicalPortfolioUrl(entry.publicId, entry.slug);
     if (!loc) return [];
     const lastmod = entry.updatedAt?.trim();
     return [`  <url><loc>${escapeHtml(loc)}</loc>${lastmod ? `<lastmod>${escapeHtml(lastmod)}</lastmod>` : ""}</url>`];
