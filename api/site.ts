@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { robotsTxt, siteEnvironmentFromHost, sitemapXml } from "../src/lib/portfolioSeo";
-import { homeHtml, loadSitemapEntries, publicPortfolioHtml } from "../src/server/seoResponse";
+import { robotsTxt, siteEnvironmentFromHost, sitemapXml } from "../src/lib/portfolioSeo.js";
+import { homeHtml, loadSitemapEntries, publicPortfolioHtml } from "../src/server/seoResponse.js";
 
 type HeaderValue = string | string[] | undefined;
 
