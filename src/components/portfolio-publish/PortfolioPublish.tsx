@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { brand } from "../../config/branding";
 import { userFacingWriteError } from "../../lib/accountLoad";
 import { useAuth } from "../../lib/authContext";
@@ -8,11 +8,8 @@ import { PublicSlugForm } from "./PublicSlugForm";
 import { getPortfolioByOwner, publishPortfolio, syncPublishedPortfolio, unpublishPortfolio, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
 import type { UserPortfolio } from "../../types/userPortfolio";
 import { TEMPLATE_DISCOVERY_PATH } from "../discover/templateDiscoveryPath";
-import { PORTFOLIO_DESIGN_PATH } from "../portfolio-design/portfolioDesignPath";
-import { PORTFOLIO_EDITOR_PATH } from "../portfolio-editor/portfolioEditorPath";
 import { PORTFOLIO_REVIEW_PATH } from "../portfolio-review/portfolioReviewPath";
-import { PORTFOLIO_SEO_PATH } from "../portfolio-seo/portfolioSeoPath";
-import { PORTFOLIO_WORKSPACE_PATH } from "../portfolio-workspace/portfolioWorkspacePath";
+import { PortfolioSectionNav, SignOutControl } from "../portfolio-workspace/PortfolioSectionNav";
 import { Button } from "../ui/Button";
 
 type PortfolioPublishProps = {
@@ -28,6 +25,8 @@ export function PortfolioPublish({ onOpenPath }: PortfolioPublishProps) {
   const [isPublishing, setIsPublishing] = useState(false);
   const [isUnpublishing, setIsUnpublishing] = useState(false);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
+  const publishingRef = useRef(false);
+  const unpublishingRef = useRef(false);
 
   const load = () => {
     setIsLoading(true);
@@ -62,6 +61,8 @@ export function PortfolioPublish({ onOpenPath }: PortfolioPublishProps) {
   };
 
   const publish = (portfolioId: string) => {
+    if (publishingRef.current || unpublishingRef.current) return;
+    publishingRef.current = true;
     setIsPublishing(true);
     setActionError(null);
     void publishPortfolio(portfolioId)
@@ -69,10 +70,15 @@ export function PortfolioPublish({ onOpenPath }: PortfolioPublishProps) {
       .catch((error: unknown) => {
         setActionError(publishChoiceError(error, "Your portfolio could not be published."));
       })
-      .finally(() => setIsPublishing(false));
+      .finally(() => {
+        publishingRef.current = false;
+        setIsPublishing(false);
+      });
   };
 
   const unpublish = (portfolioId: string) => {
+    if (publishingRef.current || unpublishingRef.current) return;
+    unpublishingRef.current = true;
     setIsUnpublishing(true);
     setActionError(null);
     void unpublishPortfolio(portfolioId)
@@ -80,7 +86,10 @@ export function PortfolioPublish({ onOpenPath }: PortfolioPublishProps) {
       .catch((error: unknown) => {
         setActionError(publishChoiceError(error, "Your portfolio could not be unpublished."));
       })
-      .finally(() => setIsUnpublishing(false));
+      .finally(() => {
+        unpublishingRef.current = false;
+        setIsUnpublishing(false);
+      });
   };
 
   const entry = lookup ? publishEntry(lookup) : null;
@@ -95,30 +104,9 @@ export function PortfolioPublish({ onOpenPath }: PortfolioPublishProps) {
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">{brand.name}</p>
               <p className="mt-1 text-sm font-semibold">Publish</p>
             </div>
-            <button type="button" onClick={() => void signOutUser()} className="shrink-0 text-sm font-bold text-[#3E7574]">
-              Sign out
-            </button>
+            <SignOutControl onSignOut={() => void signOutUser()} />
           </div>
-          <nav aria-label="Portfolio" className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
-            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_WORKSPACE_PATH)}>
-              Overview
-            </button>
-            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_EDITOR_PATH)}>
-              Edit
-            </button>
-            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_DESIGN_PATH)}>
-              Design
-            </button>
-            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_REVIEW_PATH)}>
-              Review
-            </button>
-            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_SEO_PATH)}>
-              SEO
-            </button>
-            <span className="font-bold text-[#243838] underline decoration-[#6DAEAD] decoration-2 underline-offset-8">
-              Publish
-            </span>
-          </nav>
+          <PortfolioSectionNav current="publish" onOpenPath={onOpenPath} />
         </div>
       </header>
 
@@ -222,11 +210,12 @@ function DraftState({
           ))}
         </ul>
       )}
-      {error && <p className="mt-6 text-sm font-medium text-[#B93838]">{error}</p>}
+      {isPublishing && <p className="mt-6 text-sm font-medium text-[#5C7372]" aria-live="polite">Publishing…</p>}
+      {error && <p className="mt-6 text-sm font-medium text-[#B93838]" role="alert">{error}</p>}
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
         {ready ? (
           <Button id="portfolio-publish-action" isLoading={isPublishing} disabled={busy} onClick={onPublish}>
-            Publish Portfolio
+            {isPublishing ? "Publishing…" : "Publish Portfolio"}
           </Button>
         ) : (
           <Button id="portfolio-publish-review" onClick={onReview}>
@@ -294,7 +283,7 @@ function PublishedState({
           href={publicUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex h-11 items-center justify-center rounded-xl bg-[#6DAEAD] px-5 text-sm font-bold text-white"
+          className="inline-flex h-11 items-center justify-center rounded-xl bg-[#6DAEAD] px-5 text-sm font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#6DAEAD]"
         >
           View Portfolio
         </a>
@@ -302,11 +291,12 @@ function PublishedState({
           Copy Link
         </Button>
       </div>
-      {copyState === "copied" && <p className="mt-3 text-sm font-medium text-[#3E7574]">Link copied.</p>}
+      {copyState === "copied" && <p className="mt-3 text-sm font-medium text-[#3E7574]" aria-live="polite">Link copied.</p>}
       {copyState === "manual" && (
-        <p className="mt-3 text-sm font-medium text-[#5C7372]">Select the address above and copy it.</p>
+        <p className="mt-3 text-sm font-medium text-[#5C7372]" role="status">Select the address above and copy it.</p>
       )}
-      {error && <p className="mt-6 text-sm font-medium text-[#B93838]">{error}</p>}
+      {isUnpublishing && <p className="mt-6 text-sm font-medium text-[#5C7372]" aria-live="polite">Unpublishing…</p>}
+      {error && <p className="mt-6 text-sm font-medium text-[#B93838]" role="alert">{error}</p>}
       {confirming ? (
         <div className="mt-10 border-t border-[#D5E6E5] pt-8">
           <h2 className="text-2xl font-bold tracking-[-0.04em]">Unpublish this portfolio?</h2>
@@ -315,7 +305,7 @@ function PublishedState({
           </p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <Button id="portfolio-unpublish-confirm" isLoading={isUnpublishing} disabled={busy} onClick={onConfirm}>
-              Unpublish
+              {isUnpublishing ? "Unpublishing…" : "Unpublish"}
             </Button>
             <Button id="portfolio-unpublish-cancel" variant="outline" disabled={busy} onClick={onCancel}>
               Keep published

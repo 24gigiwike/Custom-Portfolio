@@ -13,8 +13,7 @@ import { TEMPLATE_DISCOVERY_PATH } from "../discover/templateDiscoveryPath";
 import { PORTFOLIO_DESIGN_PATH } from "../portfolio-design/portfolioDesignPath";
 import { PORTFOLIO_EDITOR_PATH } from "../portfolio-editor/portfolioEditorPath";
 import { PORTFOLIO_PUBLISH_PATH } from "../portfolio-publish/portfolioPublishPath";
-import { PORTFOLIO_SEO_PATH } from "../portfolio-seo/portfolioSeoPath";
-import { PORTFOLIO_WORKSPACE_PATH } from "../portfolio-workspace/portfolioWorkspacePath";
+import { PortfolioSectionNav, SignOutControl } from "../portfolio-workspace/PortfolioSectionNav";
 import { Button } from "../ui/Button";
 import { reviewFramePath } from "./portfolioReviewPath";
 
@@ -57,30 +56,9 @@ export function PortfolioReview({ onOpenPath }: PortfolioReviewProps) {
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">{brand.name}</p>
               <p className="mt-1 text-sm font-semibold">Review</p>
             </div>
-            <button type="button" onClick={() => void signOutUser()} className="shrink-0 text-sm font-bold text-[#3E7574]">
-              Sign out
-            </button>
+            <SignOutControl onSignOut={() => void signOutUser()} />
           </div>
-          <nav aria-label="Portfolio" className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
-            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_WORKSPACE_PATH)}>
-              Overview
-            </button>
-            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_EDITOR_PATH)}>
-              Edit
-            </button>
-            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_DESIGN_PATH)}>
-              Design
-            </button>
-            <span className="font-bold text-[#243838] underline decoration-[#6DAEAD] decoration-2 underline-offset-8">
-              Review
-            </span>
-            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_SEO_PATH)}>
-              SEO
-            </button>
-            <button type="button" className="font-bold text-[#3E7574]" onClick={() => onOpenPath(PORTFOLIO_PUBLISH_PATH)}>
-              Publish
-            </button>
-          </nav>
+          <PortfolioSectionNav current="review" onOpenPath={onOpenPath} />
         </div>
       </header>
 
@@ -299,8 +277,8 @@ function ViewportChoice({
       onClick={onChoose}
       className={
         checked
-          ? "font-bold text-[#243838] underline decoration-[#6DAEAD] decoration-2 underline-offset-8"
-          : "font-bold text-[#3E7574]"
+          ? "inline-flex min-h-11 items-center rounded-lg px-2 font-bold text-[#243838] underline decoration-[#6DAEAD] decoration-2 underline-offset-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6DAEAD]"
+          : "inline-flex min-h-11 items-center rounded-lg px-2 font-bold text-[#3E7574] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6DAEAD]"
       }
     >
       {label}

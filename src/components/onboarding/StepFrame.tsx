@@ -71,8 +71,8 @@ export const StepFrame: React.FC<StepFrameProps> = ({
 
 export function FieldError({ message }: { message?: string }) {
   if (!message) return null;
-  return <p className="mt-2 text-sm font-medium text-[#B93838]">{message}</p>;
+  return <p className="mt-2 text-sm font-medium text-[#B93838]" role="alert">{message}</p>;
 }
 
 export const fieldClass =
-  "w-full rounded-xl border border-[#D5E6E5] bg-white px-4 py-3 text-base text-[#243838] outline-none transition focus:border-[#6DAEAD]";
+  "w-full rounded-xl border border-[#D5E6E5] bg-white px-4 py-3 text-base text-[#243838] outline-none transition focus:border-[#6DAEAD] focus-visible:ring-2 focus-visible:ring-[#6DAEAD] focus-visible:ring-offset-2";

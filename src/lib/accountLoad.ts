@@ -23,13 +23,41 @@ export function accountLoadFailureMessage(error: unknown): string {
   return "You're signed in, but your account could not be loaded. Check your connection and try again. This is not a new account.";
 }
 
+function errorText(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null && "message" in error) {
+    return String((error as { message?: unknown }).message ?? "");
+  }
+  return typeof error === "string" ? error : "";
+}
+
+function errorCode(error: unknown): string {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    return String((error as { code?: unknown }).code ?? "");
+  }
+  return "";
+}
+
 export function userFacingWriteError(error: unknown, fallback: string): string {
-  const raw = error instanceof Error ? error.message : String(error);
+  const raw = `${errorCode(error)} ${errorText(error)}`;
   if (/permission-denied|insufficient permissions/i.test(raw)) {
     return "You don't have permission to change this.";
   }
-  if (/unavailable|network|offline|failed to fetch/i.test(raw)) {
+  if (errorCode(error) === "unavailable" || /unavailable|network|offline|failed to fetch/i.test(raw)) {
     return "We couldn't reach the server. Check your connection and try again.";
   }
+  return fallback;
+}
+
+/**
+ * Keep a specific application message.
+ * Permission and network failures get a short explanation.
+ * A raw Firebase message does not.
+ */
+export function readableSaveError(error: unknown, fallback: string): string {
+  const mapped = userFacingWriteError(error, "");
+  if (mapped) return mapped;
+  const raw = error instanceof Error ? error.message.trim() : "";
+  if (raw && !/firebase|firestore/i.test(raw)) return raw;
   return fallback;
 }
