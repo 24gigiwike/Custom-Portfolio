@@ -1,5 +1,5 @@
-import firebaseConfig from "../../firebase-applet-config.json";
-import { readPublicPortfolio } from "../lib/publicPortfolio";
+import firebaseConfig from "../../firebase-applet-config.json" with { type: "json" };
+import { readPublicPortfolio } from "../lib/publicPortfolio.js";
 import {
   applyHead,
   renderHomeHead,
@@ -7,7 +7,7 @@ import {
   renderUnavailableHead,
   resolvePublicPortfolioSeo,
   type SiteEnvironment,
-} from "../lib/portfolioSeo";
+} from "../lib/portfolioSeo.js";
 
 const PAGE_SIZE = 300;
 const MAX_PAGES = 20;

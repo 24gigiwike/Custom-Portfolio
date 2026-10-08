@@ -1,4 +1,4 @@
-import { templateSupportsDesignControl } from "./templateCatalog";
+import { templateSupportsDesignControl } from "./templateCatalog.js";
 import type {
   PortfolioContact,
   PortfolioData,
@@ -7,7 +7,7 @@ import type {
   Project,
   SocialLink,
 } from "../templates/wdk-premium-portfolio-1/types/portfolio";
-import { DEFAULT_PORTFOLIO_DESIGN, portfolioPaletteId, type PortfolioPaletteId } from "../types/portfolioDesign";
+import { DEFAULT_PORTFOLIO_DESIGN, portfolioPaletteId, type PortfolioPaletteId } from "../types/portfolioDesign.js";
 
 /** Presentation fields the template can render. Private CMS fields are not part of this. */
 export type WdkPresentationSource = {

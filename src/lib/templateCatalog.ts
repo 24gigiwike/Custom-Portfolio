@@ -1,8 +1,8 @@
-import { WDK_TEMPLATE_PREVIEW_PATH } from "../preview/templatePreviewPath";
-import { templateConfig } from "../templates/wdk-premium-portfolio-1/data/template-config";
+import { WDK_TEMPLATE_PREVIEW_PATH } from "../preview/templatePreviewPath.js";
+import { templateConfig } from "../templates/wdk-premium-portfolio-1/data/template-config.js";
 import type { PortfolioData } from "../templates/wdk-premium-portfolio-1/types/portfolio";
 import type { PortfolioPaletteId } from "../types/portfolioDesign";
-import { PORTFOLIO_PALETTE_IDS } from "../types/portfolioDesign";
+import { PORTFOLIO_PALETTE_IDS } from "../types/portfolioDesign.js";
 
 export type TemplateAvailability = "available";
 

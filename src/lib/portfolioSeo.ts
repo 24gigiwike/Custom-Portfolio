@@ -1,7 +1,7 @@
 import type { PortfolioSEO } from "../templates/wdk-premium-portfolio-1/types/portfolio";
 import type { PublicPortfolio } from "../types/publicPortfolio";
 import type { UserPortfolio, UserPortfolioContent } from "../types/userPortfolio";
-import { templateForCreation, templateSupportsContentArea } from "./templateCatalog";
+import { templateForCreation, templateSupportsContentArea } from "./templateCatalog.js";
 
 export const PRODUCT_NAME = "Custom Portfolio";
 export const PRODUCT_DESCRIPTION = "Your work deserves a place of its own.";

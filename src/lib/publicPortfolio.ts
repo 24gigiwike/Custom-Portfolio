@@ -7,14 +7,14 @@ import type {
   SocialLink,
   SocialPlatform,
 } from "../templates/wdk-premium-portfolio-1/types/portfolio";
-import { templateConfig } from "../templates/wdk-premium-portfolio-1/data/template-config";
+import { templateConfig } from "../templates/wdk-premium-portfolio-1/data/template-config.js";
 import type { PortfolioDesign, PortfolioPaletteId } from "../types/portfolioDesign";
-import { normalizePortfolioDesign } from "../types/portfolioDesign";
+import { normalizePortfolioDesign } from "../types/portfolioDesign.js";
 import type { PublicPortfolio } from "../types/publicPortfolio";
 import type { UserPortfolio, UserPortfolioContent } from "../types/userPortfolio";
-import { portfolioPageTitle } from "./portfolioSeo";
-import { templateForCreation } from "./templateCatalog";
-import { toWdkPremiumPortfolioData, wdkPaletteForPortfolio } from "./wdkPortfolioAdapter";
+import { portfolioPageTitle } from "./portfolioSeo.js";
+import { templateForCreation } from "./templateCatalog.js";
+import { toWdkPremiumPortfolioData, wdkPaletteForPortfolio } from "./wdkPortfolioAdapter.js";
 
 const PLATFORMS = new Set<SocialPlatform>(["x", "instagram", "facebook", "youtube", "tiktok", "email"]);
 
