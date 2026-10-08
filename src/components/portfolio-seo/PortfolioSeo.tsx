@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { brand } from "../../config/branding";
 import { readableSaveError, userFacingWriteError } from "../../lib/accountLoad";
-import { confirmDiscard, useWarnOnUnload } from "../../lib/unsavedChanges";
+import { confirmDiscard, useUnsavedChanges } from "../../lib/unsavedChanges";
 import { useAuth } from "../../lib/authContext";
 import { FAQ_LIMIT, normalizeDiscoverability } from "../../lib/discoverability";
 import {
@@ -140,7 +140,7 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
   });
   const previewUrl = portfolio ? canonicalPortfolioUrl(portfolio.id, portfolio.publicSlug) : null;
   const imageBusy = imageStatus?.phase === "preparing" || imageStatus?.phase === "optimizing" || imageStatus?.phase === "uploading";
-  useWarnOnUnload(dirty);
+  useUnsavedChanges(dirty);
   const leave = () => confirmDiscard(dirty);
 
   return (

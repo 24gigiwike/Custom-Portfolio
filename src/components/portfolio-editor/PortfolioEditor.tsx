@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { readableSaveError } from "../../lib/accountLoad";
 import { brand } from "../../config/branding";
-import { confirmDiscard, useWarnOnUnload } from "../../lib/unsavedChanges";
+import { confirmDiscard, useUnsavedChanges } from "../../lib/unsavedChanges";
 import { contentAreaLabel } from "../../lib/templateCatalog";
 import { allocateProjectId } from "../../lib/projects";
 import { uploadPortfolioImage, type ImageUploadStatus, type PortfolioImageFolder } from "../../lib/storage";
@@ -117,7 +117,7 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
   };
 
   const hasUnsavedChanges = Boolean(draft && savedDraft && !draftsMatch(draft, savedDraft));
-  useWarnOnUnload(hasUnsavedChanges);
+  useUnsavedChanges(hasUnsavedChanges);
 
   const save = async () => {
     if (savingRef.current || !portfolio || !draft || imageBusy) return;

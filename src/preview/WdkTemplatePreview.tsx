@@ -3,6 +3,7 @@ import { WdkPremiumPortfolio } from "../templates/wdk-premium-portfolio-1";
 import type { PortfolioData } from "../templates/wdk-premium-portfolio-1";
 import { useAuth } from "../lib/authContext";
 import { userFacingWriteError } from "../lib/accountLoad";
+import { allocateHistoryIndex, rememberHistoryIndex } from "../lib/unsavedChanges";
 import { templateChoiceError } from "../lib/templateAdoption";
 import {
   getPortfolioByOwner,
@@ -307,12 +308,13 @@ function DesignPreview({
 }
 
 function openAppPath(path: string) {
-  try {
-    if (window.location.pathname !== path) {
-      window.history.pushState(null, "", path);
+  if (window.location.pathname !== path) {
+    const idx = allocateHistoryIndex();
+    try {
+      window.history.pushState({ idx }, "", path);
+    } catch {
+      rememberHistoryIndex(idx - 1);
     }
-  } catch {
-    // Ignore pushState failures in a strict iframe sandbox.
   }
   window.dispatchEvent(new PopStateEvent("popstate"));
 }

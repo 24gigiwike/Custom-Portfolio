@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { readableSaveError } from "../../lib/accountLoad";
 import { brand } from "../../config/branding";
-import { confirmDiscard, useWarnOnUnload } from "../../lib/unsavedChanges";
+import { confirmDiscard, useUnsavedChanges } from "../../lib/unsavedChanges";
 import { contentWithDesign, designOptionSwatches } from "../../lib/portfolioDesign";
 import { portfolioTemplateInfo } from "../../lib/portfolioTemplate";
 import { templateDesignCapabilities } from "../../lib/templateCatalog";
@@ -56,7 +56,7 @@ export function PortfolioDesign({ onPreview, onWorkspace, onDiscover }: Portfoli
   }, []);
 
   const hasUnsavedChanges = palette !== null && savedPalette !== null && palette !== savedPalette;
-  useWarnOnUnload(hasUnsavedChanges);
+  useUnsavedChanges(hasUnsavedChanges);
 
   const save = async () => {
     if (savingRef.current || !portfolio || !palette) return;
