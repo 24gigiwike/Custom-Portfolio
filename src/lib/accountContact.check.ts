@@ -223,6 +223,12 @@ assert.equal(supportWhatsappLink("   "), null);
 assert.equal(supportWhatsappLink("08031234567"), null);
 assert.equal(configuredSupportWhatsapp({}), null);
 assert.equal(configuredSupportWhatsapp({ VITE_BROADBRAND_SUPPORT_WHATSAPP: "+447911123456" })?.startsWith("https://wa.me/447911123456?text="), true);
+const broadbrand = configuredSupportWhatsapp({ VITE_BROADBRAND_SUPPORT_WHATSAPP: "2347060706416" });
+const broadbrandUrl = new URL(broadbrand ?? "");
+assert.equal(`${broadbrandUrl.origin}${broadbrandUrl.pathname}`, "https://wa.me/2347060706416");
+assert.equal(broadbrandUrl.searchParams.get("text"), "Hello BroadBrand, I need help with my Custom Portfolio account.");
+assert.equal(broadbrand?.includes("2348031234567"), false);
+assert.equal(normalizeWhatsappNumber("2347060706416").ok, false);
 
 const fieldsMarkup = renderToStaticMarkup(createElement(AccountContactFields, {
   idPrefix: "onboarding",
