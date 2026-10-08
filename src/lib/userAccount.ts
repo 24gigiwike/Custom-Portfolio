@@ -6,6 +6,7 @@ import {
 } from "firebase/firestore";
 import { db, auth } from "./firebase";
 import type { AuthUser, FoundationDraft, OnboardingStep, UserProfile } from "../types";
+import { accountContactPayload, readAccountContact } from "./accountContact";
 import {
   displayNameFromDraft,
   draftFromAccount,
@@ -146,6 +147,7 @@ export async function saveFoundationProgress(
   const email = auth.currentUser?.email || "";
   const professional = toProfessionalProfile(draft);
   const categories = resolvedCategories(draft);
+  const preferences = accountContactPayload(draft, new Date().toISOString());
 
   try {
     const userRef = doc(db, "users", uid);
@@ -157,6 +159,8 @@ export async function saveFoundationProgress(
         profession: professional.title || categories[0] || "",
         customProfession: draft.categories.includes("Other") ? draft.otherCategory.trim() : "",
         accountPrivate: toAccountPrivate(draft, email),
+        contact: preferences.contact,
+        marketing: preferences.marketing,
         professionalProfile: professional,
         portfolioPreferences: toPortfolioPreferences(draft),
         onboarding: {
@@ -181,11 +185,45 @@ export async function saveFoundationProgress(
   }
 }
 
+/**
+ * Update only the private contact preferences on users/{uid}.
+ * Does not create a portfolio or change onboarding completion.
+ */
+export async function saveAccountContactPreferences(
+  uid: string,
+  draft: Pick<
+    FoundationDraft,
+    "whatsappNumber" | "emailUpdatesOptIn" | "emailUpdatesConsentAt" | "emailUpdatesConsentVersion"
+  >,
+  nowIso = new Date().toISOString(),
+): Promise<UserProfile> {
+  const path = `users/${uid}`;
+  const preferences = accountContactPayload(draft, nowIso);
+  try {
+    const userRef = doc(db, "users", uid);
+    await setDoc(
+      userRef,
+      {
+        contact: preferences.contact,
+        marketing: preferences.marketing,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+    const refreshed = await getUserAccount(uid);
+    if (!refreshed) throw new Error("Failed to retrieve your account after saving.");
+    return refreshed;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
 function mapUserAccount(uid: string, data: Record<string, unknown>): UserProfile {
   const onboardingData = isRecord(data.onboarding) ? data.onboarding : undefined;
   const privateData = isRecord(data.accountPrivate) ? data.accountPrivate : undefined;
   const professionalData = isRecord(data.professionalProfile) ? data.professionalProfile : undefined;
   const preferenceData = isRecord(data.portfolioPreferences) ? data.portfolioPreferences : undefined;
+  const storedContact = readAccountContact(data);
   const currentStep = onboardingData?.currentStep;
 
   const account: UserProfile = {
@@ -210,6 +248,9 @@ function mapUserAccount(uid: string, data: Record<string, unknown>): UserProfile
       version: 1,
     };
   }
+
+  account.contact = storedContact.contact;
+  account.marketing = storedContact.marketing;
 
   if (privateData) {
     account.accountPrivate = {
