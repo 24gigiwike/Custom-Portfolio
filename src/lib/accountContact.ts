@@ -117,10 +117,20 @@ export function accountContactPayload(
   };
 }
 
+/**
+ * The support variable may be E.164 (`+234…`) or digits with a country code (`234…`).
+ * A leading + is added only so the number can be checked. It is not stored as a customer number.
+ */
+function supportNumberInput(configuredNumber: string): string {
+  const compact = configuredNumber.trim().replace(/[\s().-]/g, "");
+  if (compact.startsWith("+") || !/^\d+$/.test(compact)) return compact;
+  return `+${compact}`;
+}
+
 /** Opens WhatsApp with a prefilled message. Returns null when the support number is missing or invalid. */
 export function supportWhatsappLink(configuredNumber: string | null | undefined, message = SUPPORT_MESSAGE): string | null {
   if (!configuredNumber || !configuredNumber.trim()) return null;
-  const phone = normalizeWhatsappNumber(configuredNumber);
+  const phone = normalizeWhatsappNumber(supportNumberInput(configuredNumber));
   if (phone.ok === false || phone.e164 === "") return null;
   const url = new URL(`https://wa.me/${phone.e164.slice(1)}`);
   url.searchParams.set("text", message);
