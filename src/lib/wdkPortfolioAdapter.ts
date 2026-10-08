@@ -1,4 +1,3 @@
-import type { PortfolioDiscoverability } from "../types/discoverability";
 import { templateSupportsDesignControl } from "./templateCatalog.js";
 import type {
   PortfolioContact,
@@ -17,7 +16,6 @@ export type WdkPresentationSource = {
   projects: Project[];
   contact: PortfolioContact;
   seo: PortfolioSEO;
-  discoverability?: PortfolioDiscoverability;
 };
 
 /**
@@ -30,7 +28,6 @@ export function toWdkPremiumPortfolioData(portfolio: WdkPresentationSource): Por
     projects: portfolio.projects,
     contact: portfolio.contact,
     seo: portfolio.seo,
-    discoverability: portfolio.discoverability,
   };
 }
 

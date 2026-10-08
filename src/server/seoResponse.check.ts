@@ -88,8 +88,10 @@ try {
   assert.match(page.html, /name="robots" content="index, follow"/);
   assert.match(page.html, /application\/ld\+json/);
   assert.match(page.html, /<h1>Motion Designer &amp; Animator<\/h1>/);
-  assert.match(page.html, /Do you take commissions\?/);
-  assert.match(page.html, /FAQPage/);
+  assert.equal(page.html.includes("Do you take commissions?"), false);
+  assert.equal(page.html.includes("FAQPage"), false);
+  assert.equal(page.html.includes("Lagos"), false);
+  assert.equal(page.html.includes("areaServed"), false);
   assert.match(page.html, /"@type":"Person"/);
   assert.equal(page.html.includes("owner-secret-uid"), false);
   assert.equal(page.html.includes("private-looking@example.com"), false);

@@ -22,6 +22,7 @@ import {
   renderUnavailableHead,
   renderPortfolioFacts,
   resolvePortfolioSeo,
+  templateOffersDiscoverability,
   robotsTxt,
   siteEnvironmentFromHost,
   sitemapXml,
@@ -271,8 +272,10 @@ assert.match(person.jsonLd, /"@type":"Person"/);
 assert.equal(person.jsonLd.includes('"@type":"Organization"'), false);
 assert.match(person.jsonLd, /Motion design/);
 assert.match(person.jsonLd, /Title sequences/);
-assert.match(person.jsonLd, /Do you take commissions\?/);
-assert.match(person.jsonLd, /FAQPage/);
+assert.equal(person.jsonLd.includes("Do you take commissions?"), false);
+assert.equal(person.jsonLd.includes("FAQPage"), false);
+assert.equal(person.jsonLd.includes("Lagos"), false);
+assert.equal(person.jsonLd.includes("areaServed"), false);
 assert.equal(person.jsonLd.includes("Incomplete"), false);
 assert.equal(person.jsonLd.includes("owner-secret-uid"), false);
 assert.equal(person.jsonLd.includes("studio@"), false);
@@ -296,25 +299,37 @@ assert.equal(unspecified.title, "Kept title");
 assert.equal(unspecified.jsonLd.includes('"@type":"Person"'), false);
 assert.equal(unspecified.jsonLd.includes('"@type":"Organization"'), false);
 assert.equal(unspecified.jsonLd.includes("FAQPage"), false);
+assert.equal(unspecified.jsonLd.includes("Remote"), false);
 
 const factsHtml = renderPortfolioFacts(factual);
 assert.match(factsHtml, /<p>John Paul<\/p>/);
 assert.match(factsHtml, /<h1>Motion Designer &amp; Animator<\/h1>/);
-assert.match(factsHtml, /<h3>Do you take commissions\?<\/h3>/);
-assert.match(factsHtml, /Yes, for selected films\./);
-assert.match(factsHtml, /Lagos/);
+assert.match(factsHtml, /Motion design/);
+assert.match(factsHtml, /Title sequences/);
+assert.equal(factsHtml.includes("Do you take commissions?"), false);
+assert.equal(factsHtml.includes("Yes, for selected films."), false);
+assert.equal(factsHtml.includes("Lagos"), false);
+assert.equal(factsHtml.includes("Questions"), false);
 assert.equal(factsHtml.includes("<script"), false);
 assert.equal(factsHtml.includes("owner-secret-uid"), false);
 const escapedFacts = renderPortfolioFacts({
   ...factual,
-  discoverability: {
-    identity: "person",
-    serviceRegion: "",
-    faqs: [{ question: `Cost <script>`, answer: `Use "https" & care` }],
-  },
+  profile: { ...factual.profile, headline: `Cost <script> & "care"` },
 });
-assert.match(escapedFacts, /Cost &lt;script&gt;/);
+assert.match(escapedFacts, /Cost &lt;script&gt; &amp; &quot;care&quot;/);
 assert.equal(escapedFacts.includes("<script>"), false);
+assert.equal(templateOffersDiscoverability("wdk-premium-portfolio-1"), true);
+assert.equal(templateOffersDiscoverability("future-template"), false);
+const wdkTemplate = readFileSync(
+  new URL("../templates/wdk-premium-portfolio-1/template/WdkPremiumPortfolio.tsx", import.meta.url),
+  "utf8"
+);
+assert.match(wdkTemplate, /<Hero /);
+assert.match(wdkTemplate, /<ProjectSpotlight /);
+assert.match(wdkTemplate, /<Contact /);
+assert.equal(wdkTemplate.includes("ProfessionalFacts"), false);
+const wdkCss = readFileSync(new URL("../templates/wdk-premium-portfolio-1/styles/portfolio.css", import.meta.url), "utf8");
+assert.equal(wdkCss.includes("portfolio-facts"), false);
 const withBody = applyPublicBody(`<div id="root"></div>`, factsHtml);
 assert.match(withBody, /<div id="root"><article>/);
 assert.equal((withBody.match(/<h1>/g) ?? []).length, 1);
