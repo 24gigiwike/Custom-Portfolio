@@ -238,13 +238,17 @@ service cloud.firestore {
           && !isReservedSlug(slug);
       }
 
-      allow get: if resource.data.portfolioId is string
-        && (
-          (isSignedIn() && portfolioNow().data.ownerId == request.auth.uid)
-          || (
-            exists(/databases/$(database)/documents/publicPortfolios/$(resource.data.portfolioId))
-            && isPublished(portfolioNow().data)
-          )
+      // A missing slug has no document. Signed-in clients must be able to read that
+      // absence, or every unused address looks like a permissions failure.
+      // A signed-in read of an existing slug confirms a collision. The record stores
+      // the portfolio id and role only. Listing stays denied.
+      // Anonymous reads still require the portfolio to be published.
+      allow get: if isSignedIn()
+        || (
+          resource != null
+          && resource.data.portfolioId is string
+          && exists(/databases/$(database)/documents/publicPortfolios/$(resource.data.portfolioId))
+          && isPublished(portfolioNow().data)
         );
       allow list: if false;
 
