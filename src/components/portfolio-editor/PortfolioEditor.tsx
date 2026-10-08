@@ -5,7 +5,7 @@ import { brand } from "../../config/branding";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsavedChanges";
 import { contentAreaLabel } from "../../lib/templateCatalog";
 import { allocateProjectId } from "../../lib/projects";
-import { uploadPortfolioImage, type ImageUploadStatus, type PortfolioImageFolder } from "../../lib/storage";
+import { usePortfolioImageField } from "./usePortfolioImageField";
 import { getPortfolioByOwner, updatePortfolio, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
 import type { UserPortfolio } from "../../types/userPortfolio";
 import { Button } from "../ui/Button";
@@ -46,8 +46,6 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
-  const [imageError, setImageError] = useState<{ field: PortfolioImageFolder; message: string } | null>(null);
-  const [imageStatus, setImageStatus] = useState<{ field: PortfolioImageFolder; status: ImageUploadStatus } | null>(null);
   const savingRef = useRef(false);
 
   const load = () => {
@@ -84,37 +82,25 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
     setFieldErrors(null);
   };
 
-  const imageBusy =
-    imageStatus?.status.phase === "preparing" ||
-    imageStatus?.status.phase === "optimizing" ||
-    imageStatus?.status.phase === "uploading";
-
-  const uploadImage = async (folder: PortfolioImageFolder, file: File) => {
-    if (!portfolio) return;
-    setImageError(null);
-    setImageStatus({ field: folder, status: { phase: "preparing", percent: null } });
-    try {
-      const uploaded = await uploadPortfolioImage(portfolio.id, file, folder, (status) => {
-        setImageStatus({ field: folder, status });
-      });
-      setDraft((current) => {
-        if (!current) return current;
-        if (folder === "portrait") {
-          return { ...current, heroImage: uploaded.downloadUrl, heroImageMobile: uploaded.downloadUrl };
-        }
-        return { ...current, logo: uploaded.downloadUrl };
-      });
-      setJustSaved(false);
-      setSaveError(null);
-      setFieldErrors(null);
-    } catch (error: unknown) {
-      setImageStatus(null);
-      setImageError({
-        field: folder,
-        message: readableSaveError(error, "Couldn't upload this image. Try again."),
-      });
-    }
+  const rememberImage = (patch: Partial<EditorDraft>) => {
+    setDraft((current) => (current ? { ...current, ...patch } : current));
+    setJustSaved(false);
+    setSaveError(null);
+    setFieldErrors(null);
   };
+  const portraitImage = usePortfolioImageField({
+    portfolioId: portfolio?.id ?? null,
+    folder: "portrait",
+    savedUrl: savedDraft?.heroImage || savedDraft?.heroImageMobile || "",
+    onUploaded: (url) => rememberImage({ heroImage: url, heroImageMobile: url }),
+  });
+  const logoImage = usePortfolioImageField({
+    portfolioId: portfolio?.id ?? null,
+    folder: "logo",
+    savedUrl: savedDraft?.logo ?? "",
+    onUploaded: (url) => rememberImage({ logo: url }),
+  });
+  const imageBusy = portraitImage.busy || logoImage.busy;
 
   const hasUnsavedChanges = Boolean(draft && savedDraft && !draftsMatch(draft, savedDraft));
   useUnsavedChanges(hasUnsavedChanges);
@@ -303,11 +289,10 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
             <ProfileSection
               draft={draft}
               fieldErrors={fieldErrors}
-              imageError={imageError}
-              imageStatus={imageStatus}
-              imageBusy={imageBusy}
+              portrait={portraitImage}
+              logo={logoImage}
+              saving={isSaving}
               onChange={updateDraft}
-              onUpload={(folder, file) => void uploadImage(folder, file)}
             />
           )}
 
@@ -334,19 +319,17 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
 function ProfileSection({
   draft,
   fieldErrors,
-  imageError,
-  imageStatus,
-  imageBusy,
+  portrait,
+  logo,
+  saving,
   onChange,
-  onUpload,
 }: {
   draft: EditorDraft;
   fieldErrors: EditorFieldErrors | null;
-  imageError: { field: PortfolioImageFolder; message: string } | null;
-  imageStatus: { field: PortfolioImageFolder; status: ImageUploadStatus } | null;
-  imageBusy: boolean;
+  portrait: ReturnType<typeof usePortfolioImageField>;
+  logo: ReturnType<typeof usePortfolioImageField>;
+  saving: boolean;
   onChange: (next: EditorDraft) => void;
-  onUpload: (folder: PortfolioImageFolder, file: File) => void;
 }) {
   return (
     <section id="editor-profile" className="scroll-mt-64 mt-12" aria-labelledby="profile-heading">
@@ -386,11 +369,16 @@ function ProfileSection({
           label="Portrait"
           hint="Shown large beside your introduction. A device photo is prepared before it uploads."
           value={draft.heroImage || draft.heroImageMobile}
-          error={fieldErrors?.heroImage || (imageError?.field === "portrait" ? imageError.message : undefined)}
-          status={imageStatus?.field === "portrait" ? imageStatus.status : null}
-          disabled={imageBusy && imageStatus?.field !== "portrait"}
+          localUrl={portrait.localUrl}
+          error={fieldErrors?.heroImage || portrait.error || undefined}
+          status={portrait.status}
+          disabled={saving || logo.busy}
+          canRetry={portrait.canRetry}
+          canCancel={portrait.canCancel}
           shape="portrait"
-          onUpload={(file) => onUpload("portrait", file)}
+          onUpload={portrait.choose}
+          onRetry={portrait.retry}
+          onCancel={portrait.cancel}
           onValueChange={(value) => onChange({ ...draft, heroImage: value, heroImageMobile: value })}
         />
 
@@ -399,11 +387,16 @@ function ProfileSection({
           label="Logo"
           hint="The mark shown beside your name. Leave this empty to skip it."
           value={draft.logo}
-          error={fieldErrors?.logo || (imageError?.field === "logo" ? imageError.message : undefined)}
-          status={imageStatus?.field === "logo" ? imageStatus.status : null}
-          disabled={imageBusy && imageStatus?.field !== "logo"}
+          localUrl={logo.localUrl}
+          error={fieldErrors?.logo || logo.error || undefined}
+          status={logo.status}
+          disabled={saving || portrait.busy}
+          canRetry={logo.canRetry}
+          canCancel={logo.canCancel}
           shape="logo"
-          onUpload={(file) => onUpload("logo", file)}
+          onUpload={logo.choose}
+          onRetry={logo.retry}
+          onCancel={logo.cancel}
           onValueChange={(value) => onChange({ ...draft, logo: value })}
         />
 

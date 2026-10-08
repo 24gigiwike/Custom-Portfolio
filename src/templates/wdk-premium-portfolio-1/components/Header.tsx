@@ -1,3 +1,4 @@
+import { portfolioLogoSrc } from '../presentation/logoSrc.ts'
 import type { SocialLink } from '../types/portfolio.ts'
 import { SocialLinks } from './SocialLinks.tsx'
 
@@ -8,10 +9,11 @@ type HeaderProps = {
 }
 
 export function Header({ brandName, logo, socialLinks }: HeaderProps) {
+    const logoSrc = portfolioLogoSrc(logo)
     return (
         <div className="nav-container-left">
             <div className="nav-container-left-L">
-                <img alt={brandName} className="logo" src={logo} />
+                {logoSrc ? <img alt={brandName} className="logo" src={logoSrc} decoding="async" /> : null}
             </div>
             <div className="nav-container-left-R">
                 <SocialLinks links={socialLinks} />
