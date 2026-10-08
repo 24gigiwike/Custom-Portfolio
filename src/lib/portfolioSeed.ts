@@ -1,4 +1,5 @@
 import type { UserProfile } from "../types";
+import { emptyDiscoverability } from "./discoverability";
 import { DEFAULT_PORTFOLIO_DESIGN } from "../types/portfolioDesign";
 import type { PortfolioPublishing, UserPortfolioContent } from "../types/userPortfolio";
 
@@ -59,6 +60,7 @@ export function seedPortfolioFromAccount(
       twitterDescription: "",
       twitterImage: "",
     },
+    discoverability: emptyDiscoverability(),
     design: { ...DEFAULT_PORTFOLIO_DESIGN },
     publishing: EMPTY_PUBLISHING,
   };

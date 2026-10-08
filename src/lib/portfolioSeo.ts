@@ -1,4 +1,6 @@
+import { normalizeDiscoverability } from "./discoverability.js";
 import type { PortfolioSEO } from "../templates/wdk-premium-portfolio-1/types/portfolio";
+import type { PortfolioDiscoverability } from "../types/discoverability";
 import type { PublicPortfolio } from "../types/publicPortfolio";
 import type { UserPortfolio, UserPortfolioContent } from "../types/userPortfolio";
 import { templateForCreation, templateSupportsContentArea } from "./templateCatalog.js";
@@ -19,10 +21,11 @@ export type RobotsDirective = "index, follow" | "noindex, nofollow";
 export type SeoSource = {
   publicId: string;
   selectedTemplate: string;
-  profile: { brandName: string; headline: string };
-  contact: { description: string };
-  projects: { title: string; url: string }[];
+  profile: { brandName: string; headline: string; capabilityTags?: string[] };
+  contact: { description: string; projectTypes?: string[] };
+  projects: { title: string; url: string; category?: string; tech?: string[] }[];
   seo: Pick<PortfolioSEO, "title" | "description" | "ogImage" | "twitterImage">;
+  discoverability?: PortfolioDiscoverability;
 };
 
 export type ResolvedPortfolioSeo = {
@@ -173,38 +176,88 @@ export function resolvePublicPortfolioSeo(
   return resolvePortfolioSeo(portfolio, environment);
 }
 
+function listed(values: string[] | undefined): string[] {
+  return (values ?? []).map((value) => normalizeSeoText(value)).filter(Boolean);
+}
+
+function showsArea(source: SeoSource, area: "profile" | "projects" | "contact" | "discoverability"): boolean {
+  return templateSupportsContentArea(source.selectedTemplate, area);
+}
+
 function portfolioJsonLd(
   source: SeoSource,
   resolved: { title: string; description: string; canonicalUrl: string; image: string }
 ): string {
   const name = normalizeSeoText(source.profile.brandName);
   if (!name) return "";
-  const headline = normalizeSeoText(source.profile.headline);
-  const person: Record<string, unknown> = {
-    "@type": "Person",
-    name,
-    url: resolved.canonicalUrl,
-  };
-  if (headline) person.description = headline;
-  if (resolved.image) person.image = resolved.image;
-  const works = source.projects
-    .map((project) => ({
-      title: normalizeSeoText(project.title),
-      url: project.url.trim(),
-    }))
-    .filter((project) => project.title && HTTPS_URL.test(project.url))
-    .slice(0, 12)
-    .map((project) => ({ "@type": "CreativeWork", name: project.title, url: project.url }));
+  const facts = showsArea(source, "discoverability") ? normalizeDiscoverability(source.discoverability) : emptyFacts();
+  const headline = showsArea(source, "profile") ? normalizeSeoText(source.profile.headline) : "";
+  const summary = showsArea(source, "contact") ? normalizeSeoText(source.contact.description) : "";
+  const expertise = showsArea(source, "profile") ? listed(source.profile.capabilityTags) : [];
+  const services = showsArea(source, "contact") ? listed(source.contact.projectTypes) : [];
+  const works = showsArea(source, "projects")
+    ? source.projects
+        .map((project) => ({
+          title: normalizeSeoText(project.title),
+          url: project.url.trim(),
+          category: normalizeSeoText(project.category ?? ""),
+          tech: listed(project.tech),
+        }))
+        .filter((project) => project.title && HTTPS_URL.test(project.url))
+        .slice(0, 12)
+        .map((project) => {
+          const work: Record<string, unknown> = { "@type": "CreativeWork", name: project.title, url: project.url };
+          if (project.category) work.about = project.category;
+          if (project.tech.length > 0) work.keywords = project.tech.join(", ");
+          return work;
+        })
+    : [];
+  const entityId = `${resolved.canonicalUrl}#identity`;
+  const graph: Record<string, unknown>[] = [];
   const page: Record<string, unknown> = {
-    "@context": "https://schema.org",
     "@type": "ProfilePage",
+    "@id": resolved.canonicalUrl,
     url: resolved.canonicalUrl,
     name: resolved.title,
-    mainEntity: person,
   };
   if (resolved.description) page.description = resolved.description;
   if (works.length > 0) page.hasPart = works;
-  return escapeJsonLd(JSON.stringify(page));
+  if (facts.identity) {
+    const entity: Record<string, unknown> = {
+      "@type": facts.identity === "organization" ? "Organization" : "Person",
+      "@id": entityId,
+      name,
+      url: resolved.canonicalUrl,
+    };
+    if (summary) entity.description = summary;
+    else if (headline) entity.description = headline;
+    if (resolved.image) entity.image = resolved.image;
+    if (expertise.length > 0) entity.knowsAbout = expertise;
+    if (facts.serviceRegion) entity.areaServed = facts.serviceRegion;
+    if (services.length > 0) {
+      entity.makesOffer = services.map((service) => ({ "@type": "Service", name: service }));
+    }
+    page.mainEntity = { "@id": entityId };
+    graph.push(page, entity);
+  } else {
+    graph.push(page);
+  }
+  if (facts.faqs.length > 0) {
+    graph.push({
+      "@type": "FAQPage",
+      "@id": `${resolved.canonicalUrl}#questions`,
+      mainEntity: facts.faqs.map((faq) => ({
+        "@type": "Question",
+        name: faq.question,
+        acceptedAnswer: { "@type": "Answer", text: faq.answer },
+      })),
+    });
+  }
+  return escapeJsonLd(JSON.stringify({ "@context": "https://schema.org", "@graph": graph }));
+}
+
+function emptyFacts(): PortfolioDiscoverability {
+  return { identity: "", serviceRegion: "", faqs: [] };
 }
 
 export function resolvedToPortfolioSeo(resolved: ResolvedPortfolioSeo): PortfolioSEO {
@@ -223,7 +276,12 @@ export function resolvedToPortfolioSeo(resolved: ResolvedPortfolioSeo): Portfoli
 
 export function contentWithSeo(
   portfolio: UserPortfolio,
-  input: { title: string; description: string; image: string }
+  input: {
+    title: string;
+    description: string;
+    image: string;
+    discoverability?: PortfolioDiscoverability;
+  }
 ): UserPortfolioContent {
   const title = normalizeSeoText(input.title);
   const description = normalizeSeoText(input.description);
@@ -234,6 +292,7 @@ export function contentWithSeo(
     socialLinks: portfolio.socialLinks,
     projects: portfolio.projects,
     contact: portfolio.contact,
+    discoverability: normalizeDiscoverability(input.discoverability ?? portfolio.discoverability),
     design: portfolio.design,
     publishing: portfolio.publishing,
     seo: {
@@ -252,6 +311,60 @@ export function contentWithSeo(
 
 export function templateOffersSeo(selectedTemplate: string): boolean {
   return templateSupportsContentArea(selectedTemplate, "seo");
+}
+
+export function templateOffersDiscoverability(selectedTemplate: string): boolean {
+  return templateSupportsContentArea(selectedTemplate, "discoverability");
+}
+
+/** Visible public facts for the initial HTML. The same facts are shown by a supporting template. */
+export function renderPortfolioFacts(source: SeoSource): string {
+  const name = normalizeSeoText(source.profile.brandName);
+  const headline = showsArea(source, "profile") ? normalizeSeoText(source.profile.headline) : "";
+  const summary = showsArea(source, "contact") ? normalizeSeoText(source.contact.description) : "";
+  const expertise = showsArea(source, "profile") ? listed(source.profile.capabilityTags) : [];
+  const services = showsArea(source, "contact") ? listed(source.contact.projectTypes) : [];
+  const facts = showsArea(source, "discoverability") ? normalizeDiscoverability(source.discoverability) : emptyFacts();
+  const projects = showsArea(source, "projects")
+    ? source.projects.flatMap((project) => {
+        const title = normalizeSeoText(project.title);
+        if (!title) return [];
+        const url = project.url.trim();
+        const href = HTTPS_URL.test(url) ? url : "";
+        return [{ title, href }];
+      })
+    : [];
+  const heading = headline || name || "Portfolio";
+  const lines = [
+    `<article>`,
+    name && headline ? `<p>${escapeHtml(name)}</p>` : "",
+    `<h1>${escapeHtml(heading)}</h1>`,
+    summary ? `<p>${escapeHtml(summary)}</p>` : "",
+    expertise.length ? `<h2>Expertise</h2><ul>${expertise.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "",
+    services.length ? `<h2>Services</h2><ul>${services.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "",
+    facts.serviceRegion ? `<p>${escapeHtml(facts.serviceRegion)}</p>` : "",
+    projects.length
+      ? `<h2>Selected work</h2><ul>${projects
+          .map((project) =>
+            project.href
+              ? `<li><a href="${escapeHtml(project.href)}">${escapeHtml(project.title)}</a></li>`
+              : `<li>${escapeHtml(project.title)}</li>`
+          )
+          .join("")}</ul>`
+      : "",
+    facts.faqs.length
+      ? `<section aria-label="Questions"><h2>Questions</h2>${facts.faqs
+          .map((faq) => `<h3>${escapeHtml(faq.question)}</h3><p>${escapeHtml(faq.answer)}</p>`)
+          .join("")}</section>`
+      : "",
+    `</article>`,
+  ];
+  return lines.filter(Boolean).join("");
+}
+
+export function applyPublicBody(html: string, inner: string): string {
+  if (!html.includes('<div id="root">')) return html;
+  return html.replace(/<div id="root">[\s\S]*?<\/div>/, `<div id="root">${inner}</div>`);
 }
 
 export function platformTitle(path: string): string {

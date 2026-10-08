@@ -42,6 +42,7 @@ assert.deepEqual(templateContentAreas(wdk.id), [
   "projects",
   "contact",
   "seo",
+  "discoverability",
 ]);
 assert.deepEqual(wdk.capabilities.areas, templateContentAreas(wdk.id));
 assert.equal(templateSupportsContentArea(wdk.id, "projects"), true);

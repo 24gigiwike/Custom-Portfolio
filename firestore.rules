@@ -69,6 +69,7 @@ service cloud.firestore {
           "projects",
           "contact",
           "seo",
+          "discoverability",
           "design",
           "publishedAt",
           "updatedAt"
@@ -100,6 +101,18 @@ service cloud.firestore {
           "title", "description", "canonicalUrl", "ogTitle", "ogDescription",
           "ogImage", "twitterTitle", "twitterDescription", "twitterImage"
         ])
+        && (
+          !("discoverability" in request.resource.data)
+          || (
+            request.resource.data.discoverability is map
+            && request.resource.data.discoverability.keys().hasOnly(["identity", "serviceRegion", "faqs"])
+            && request.resource.data.discoverability.identity in ["", "person", "organization"]
+            && request.resource.data.discoverability.serviceRegion is string
+            && request.resource.data.discoverability.serviceRegion.size() <= 120
+            && request.resource.data.discoverability.faqs is list
+            && request.resource.data.discoverability.faqs.size() <= 8
+          )
+        )
         && request.resource.data.design is map
         && request.resource.data.design.keys().hasOnly(["palette"])
         && request.resource.data.updatedAt == request.time

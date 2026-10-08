@@ -18,6 +18,7 @@ export function contentWithDesign(portfolio: UserPortfolio, palette: string): Us
     projects: portfolio.projects,
     contact: portfolio.contact,
     seo: portfolio.seo,
+    discoverability: portfolio.discoverability,
     design: { palette: allowed ? portfolioPaletteId(palette) : portfolio.design.palette },
     publishing: portfolio.publishing,
   };

@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react'
 import { Contact } from '../components/Contact.tsx'
 import { wdkPaletteVariables } from '../design/palettes.ts'
 import { Hero } from '../components/Hero.tsx'
+import { ProfessionalFacts } from '../components/ProfessionalFacts.tsx'
 import { ProjectSpotlight } from '../components/ProjectSpotlight.tsx'
 import { templateConfig } from '../data/template-config.ts'
 import type { PortfolioData } from '../types/portfolio.ts'
@@ -33,6 +34,7 @@ export function WdkPremiumPortfolio({ data, palette = "original", robots = "noin
         <div data-template={templateConfig.id} style={style}>
             <Hero profile={data.profile} socialLinks={data.socialLinks} />
             <ProjectSpotlight projects={data.projects} />
+            <ProfessionalFacts facts={data.discoverability} />
             <Contact contact={data.contact} />
         </div>
     )

@@ -2,13 +2,16 @@ import React, { useEffect, useState } from "react";
 import { brand } from "../../config/branding";
 import { userFacingWriteError } from "../../lib/accountLoad";
 import { useAuth } from "../../lib/authContext";
+import { FAQ_LIMIT, normalizeDiscoverability } from "../../lib/discoverability";
 import {
   contentWithSeo,
   portfolioCanonicalUrl,
   portfolioPageDescription,
   portfolioPageTitle,
+  templateOffersDiscoverability,
   templateOffersSeo,
 } from "../../lib/portfolioSeo";
+import type { PortfolioIdentity } from "../../types/discoverability";
 import { uploadPortfolioImage, type ImageUploadStatus } from "../../lib/storage";
 import { getPortfolioByOwner, updatePortfolio, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
 import type { UserPortfolio } from "../../types/userPortfolio";
@@ -32,6 +35,9 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState("");
+  const [identity, setIdentity] = useState<PortfolioIdentity>("");
+  const [serviceRegion, setServiceRegion] = useState("");
+  const [faqs, setFaqs] = useState<{ question: string; answer: string }[]>([]);
   const [savedKey, setSavedKey] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -45,8 +51,12 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
     setPortfolio(next);
     setTitle(next.seo.title);
     setDescription(next.seo.description);
+    const facts = normalizeDiscoverability(next.discoverability);
     setImage(next.seo.ogImage || next.seo.twitterImage);
-    setSavedKey(snapshot(next.seo.title, next.seo.description, next.seo.ogImage || next.seo.twitterImage));
+    setIdentity(facts.identity);
+    setServiceRegion(facts.serviceRegion);
+    setFaqs(facts.faqs);
+    setSavedKey(snapshot(next.seo.title, next.seo.description, next.seo.ogImage || next.seo.twitterImage, facts));
   };
 
   const load = () => {
@@ -91,7 +101,15 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
     }
     setIsSaving(true);
     setSaveError(null);
-    void updatePortfolio(portfolio.id, contentWithSeo(portfolio, { title, description, image }))
+    void updatePortfolio(
+      portfolio.id,
+      contentWithSeo(portfolio, {
+        title,
+        description,
+        image,
+        discoverability: normalizeDiscoverability({ identity, serviceRegion, faqs }),
+      })
+    )
       .then((saved) => {
         apply(saved);
         setJustSaved(true);
@@ -103,7 +121,10 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
   };
 
   const offersSeo = portfolio ? templateOffersSeo(portfolio.selectedTemplate) : false;
-  const dirty = portfolio ? snapshot(title, description, image) !== savedKey : false;
+  const offersFacts = portfolio ? templateOffersDiscoverability(portfolio.selectedTemplate) : false;
+  const dirty = portfolio
+    ? snapshot(title, description, image, { identity, serviceRegion, faqs }) !== savedKey
+    : false;
   const previewTitle = portfolioPageTitle({
     seoTitle: title,
     brandName: portfolio?.profile.brandName,
@@ -207,6 +228,138 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
                 }}
               />
             </div>
+            {offersFacts && (
+              <section className="mt-10 border-t border-[#D5E6E5] pt-8" aria-labelledby="portfolio-seo-facts">
+                <h2 id="portfolio-seo-facts" className="text-lg font-bold tracking-[-0.03em]">AI Search & Discoverability</h2>
+                <p className="mt-2 text-sm leading-relaxed text-[#5C7372]">
+                  Describe the work in your own words. These details are optional. Filling them in does not rank the portfolio or mean an AI product has indexed it.
+                </p>
+                <ul className="mt-4 list-disc space-y-1 pl-5 text-sm leading-relaxed text-[#5C7372]">
+                  <li>Describe your work clearly.</li>
+                  <li>Name your specialization in the profile, not here again.</li>
+                  <li>Answer questions real visitors may ask.</li>
+                </ul>
+                <label className="mt-8 block" htmlFor="portfolio-seo-identity">
+                  <span className="text-sm font-semibold">How should this portfolio be described?</span>
+                  <select
+                    id="portfolio-seo-identity"
+                    value={identity}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setIdentity(value === "person" || value === "organization" ? value : "");
+                      setJustSaved(false);
+                    }}
+                    className="mt-2 w-full rounded-xl border border-[#D5E6E5] bg-white px-4 py-3 text-sm"
+                  >
+                    <option value="">Leave unspecified</option>
+                    <option value="person">Individual</option>
+                    <option value="organization">Organization</option>
+                  </select>
+                </label>
+                <p className="mt-2 text-sm leading-relaxed text-[#5C7372]">Nothing is inferred. Leave this unspecified if neither fits.</p>
+                <label className="mt-6 block" htmlFor="portfolio-seo-region">
+                  <span className="text-sm font-semibold">Service area</span>
+                  <input
+                    id="portfolio-seo-region"
+                    value={serviceRegion}
+                    onChange={(event) => {
+                      setServiceRegion(event.target.value);
+                      setJustSaved(false);
+                    }}
+                    placeholder="Lagos, or Remote"
+                    className="mt-2 w-full rounded-xl border border-[#D5E6E5] bg-white px-4 py-3 text-sm"
+                  />
+                </label>
+                <p className="mt-2 text-sm leading-relaxed text-[#5C7372]">A city, region, or remote. Not a street address.</p>
+                <div className="mt-8">
+                  <h3 className="text-sm font-semibold">Questions</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-[#5C7372]">
+                    A question is shown only when it has an answer. Up to {FAQ_LIMIT}.
+                  </p>
+                  <div className="mt-4 space-y-4">
+                    {faqs.map((faq, index) => (
+                      <div key={index} className="rounded-2xl border border-[#D5E6E5] bg-white p-4">
+                        <label className="block" htmlFor={`portfolio-seo-question-${index}`}>
+                          <span className="text-sm font-semibold">Question</span>
+                          <input
+                            id={`portfolio-seo-question-${index}`}
+                            value={faq.question}
+                            onChange={(event) => {
+                              setFaqs((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, question: event.target.value } : item));
+                              setJustSaved(false);
+                            }}
+                            className="mt-2 w-full rounded-xl border border-[#D5E6E5] px-4 py-3 text-sm"
+                          />
+                        </label>
+                        <label className="mt-4 block" htmlFor={`portfolio-seo-answer-${index}`}>
+                          <span className="text-sm font-semibold">Answer</span>
+                          <textarea
+                            id={`portfolio-seo-answer-${index}`}
+                            value={faq.answer}
+                            rows={3}
+                            onChange={(event) => {
+                              setFaqs((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, answer: event.target.value } : item));
+                              setJustSaved(false);
+                            }}
+                            className="mt-2 w-full rounded-xl border border-[#D5E6E5] px-4 py-3 text-sm"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="mt-3 text-sm font-bold text-[#3E7574]"
+                          onClick={() => {
+                            setFaqs((current) => current.filter((_, itemIndex) => itemIndex !== index));
+                            setJustSaved(false);
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  {faqs.length < FAQ_LIMIT && (
+                    <button
+                      type="button"
+                      className="mt-4 text-sm font-bold text-[#3E7574]"
+                      onClick={() => {
+                        setFaqs((current) => [...current, { question: "", answer: "" }]);
+                        setJustSaved(false);
+                      }}
+                    >
+                      Add a question
+                    </button>
+                  )}
+                </div>
+                <div className="mt-8 rounded-2xl border border-[#D5E6E5] bg-white p-5">
+                  <h3 className="text-sm font-semibold">Content preview</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-[#5C7372]">
+                    Public facts from this portfolio. This is not an AI answer, and it does not mean any product has indexed the page.
+                  </p>
+                  <dl className="mt-4 space-y-3 text-sm">
+                    <div>
+                      <dt className="font-semibold">Name</dt>
+                      <dd className="text-[#5C7372]">{portfolio?.profile.brandName || "Not added yet"}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-semibold">Headline</dt>
+                      <dd className="text-[#5C7372]">{portfolio?.profile.headline || "Not added yet"}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-semibold">Summary</dt>
+                      <dd className="text-[#5C7372]">{portfolio?.contact.description || "The contact description is the public summary. Edit it with the rest of the portfolio."}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-semibold">Expertise</dt>
+                      <dd className="text-[#5C7372]">{portfolio?.profile.capabilityTags.filter(Boolean).join(", ") || "Add areas of expertise in the portfolio editor."}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-semibold">Services</dt>
+                      <dd className="text-[#5C7372]">{portfolio?.contact.projectTypes.filter(Boolean).join(", ") || "Project types in the contact section are the public services."}</dd>
+                    </div>
+                  </dl>
+                </div>
+              </section>
+            )}
             <section className="mt-10 border-t border-[#D5E6E5] pt-8" aria-labelledby="portfolio-seo-preview">
               <h2 id="portfolio-seo-preview" className="text-lg font-bold tracking-[-0.03em]">Search preview</h2>
               <p className="mt-2 text-sm leading-relaxed text-[#5C7372]">
@@ -233,8 +386,13 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
   );
 }
 
-function snapshot(title: string, description: string, image: string): string {
-  return JSON.stringify([title, description, image]);
+function snapshot(
+  title: string,
+  description: string,
+  image: string,
+  facts: { identity: string; serviceRegion: string; faqs: { question: string; answer: string }[] }
+): string {
+  return JSON.stringify([title, description, image, facts]);
 }
 
 function Status({ title, body, children }: { title: string; body?: string; children?: React.ReactNode }) {

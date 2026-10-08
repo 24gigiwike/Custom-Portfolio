@@ -31,7 +31,7 @@ const WDK_PREVIEW_IMAGE: TemplatePreviewImage = {
  * Content areas a template can present.
  * These name areas of UserPortfolio, not the user's saved values.
  */
-export const CONTENT_AREAS = ["profile", "socialLinks", "projects", "contact", "seo"] as const;
+export const CONTENT_AREAS = ["profile", "socialLinks", "projects", "contact", "seo", "discoverability"] as const;
 
 export type ContentArea = (typeof CONTENT_AREAS)[number];
 
@@ -78,6 +78,7 @@ const WDK_CONTENT_AREAS = [
   "projects",
   "contact",
   "seo",
+  "discoverability",
 ] as const satisfies readonly (keyof PortfolioData)[];
 
 type _wdkAreasMatchPortfolioData = Assert<Same<(typeof WDK_CONTENT_AREAS)[number], keyof PortfolioData>>;
@@ -112,6 +113,7 @@ const CONTENT_AREA_LABELS: Record<ContentArea, string> = {
   projects: "Projects",
   contact: "Contact",
   seo: "Search and sharing",
+  discoverability: "AI search and discoverability",
 };
 
 /**
