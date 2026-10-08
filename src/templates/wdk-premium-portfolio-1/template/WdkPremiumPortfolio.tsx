@@ -15,11 +15,13 @@ export interface WdkPremiumPortfolioProps {
     data: PortfolioData
     /** Semantic accent id. Omitted or unknown values use the original template palette. */
     palette?: string
+    /** Indexing directive supplied by the product. Demos stay out of search results. */
+    robots?: string
 }
 
-export function WdkPremiumPortfolio({ data, palette = "original" }: WdkPremiumPortfolioProps) {
+export function WdkPremiumPortfolio({ data, palette = "original", robots = "noindex, nofollow" }: WdkPremiumPortfolioProps) {
     useLenis()
-    usePortfolioSeo(data.seo)
+    usePortfolioSeo(data.seo, robots)
 
     const style = {
         '--hero-image': `url("${data.profile.heroImage}")`,

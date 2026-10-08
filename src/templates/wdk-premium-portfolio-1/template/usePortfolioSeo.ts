@@ -6,6 +6,17 @@ type Restore = () => void
 function upsertMeta(attribute: 'name' | 'property', key: string, content: string): Restore {
     const selector = `meta[${attribute}="${key}"]`
     const existing = document.head.querySelector(selector)
+    if (!content) {
+        if (!existing) return () => undefined
+        const previous = existing.getAttribute('content')
+        existing.remove()
+        return () => {
+            const restored = document.createElement('meta')
+            restored.setAttribute(attribute, key)
+            if (previous !== null) restored.setAttribute('content', previous)
+            document.head.appendChild(restored)
+        }
+    }
     const created = !existing
     const previous = existing?.getAttribute('content') ?? null
     const element = existing ?? document.createElement('meta')
@@ -54,29 +65,30 @@ function upsertCanonical(href: string): Restore {
     }
 }
 
-export function usePortfolioSeo(seo: PortfolioSEO) {
+export function usePortfolioSeo(seo: PortfolioSEO, robots = 'noindex, nofollow') {
     useLayoutEffect(() => {
         const previousTitle = document.title
         document.title = seo.title
 
+        const card = seo.ogImage || seo.twitterImage ? 'summary_large_image' : 'summary'
         const restore = [
             upsertMeta('name', 'description', seo.description),
-            upsertMeta('name', 'robots', 'index, follow'),
-            upsertCanonical(seo.canonicalUrl),
-            upsertMeta('property', 'og:type', 'website'),
+            upsertMeta('name', 'robots', robots),
+            seo.canonicalUrl ? upsertCanonical(seo.canonicalUrl) : () => undefined,
+            upsertMeta('property', 'og:type', 'profile'),
             upsertMeta('property', 'og:url', seo.canonicalUrl),
-            upsertMeta('property', 'og:title', seo.ogTitle),
-            upsertMeta('property', 'og:description', seo.ogDescription),
+            upsertMeta('property', 'og:title', seo.ogTitle || seo.title),
+            upsertMeta('property', 'og:description', seo.ogDescription || seo.description),
             upsertMeta('property', 'og:image', seo.ogImage),
-            upsertMeta('name', 'twitter:card', 'summary_large_image'),
-            upsertMeta('name', 'twitter:title', seo.twitterTitle),
-            upsertMeta('name', 'twitter:description', seo.twitterDescription),
-            upsertMeta('name', 'twitter:image', seo.twitterImage),
+            upsertMeta('name', 'twitter:card', card),
+            upsertMeta('name', 'twitter:title', seo.twitterTitle || seo.title),
+            upsertMeta('name', 'twitter:description', seo.twitterDescription || seo.description),
+            upsertMeta('name', 'twitter:image', seo.twitterImage || seo.ogImage),
         ]
 
         return () => {
             document.title = previousTitle
             restore.forEach((undo) => undo())
         }
-    }, [seo])
+    }, [seo, robots])
 }

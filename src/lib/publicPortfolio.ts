@@ -12,6 +12,7 @@ import type { PortfolioDesign, PortfolioPaletteId } from "../types/portfolioDesi
 import { normalizePortfolioDesign } from "../types/portfolioDesign";
 import type { PublicPortfolio } from "../types/publicPortfolio";
 import type { UserPortfolio, UserPortfolioContent } from "../types/userPortfolio";
+import { portfolioPageTitle } from "./portfolioSeo";
 import { templateForCreation } from "./templateCatalog";
 import { toWdkPremiumPortfolioData, wdkPaletteForPortfolio } from "./wdkPortfolioAdapter";
 
@@ -310,11 +311,11 @@ export function publicPortfolioPresentation(portfolio: PublicPortfolio): PublicW
   return render ? render(portfolio) : null;
 }
 
-/** Document title only. Stored SEO fields are otherwise left to the template. */
+/** Browser title for a public portfolio. Explicit SEO title, then name and headline. */
 export function publicDocumentTitle(portfolio: PublicPortfolio): string {
-  const seoTitle = portfolio.seo.title.trim();
-  if (seoTitle) return seoTitle;
-  const name = portfolio.profile.brandName.trim();
-  if (name) return name;
-  return "Portfolio";
+  return portfolioPageTitle({
+    seoTitle: portfolio.seo.title,
+    brandName: portfolio.profile.brandName,
+    headline: portfolio.profile.headline,
+  });
 }

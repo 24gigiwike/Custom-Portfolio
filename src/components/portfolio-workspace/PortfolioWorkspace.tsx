@@ -12,6 +12,7 @@ import { Button } from "../ui/Button";
 import { PORTFOLIO_DESIGN_PATH } from "../portfolio-design/portfolioDesignPath";
 import { PORTFOLIO_EDITOR_PATH } from "../portfolio-editor/portfolioEditorPath";
 import { PORTFOLIO_PUBLISH_PATH } from "../portfolio-publish/portfolioPublishPath";
+import { PORTFOLIO_SEO_PATH } from "../portfolio-seo/portfolioSeoPath";
 import { PORTFOLIO_REVIEW_PATH } from "../portfolio-review/portfolioReviewPath";
 import { publicPortfolioUrl } from "../public/publicPortfolioPath";
 
@@ -58,6 +59,7 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
   const openDesign = () => onOpenPath(PORTFOLIO_DESIGN_PATH);
   const openReview = () => onOpenPath(PORTFOLIO_REVIEW_PATH);
   const openPublish = () => onOpenPath(PORTFOLIO_PUBLISH_PATH);
+  const openSeo = () => onOpenPath(PORTFOLIO_SEO_PATH);
   const openCreateFlow = () => onOpenPath(TEMPLATE_DISCOVERY_PATH);
 
   const accountName = userAccount?.accountPrivate?.firstName || user?.displayName || "";
@@ -111,6 +113,14 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
               onClick={openReview}
             >
               Review
+            </button>
+            <button
+              type="button"
+              id="portfolio-workspace-seo"
+              className="font-bold text-[#3E7574]"
+              onClick={openSeo}
+            >
+              SEO
             </button>
             <button
               type="button"
