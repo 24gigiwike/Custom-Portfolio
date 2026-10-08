@@ -190,6 +190,42 @@ export function slugClaimMessage(reason: SlugProblem): string {
   return "That address is already taken.";
 }
 
+export const SLUG_CHECK_MESSAGE = "Unable to check this address right now. Please try again.";
+export const SLUG_NETWORK_MESSAGE = "We couldn't reach the server. Check your connection and try again.";
+
+export type SlugAvailability =
+  | { status: "current" }
+  | { status: "empty" }
+  | { status: "invalid" }
+  | { status: "reserved" }
+  | { status: "available" }
+  | { status: "taken" }
+  | { status: "identity" }
+  | { status: "alias-limit" }
+  | { status: "unchecked"; message: string };
+
+/**
+ * A failed read is not evidence that somebody else owns the address.
+ * Permission and network failures stay distinct from a confirmed collision.
+ */
+export function slugCheckMessage(error: unknown): string {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+  const raw = error instanceof Error ? error.message : String(error ?? "");
+  if (code === "unavailable" || code === "deadline-exceeded" || /unavailable|network|offline|failed to fetch/i.test(raw)) {
+    return SLUG_NETWORK_MESSAGE;
+  }
+  return SLUG_CHECK_MESSAGE;
+}
+
+export function slugAvailabilityMessage(availability: SlugAvailability): string | null {
+  if (availability.status === "unchecked") return availability.message;
+  if (availability.status === "available" || availability.status === "current" || availability.status === "empty") return null;
+  return slugClaimMessage(availability.status);
+}
+
 /**
  * Decide a slug change from records the caller has already read.
  * This does not write. The transaction that claims the slug is authoritative.

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { canonicalPortfolioUrl } from "../../lib/portfolioSeo";
-import { parsePublicSlug, slugClaimMessage } from "../../lib/portfolioSlug";
-import { previewPublicSlug, savePortfolioSlug, type SlugAvailability } from "../../lib/userPortfolio";
+import { parsePublicSlug, SLUG_CHECK_MESSAGE, slugAvailabilityMessage, slugClaimMessage, type SlugAvailability } from "../../lib/portfolioSlug";
+import { previewPublicSlug, savePortfolioSlug } from "../../lib/userPortfolio";
 import type { UserPortfolio } from "../../types/userPortfolio";
 import { Button } from "../ui/Button";
 
@@ -39,8 +39,12 @@ export function PublicSlugForm({ portfolio, published, onSaved }: PublicSlugForm
         .then((result) => {
           if (active) setAvailability(result);
         })
-        .catch(() => {
-          if (active) setAvailability(null);
+        .catch((error: unknown) => {
+          if (!active) return;
+          const message = error instanceof Error && error.message
+            ? error.message
+            : SLUG_CHECK_MESSAGE;
+          setAvailability({ status: "unchecked", message });
         });
     }, 300);
     return () => {
@@ -49,6 +53,7 @@ export function PublicSlugForm({ portfolio, published, onSaved }: PublicSlugForm
     };
   }, [dirty, parsed.ok, parsed.ok ? parsed.slug : slug, portfolio]);
 
+  const availabilityMessage = availability ? slugAvailabilityMessage(availability) : null;
   const blocked = !parsed.ok || availability?.status === "taken" || availability?.status === "identity" || availability?.status === "reserved" || availability?.status === "invalid" || availability?.status === "alias-limit";
 
   const save = () => {
@@ -106,8 +111,8 @@ export function PublicSlugForm({ portfolio, published, onSaved }: PublicSlugForm
       {parsed.ok && !parsed.slug && dirty && availability?.status === "available" && (
         <p className="mt-3 text-sm text-[#5C7372]">The original link will be the public address. Previous names stay yours.</p>
       )}
-      {parsed.ok && availability && availability.status !== "available" && availability.status !== "current" && availability.status !== "empty" && (
-        <p className="mt-3 text-sm font-medium text-[#B93838]">{slugClaimMessage(availability.status)}</p>
+      {parsed.ok && availabilityMessage && (
+        <p className="mt-3 text-sm font-medium text-[#B93838]">{availabilityMessage}</p>
       )}
       {saveError && <p className="mt-3 text-sm font-medium text-[#B93838]">{saveError}</p>}
       <div className="mt-4">

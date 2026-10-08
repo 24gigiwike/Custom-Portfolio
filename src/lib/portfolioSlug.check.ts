@@ -9,6 +9,10 @@ import {
   parsePublicSlug,
   planSlugClaim,
   resolvePublicAddress,
+  SLUG_CHECK_MESSAGE,
+  SLUG_NETWORK_MESSAGE,
+  slugAvailabilityMessage,
+  slugCheckMessage,
   slugClaimMessage,
 } from "./portfolioSlug";
 import type { UserPortfolio } from "../types/userPortfolio";
@@ -40,6 +44,20 @@ assert.equal(parsePublicSlug("template-preview").ok, false);
 assert.equal(parsePublicSlug("../john").ok, false);
 assert.equal(parsePublicSlug("john/paul").ok, false);
 assert.equal(slugClaimMessage("taken"), "That address is already taken.");
+assert.equal(slugCheckMessage({ code: "permission-denied", message: "Missing or insufficient permissions." }), SLUG_CHECK_MESSAGE);
+assert.notEqual(slugCheckMessage({ code: "permission-denied" }), slugClaimMessage("taken"));
+assert.equal(slugCheckMessage({ code: "unavailable", message: "The client is offline." }), SLUG_NETWORK_MESSAGE);
+assert.equal(slugAvailabilityMessage({ status: "unchecked", message: SLUG_CHECK_MESSAGE }), SLUG_CHECK_MESSAGE);
+assert.equal(slugAvailabilityMessage({ status: "taken" }), "That address is already taken.");
+assert.equal(slugAvailabilityMessage({ status: "available" }), null);
+const slugRules = rules.slice(rules.indexOf("match /portfolioSlugs/{slug}"), rules.indexOf("match /{document=**}"));
+assert.match(slugRules, /allow get: if isSignedIn\(\)/);
+assert.match(slugRules, /allow list: if false;/);
+const accessSource = readFileSync(new URL("./portfolioSlugAccess.ts", import.meta.url), "utf8");
+const formSource = readFileSync(new URL("../components/portfolio-publish/PublicSlugForm.tsx", import.meta.url), "utf8");
+assert.equal(accessSource.includes("permissionDenied"), false);
+assert.match(formSource, /slugAvailabilityMessage/);
+assert.doesNotMatch(formSource, /slugClaimMessage\(availability/);
 
 const claim = planSlugClaim({
   portfolioId: "ABC123",
