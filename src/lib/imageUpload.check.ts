@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { draftFromPortfolio, draftsMatch } from "../components/portfolio-editor/editorDraft";
+import { Hero } from "../templates/wdk-premium-portfolio-1/components/Hero.tsx";
 import { Header } from "../templates/wdk-premium-portfolio-1/components/Header.tsx";
 import { portfolioLogoSrc } from "../templates/wdk-premium-portfolio-1/presentation/logoSrc";
 import { cssImageUrl } from "../templates/wdk-premium-portfolio-1/presentation/cssImageUrl";
+import type { UserPortfolio } from "../types/userPortfolio";
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 
@@ -25,6 +28,46 @@ assert.equal(logoHeader.includes('src=""'), false);
 assert.equal(cssImageUrl(""), "none");
 assert.equal(cssImageUrl("  "), "none");
 assert.equal(cssImageUrl("https://cdn.example.com/portrait.jpg"), 'url("https://cdn.example.com/portrait.jpg")');
+
+const profile = {
+  brandName: "Ada Lovelace",
+  logo: "",
+  heroImage: "",
+  heroImageMobile: "",
+  headline: "Analytical engines",
+  capabilityTags: ["Mathematics"],
+  ctaLabel: "Write",
+  ctaHref: "#contact",
+  email: "",
+};
+const emptyHero = renderToStaticMarkup(createElement(Hero, { profile, socialLinks: [] }));
+assert.equal(emptyHero.includes("<img"), false);
+assert.match(emptyHero, /class="container"/);
+assert.match(emptyHero, /class="container-left"/);
+assert.match(emptyHero, /class="container-right"/);
+assert.match(emptyHero, /Analytical engines/);
+const savedHero = renderToStaticMarkup(createElement(Hero, {
+  profile: { ...profile, logo: savedLogo },
+  socialLinks: [],
+}));
+assert.match(savedHero, /class="logo"/);
+assert.match(savedHero, /src="https:\/\/cdn\.example\.com\/logo\.png"/);
+assert.equal(savedHero.includes('src=""'), false);
+assert.match(savedHero, /class="container-right"/);
+const emptyHeroStyle = renderToStaticMarkup(createElement("div", {
+  className: "container-right",
+  style: { "--hero-image": cssImageUrl(""), "--hero-image-mobile": cssImageUrl(" ") },
+}));
+assert.match(emptyHeroStyle, /--hero-image:none/);
+assert.match(emptyHeroStyle, /--hero-image-mobile:none/);
+assert.equal(emptyHeroStyle.includes("url("), false);
+const savedHeroUrl = "https://cdn.example.com/portrait.jpg";
+const savedHeroStyle = renderToStaticMarkup(createElement("div", {
+  className: "container-right",
+  style: { "--hero-image": cssImageUrl(savedHeroUrl), "--hero-image-mobile": cssImageUrl(savedHeroUrl) },
+}));
+assert.match(savedHeroStyle, /--hero-image:url\(&quot;https:\/\/cdn\.example\.com\/portrait\.jpg&quot;\)/);
+assert.match(savedHeroStyle, /--hero-image-mobile:url\(&quot;https:\/\/cdn\.example\.com\/portrait\.jpg&quot;\)/);
 
 const header = read("../templates/wdk-premium-portfolio-1/components/Header.tsx");
 assert.match(header, /portfolioLogoSrc\(logo\)/);
@@ -60,8 +103,65 @@ assert.match(hook, /URL\.revokeObjectURL/);
 assert.match(hook, /ImagePreparationError/);
 assert.match(hook, /ImageUploadCancelled/);
 assert.match(hook, /beginPortfolioImageUpload/);
+assert.match(hook, /releaseImageAttempt/);
+assert.match(hook, /generationRef\.current = released\.generation/);
+assert.match(hook, /attempt\.phase === "ready" \|\| attempt\.phase === "idle"/);
+assert.match(hook, /probe\.onerror/);
+const uploadResult = hook.slice(hook.indexOf("session.done.then"), hook.indexOf("error: unknown"));
+assert.match(uploadResult, /generationRef\.current !== generation/);
+assert.match(uploadResult, /onUploaded\(uploaded\.downloadUrl\)/);
+const uploadFailure = hook.slice(hook.indexOf("error: unknown"), hook.indexOf("useEffect"));
+assert.doesNotMatch(uploadFailure, /onUploaded/);
+assert.match(hook, /fileRef\.current = file/);
+assert.match(hook, /start\(file, next\.generation\)/);
 assert.doesNotMatch(hook, /deleteStoredImage/);
 assert.doesNotMatch(hook, /updatePortfolio/);
+
+const portfolio = {
+  id: "portfolio-1",
+  ownerId: "owner-1",
+  selectedTemplate: "wdk-premium-portfolio-1",
+  profile: {
+    brandName: "Ada",
+    logo: "",
+    heroImage: "https://cdn.example.com/saved.jpg",
+    heroImageMobile: "https://cdn.example.com/saved.jpg",
+    headline: "Hello",
+    capabilityTags: [],
+    ctaLabel: "Go",
+    ctaHref: "#contact",
+    email: "",
+  },
+  socialLinks: [],
+  projects: [],
+  contact: { email: "", eyebrow: "", heading: "", description: "", projectTypes: [], formEndpoint: "" },
+  seo: {
+    title: "",
+    description: "",
+    canonicalUrl: "",
+    ogTitle: "",
+    ogDescription: "",
+    ogImage: "",
+    twitterTitle: "",
+    twitterDescription: "",
+    twitterImage: "",
+  },
+  discoverability: { identity: "", serviceRegion: "", faqs: [] },
+  design: { palette: "original" },
+  publicSlug: "",
+  publicSlugAliases: [],
+  publishing: { status: "draft" },
+  createdAt: null,
+  updatedAt: null,
+} as UserPortfolio;
+const savedDraft = draftFromPortfolio(portfolio);
+const uploadedDraft = {
+  ...savedDraft,
+  heroImage: "https://cdn.example.com/uploaded.jpg",
+  heroImageMobile: "https://cdn.example.com/uploaded.jpg",
+};
+assert.equal(draftsMatch(savedDraft, uploadedDraft), false);
+assert.equal(draftsMatch(savedDraft, { ...savedDraft }), true);
 
 const seo = read("../components/portfolio-seo/PortfolioSeo.tsx");
 assert.match(seo, /contentWithSeo\(portfolio,/);

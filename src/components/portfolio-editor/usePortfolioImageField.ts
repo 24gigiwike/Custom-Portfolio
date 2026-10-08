@@ -7,6 +7,7 @@ import {
   idleImageAttempt,
   imageAttemptIsBusy,
   imageAttemptSaved,
+  releaseImageAttempt,
   remotePreviewReady,
   retryImageAttempt,
   takeUploadFailure,
@@ -102,9 +103,11 @@ export function usePortfolioImageField({
   }, [savedUrl]);
 
   useEffect(() => {
-    if (attempt.phase !== "ready" || !attempt.localUrl || !attempt.remoteUrl) return;
+    const waitingForRemote = Boolean(attempt.localUrl && attempt.remoteUrl && (attempt.phase === "ready" || attempt.phase === "idle"));
+    if (!waitingForRemote) return;
     const generation = attempt.generation;
     const remoteUrl = attempt.remoteUrl;
+    if (!remoteUrl) return;
     const probe = new Image();
     const finish = () => {
       if (generationRef.current !== generation) return;
@@ -114,16 +117,23 @@ export function usePortfolioImageField({
       commit(ready.state);
     };
     probe.onload = finish;
+    probe.onerror = () => {
+      // The local preview stays. A failed remote load must not replace it.
+    };
     probe.src = remoteUrl;
     return () => {
       probe.onload = null;
+      probe.onerror = null;
     };
   }, [attempt.phase, attempt.generation, attempt.localUrl, attempt.remoteUrl]);
 
   useEffect(() => {
     return () => {
+      const released = releaseImageAttempt(attemptRef.current);
+      generationRef.current = released.generation;
       sessionRef.current?.cancel();
-      if (attemptRef.current.localUrl) URL.revokeObjectURL(attemptRef.current.localUrl);
+      sessionRef.current = null;
+      if (released.revokeUrl) URL.revokeObjectURL(released.revokeUrl);
     };
   }, []);
 

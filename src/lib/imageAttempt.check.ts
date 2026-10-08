@@ -9,6 +9,7 @@ import {
   imageChangeIsSaved,
   imagePhaseLabel,
   previewSource,
+  releaseImageAttempt,
   remotePreviewReady,
   retryImageAttempt,
   takeUploadFailure,
@@ -91,5 +92,66 @@ assert.equal(cancelled.state.localUrl, null);
 assert.equal(previewSource(cancelled.state.localUrl, "https://cdn.example.com/new.jpg"), "https://cdn.example.com/new.jpg");
 assert.equal(takeUploadResult(cancelled.state, prepared.generation, "https://cdn.example.com/after-cancel.jpg").applied, false);
 assert.equal(cancelImageAttempt(cancelled.state, cancelled.state.generation).changed, false);
+
+const previousDraft = "https://cdn.example.com/saved.jpg";
+const selectionA = beginImageAttempt(idleImageAttempt(), "blob:a");
+const selectionB = beginImageAttempt(selectionA.state, "blob:b");
+assert.equal(selectionB.revokeUrl, "blob:a");
+const cancelAWhileB = cancelImageAttempt(selectionB.state, selectionA.state.generation);
+assert.equal(cancelAWhileB.changed, false);
+assert.equal(cancelAWhileB.state.localUrl, "blob:b");
+assert.equal(applyUploadStatus(selectionB.state, selectionA.state.generation, { phase: "uploading", percent: 90 }), selectionB.state);
+assert.equal(takeUploadResult(selectionB.state, selectionA.state.generation, "https://cdn.example.com/a.jpg").applied, false);
+assert.equal(previewSource(selectionB.state.localUrl, previousDraft), "blob:b");
+
+const cancelB = cancelImageAttempt(selectionB.state, selectionB.state.generation);
+assert.equal(cancelB.revokeUrl, "blob:b");
+assert.equal(previewSource(cancelB.state.localUrl, previousDraft), previousDraft);
+assert.equal(takeUploadFailure(cancelB.state, selectionB.state.generation, "Couldn't upload this portrait. Try again.").applied, false);
+
+const replacement = beginImageAttempt(cancelB.state, "blob:replacement");
+const replacementFailed = takeUploadFailure(
+  replacement.state,
+  replacement.state.generation,
+  "This image couldn't be prepared. Please choose a smaller JPG, PNG, or WEBP.",
+);
+assert.equal(replacementFailed.state.remoteUrl, null);
+assert.equal(replacementFailed.state.phase, "error");
+assert.equal(imagePhaseLabel({ phase: "ready", percent: null }) === replacementFailed.state.error, false);
+assert.equal(previewSource(replacementFailed.state.localUrl, previousDraft), "blob:replacement");
+const retryReplacement = retryImageAttempt(replacementFailed.state);
+assert.equal(retryReplacement.localUrl, "blob:replacement");
+assert.equal(retryReplacement.generation, replacementFailed.state.generation + 1);
+
+const uploadedBeforeRemote = takeUploadResult(retryReplacement, retryReplacement.generation, "https://cdn.example.com/uploaded.jpg");
+assert.equal(uploadedBeforeRemote.applied, true);
+assert.equal(previewSource(uploadedBeforeRemote.state.localUrl, "https://cdn.example.com/uploaded.jpg"), "blob:replacement");
+assert.equal(imageChangeIsSaved("https://cdn.example.com/uploaded.jpg", previousDraft), false);
+const savedBeforeRemote = imageAttemptSaved(uploadedBeforeRemote.state, "https://cdn.example.com/uploaded.jpg");
+assert.equal(savedBeforeRemote.changed, true);
+assert.equal(savedBeforeRemote.revokeUrl, null);
+assert.equal(savedBeforeRemote.state.localUrl, "blob:replacement");
+assert.equal(savedBeforeRemote.state.phase, "idle");
+assert.equal(imagePhaseLabel(null), null);
+assert.equal(previewSource(savedBeforeRemote.state.localUrl, "https://cdn.example.com/uploaded.jpg"), "blob:replacement");
+assert.equal(remotePreviewReady(savedBeforeRemote.state, savedBeforeRemote.state.generation - 1).changed, false);
+const remoteLoadedAfterSave = remotePreviewReady(savedBeforeRemote.state, savedBeforeRemote.state.generation);
+assert.equal(remoteLoadedAfterSave.changed, true);
+assert.equal(remoteLoadedAfterSave.revokeUrl, "blob:replacement");
+assert.equal(remoteLoadedAfterSave.state.localUrl, null);
+assert.equal(previewSource(remoteLoadedAfterSave.state.localUrl, "https://cdn.example.com/uploaded.jpg"), "https://cdn.example.com/uploaded.jpg");
+
+const stillLocal = imageAttemptSaved(
+  takeUploadResult(beginImageAttempt(idleImageAttempt(), "blob:held").state, 1, "https://cdn.example.com/held.jpg").state,
+  "https://cdn.example.com/held.jpg",
+);
+assert.equal(stillLocal.state.localUrl, "blob:held");
+assert.equal(previewSource(stillLocal.state.localUrl, "https://cdn.example.com/held.jpg"), "blob:held");
+assert.equal(remotePreviewReady(stillLocal.state, stillLocal.state.generation).state.localUrl, null);
+
+const released = releaseImageAttempt(uploadedBeforeRemote.state);
+assert.equal(released.revokeUrl, "blob:replacement");
+assert.equal(released.generation, uploadedBeforeRemote.state.generation + 1);
+assert.equal(takeUploadResult(uploadedBeforeRemote.state, released.generation, "https://cdn.example.com/after-unmount.jpg").applied, false);
 
 console.log("image attempt checks passed");

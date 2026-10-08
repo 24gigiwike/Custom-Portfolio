@@ -155,12 +155,22 @@ export function remotePreviewReady(
   state: ImageAttemptState,
   generation: number,
 ): { changed: boolean; state: ImageAttemptState; revokeUrl: string | null } {
-  if (state.generation !== generation || state.phase !== "ready" || !state.localUrl) return same(state);
-  return {
-    changed: true,
-    revokeUrl: state.localUrl,
-    state: { ...state, localUrl: null },
-  };
+  if (state.generation !== generation || !state.localUrl || !state.remoteUrl) return same(state);
+  if (state.phase === "ready") {
+    return {
+      changed: true,
+      revokeUrl: state.localUrl,
+      state: { ...state, localUrl: null },
+    };
+  }
+  if (state.phase === "idle") {
+    return {
+      changed: true,
+      revokeUrl: state.localUrl,
+      state: { ...idleImageAttempt(), generation: state.generation },
+    };
+  }
+  return same(state);
 }
 
 export function imageAttemptSaved(
@@ -168,11 +178,29 @@ export function imageAttemptSaved(
   savedUrl: string,
 ): { changed: boolean; state: ImageAttemptState; revokeUrl: string | null } {
   if (state.phase !== "ready" || !state.remoteUrl || state.remoteUrl !== savedUrl) return same(state);
+  if (state.localUrl) {
+    return {
+      changed: true,
+      revokeUrl: null,
+      state: {
+        ...state,
+        phase: "idle",
+        percent: null,
+        error: null,
+        canRetry: false,
+      },
+    };
+  }
   return {
     changed: true,
-    revokeUrl: state.localUrl,
+    revokeUrl: null,
     state: { ...idleImageAttempt(), generation: state.generation },
   };
+}
+
+/** Drop an in-flight attempt on unmount. Callers must ignore the previous generation. */
+export function releaseImageAttempt(state: ImageAttemptState): { generation: number; revokeUrl: string | null } {
+  return { generation: state.generation + 1, revokeUrl: state.localUrl };
 }
 
 export function previewSource(localUrl: string | null, committedUrl: string): string {
