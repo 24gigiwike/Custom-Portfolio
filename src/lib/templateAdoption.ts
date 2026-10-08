@@ -120,6 +120,8 @@ export function fieldsForTemplateAdoption(
     seo: content.seo,
     discoverability: content.discoverability,
     design: content.design,
+    publicSlug: content.publicSlug,
+    publicSlugAliases: content.publicSlugAliases,
     publishing: { status: "draft" },
   };
   if (!options.preserveStoredSocialLinks) fields.socialLinks = content.socialLinks;

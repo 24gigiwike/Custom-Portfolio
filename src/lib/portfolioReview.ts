@@ -194,6 +194,7 @@ export function savedPortfolioPresentation(
       projects: portfolio.projects,
       seo: portfolio.seo,
       discoverability: portfolio.discoverability,
+      publicSlug: portfolio.publicSlug,
     },
     environment
   );

@@ -71,6 +71,39 @@ try {
       }), { status: 200 });
     }
     if (url.includes("/publicPortfolios/brokenid")) return new Response("nope", { status: 500 });
+    if (url.includes("/publicPortfolios/SLUGID")) {
+      return new Response(documentFor({
+        publicId: "SLUGID",
+        selectedTemplate: "wdk-premium-portfolio-1",
+        profile: { brandName: "John Paul", headline: "Motion Designer" },
+        contact: { description: "Selected animation and motion work." },
+        projects: [],
+        socialLinks: [],
+        seo: { title: "John Paul — Motion Designer", description: "Selected animation and motion work." },
+        design: { palette: "original" },
+        publicSlug: "johnpaul",
+      }), { status: 200 });
+    }
+    if (url.includes("/publicPortfolios/IDONLY")) {
+      return new Response(documentFor({
+        publicId: "IDONLY",
+        selectedTemplate: "wdk-premium-portfolio-1",
+        profile: { brandName: "Kept Name", headline: "Kept headline" },
+        contact: { description: "Kept description." },
+        projects: [],
+        socialLinks: [],
+        seo: { title: "Kept title", description: "Kept description." },
+        design: { palette: "original" },
+        publicSlug: "",
+      }), { status: 200 });
+    }
+    if (url.includes("/portfolioSlugs/johnpaul")) {
+      return new Response(documentFor({ slug: "johnpaul", portfolioId: "SLUGID", role: "active" }), { status: 200 });
+    }
+    if (url.includes("/portfolioSlugs/old-name")) {
+      return new Response(documentFor({ slug: "old-name", portfolioId: "SLUGID", role: "alias" }), { status: 200 });
+    }
+    if (url.includes("/portfolioSlugs/hidden")) return new Response("{}", { status: 403 });
     if (url.includes("/sitemapEntries")) return new Response("{}", { status: 403 });
     return new Response("{}", { status: 404 });
   });
@@ -135,23 +168,55 @@ try {
 
   await assert.rejects(() => loadSitemapEntries());
 
+  const slugPage = await publicPortfolioHtml("johnpaul", shell, "production");
+  assert.equal(slugPage.status, 200);
+  assert.match(slugPage.html, /<title>John Paul — Motion Designer<\/title>/);
+  assert.match(slugPage.html, /rel="canonical" href="https:\/\/customportfolio\.broadbrand\.com\.ng\/p\/johnpaul"/);
+  assert.equal(slugPage.html.includes("/p/SLUGID"), false);
+  assert.equal(slugPage.html.includes("owner-secret"), false);
+
+  const idRedirect = await publicPortfolioHtml("SLUGID", shell, "production");
+  assert.equal(idRedirect.status, 301);
+  assert.equal(idRedirect.location, "https://customportfolio.broadbrand.com.ng/p/johnpaul");
+  assert.equal(idRedirect.html.includes("John Paul"), false);
+  assert.equal(idRedirect.html.includes("FAQPage"), false);
+
+  const alias = await publicPortfolioHtml("old-name", shell, "production");
+  assert.equal(alias.status, 301);
+  assert.equal(alias.location, "https://customportfolio.broadbrand.com.ng/p/johnpaul");
+  assert.equal(alias.html.includes("John Paul"), false);
+
+  const idOnly = await publicPortfolioHtml("IDONLY", shell, "production");
+  assert.equal(idOnly.status, 200);
+  assert.match(idOnly.html, /rel="canonical" href="https:\/\/customportfolio\.broadbrand\.com\.ng\/p\/IDONLY"/);
+  assert.equal(idOnly.location, undefined);
+
+  const hiddenSlug = await publicPortfolioHtml("hidden", shell, "production");
+  assert.equal(hiddenSlug.status, 404);
+  assert.equal(hiddenSlug.location, undefined);
+  assert.equal(hiddenSlug.html.includes("John Paul"), false);
+
+  const unknownSlug = await publicPortfolioHtml("not-a-portfolio", shell, "production");
+  assert.equal(unknownSlug.status, 404);
+
   const respond = async (url: string, host: string) => {
     let status = 0;
     let body = "";
+    const headers: Record<string, string> = {};
     const res = {
       status(code: number) {
         status = code;
         return res;
       },
-      setHeader() {
-        return undefined;
+      setHeader(name: string, value: string) {
+        headers[name.toLowerCase()] = value;
       },
       end(value: string) {
         body = value;
       },
     };
     await handler({ url, headers: { host } }, res);
-    return { status, body };
+    return { status, body, headers };
   };
 
   const productionHome = await respond("/api/site?kind=home", "customportfolio.broadbrand.com.ng");
@@ -172,6 +237,15 @@ try {
   assert.equal(missingPage.status, 404);
   assert.match(missingPage.body, /<title>Portfolio<\/title>/);
   assert.equal(missingPage.body.includes("John Paul"), false);
+
+  const slugRefresh = await respond("/api/site?kind=portfolio&publicId=johnpaul", "customportfolio.broadbrand.com.ng");
+  assert.equal(slugRefresh.status, 200);
+  assert.match(slugRefresh.body, /canonical" href="https:\/\/customportfolio\.broadbrand\.com\.ng\/p\/johnpaul"/);
+
+  const idRefresh = await respond("/api/site?kind=portfolio&publicId=SLUGID", "customportfolio.broadbrand.com.ng");
+  assert.equal(idRefresh.status, 301);
+  assert.equal(idRefresh.headers.location, "https://customportfolio.broadbrand.com.ng/p/johnpaul");
+  assert.equal(idRefresh.body.includes("John Paul"), false);
 } finally {
   globalThis.fetch = originalFetch;
 }

@@ -20,6 +20,8 @@ export function contentWithDesign(portfolio: UserPortfolio, palette: string): Us
     seo: portfolio.seo,
     discoverability: portfolio.discoverability,
     design: { palette: allowed ? portfolioPaletteId(palette) : portfolio.design.palette },
+    publicSlug: portfolio.publicSlug,
+    publicSlugAliases: portfolio.publicSlugAliases,
     publishing: portfolio.publishing,
   };
 }

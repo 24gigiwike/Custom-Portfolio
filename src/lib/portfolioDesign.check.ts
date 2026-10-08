@@ -89,6 +89,8 @@ const portfolio: UserPortfolio = {
   },
   discoverability: { identity: "", serviceRegion: "", faqs: [] },
   design: { palette: "original" },
+  publicSlug: "",
+  publicSlugAliases: [],
   publishing: { status: "draft" },
   createdAt: null,
   updatedAt: null,

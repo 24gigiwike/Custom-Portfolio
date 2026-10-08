@@ -13,6 +13,7 @@ import {
   normalizeSeoText,
   platformRobots,
   platformTitle,
+  canonicalPortfolioUrl,
   portfolioCanonicalUrl,
   portfolioPageDescription,
   portfolioPageTitle,
@@ -68,6 +69,8 @@ function source(overrides: Partial<UserPortfolio> = {}): UserPortfolio {
     },
     discoverability: { identity: "", serviceRegion: "", faqs: [] },
     design: { palette: "ocean" },
+    publicSlug: "",
+    publicSlugAliases: [],
     publishing: { status: "published", publishedAt: "2024-07-01" },
     createdAt: null,
     updatedAt: null,
@@ -93,6 +96,7 @@ function seoSource(portfolio: UserPortfolio): SeoSource {
     })),
     seo: portfolio.seo,
     discoverability: portfolio.discoverability,
+    publicSlug: portfolio.publicSlug,
   };
 }
 
@@ -119,6 +123,8 @@ assert.equal(portfolioPageDescription({ seoDescription: "a".repeat(200) }).lengt
 
 const canonical = portfolioCanonicalUrl("ABC123");
 assert.equal(canonical, "https://customportfolio.broadbrand.com.ng/p/ABC123");
+assert.equal(canonicalPortfolioUrl("ABC123", "johnpaul"), "https://customportfolio.broadbrand.com.ng/p/johnpaul");
+assert.equal(canonicalPortfolioUrl("ABC123", ""), canonical);
 assert.equal(portfolioCanonicalUrl("a b"), null);
 assert.equal(portfolioCanonicalUrl("../admin"), null);
 assert.equal(portfolioCanonicalUrl("ABC123?utm=1"), null);
@@ -213,6 +219,8 @@ assert.equal(saved.design.palette, "ocean");
 assert.equal(saved.publishing.status, "published");
 assert.equal(saved.publishing.publishedAt, "2024-07-01");
 assert.deepEqual(saved.discoverability, named.discoverability);
+assert.equal(saved.publicSlug, named.publicSlug);
+assert.deepEqual(saved.publicSlugAliases, named.publicSlugAliases);
 const delivery = publicDeliveryForSavedContent(named, saved);
 assert.equal(delivery.action, "upsert");
 if (delivery.action === "upsert") {
@@ -230,6 +238,9 @@ const xml = sitemapXml([
 assert.match(xml, /https:\/\/customportfolio\.broadbrand\.com\.ng\/p\/ABC123/);
 assert.match(xml, /<lastmod>2024-07-01T00:00:00Z<\/lastmod>/);
 assert.equal(xml.includes("not valid"), false);
+const sluggedXml = sitemapXml([{ publicId: "ABC123", slug: "johnpaul", updatedAt: "2024-07-01T00:00:00Z" }]);
+assert.match(sluggedXml, /\/p\/johnpaul</);
+assert.equal(sluggedXml.includes("/p/ABC123"), false);
 
 const productionRobots = robotsTxt("production");
 assert.match(productionRobots, /Allow: \/p\//);
@@ -338,7 +349,7 @@ const rules = readFileSync(new URL("../../firestore.rules", import.meta.url), "u
 const sitemapRules = rules.slice(rules.indexOf("match /sitemapEntries/{publicId}"), rules.indexOf("match /{document=**}"));
 assert.match(sitemapRules, /allow read: if true;/);
 assert.match(sitemapRules, /privatePortfolioAfter\(\)\.data\.ownerId == request\.auth\.uid/);
-assert.match(sitemapRules, /request\.resource\.data\.keys\(\)\.hasOnly\(\["publicId", "updatedAt"\]\)/);
+assert.match(sitemapRules, /request\.resource\.data\.keys\(\)\.hasOnly\(\["publicId", "updatedAt", "slug"\]\)/);
 const privateRules = rules.slice(rules.indexOf("match /portfolios/{portfolioId}"), rules.indexOf("match /publicPortfolios/{publicId}"));
 assert.match(privateRules, /allow read: if isSignedIn\(\) && resource\.data\.ownerId == request\.auth\.uid;/);
 assert.equal(privateRules.includes("allow read: if true"), false);

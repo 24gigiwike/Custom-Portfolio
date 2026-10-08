@@ -9,6 +9,7 @@ import type {
 import type { PortfolioPublishing, UserPortfolio, UserPortfolioContent } from "../types/userPortfolio";
 import { normalizePortfolioDesign } from "../types/portfolioDesign";
 import { normalizeDiscoverability } from "./discoverability.js";
+import { storedPublicSlug, storedPublicSlugAliases } from "./portfolioSlug.js";
 import { findCatalogTemplate } from "./templateCatalog";
 
 const PLATFORMS = new Set<SocialPlatform>(["x", "instagram", "facebook", "youtube", "tiktok", "email"]);
@@ -159,6 +160,8 @@ export function portfolioContentForTemplate(
     seo: readSeo(data.seo),
     discoverability: normalizeDiscoverability(data.discoverability),
     design: normalizePortfolioDesign(data.design),
+    publicSlug: storedPublicSlug(data.publicSlug),
+    publicSlugAliases: storedPublicSlugAliases(data.publicSlugAliases, storedPublicSlug(data.publicSlug)),
     publishing: readPublishing(data),
   };
 }

@@ -14,6 +14,7 @@ import type { PortfolioDiscoverability } from "../types/discoverability";
 import type { PublicPortfolio } from "../types/publicPortfolio";
 import type { UserPortfolio, UserPortfolioContent } from "../types/userPortfolio";
 import { normalizeDiscoverability } from "./discoverability.js";
+import { storedPublicSlug } from "./portfolioSlug.js";
 import { portfolioPageTitle } from "./portfolioSeo.js";
 import { templateForCreation } from "./templateCatalog.js";
 import { toWdkPremiumPortfolioData, wdkPaletteForPortfolio } from "./wdkPortfolioAdapter.js";
@@ -36,6 +37,7 @@ export type PublicPortfolioFields = {
   seo: PortfolioSEO;
   discoverability: PortfolioDiscoverability;
   design: PortfolioDesign;
+  publicSlug: string;
 };
 
 export type PublicDelivery =
@@ -150,6 +152,7 @@ export function publicPortfolioFromUserPortfolio(portfolio: UserPortfolio): Publ
     seo: publicSeo(portfolio.seo),
     discoverability: normalizeDiscoverability(portfolio.discoverability),
     design: { palette: normalizePortfolioDesign(portfolio.design).palette },
+    publicSlug: storedPublicSlug(portfolio.publicSlug),
   };
 }
 
@@ -293,6 +296,7 @@ export function readPublicPortfolio(publicId: string, data: Record<string, unkno
     seo,
     discoverability: normalizeDiscoverability(data.discoverability),
     design: normalizePortfolioDesign(data.design),
+    publicSlug: storedPublicSlug(data.publicSlug),
     publishedAt: readTime(data.publishedAt),
     updatedAt: readTime(data.updatedAt),
   };

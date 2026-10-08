@@ -64,6 +64,11 @@ export function PublicPortfolioView({ publicId }: { publicId: string }) {
     );
   }
 
+  if (lookup.status === "redirect") {
+    window.location.replace(lookup.path);
+    return <PublicStatus title="Loading portfolio…" titleText="Portfolio" />;
+  }
+
   if (lookup.status === "unavailable") {
     return <PublicStatus title="This portfolio is not available." titleText="Portfolio" />;
   }

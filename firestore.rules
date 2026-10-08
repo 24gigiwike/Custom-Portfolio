@@ -11,6 +11,24 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isReservedSlug(slug) {
+      return slug in [
+        "about", "account", "accounts", "admin", "administrator", "api", "app", "assets",
+        "auth", "billing", "blog", "broadbrand", "cdn", "contact", "copy", "create",
+        "customportfolio", "dashboard", "delete", "demo", "design", "dev", "development",
+        "discover", "docs", "documentation", "download", "downloads", "draft", "edit",
+        "email", "favicon", "files", "firebase", "google", "health", "help", "home",
+        "index", "legal", "login", "logout", "mail", "me", "moderator", "new", "null",
+        "onboarding", "overview", "owner", "owners", "portfolio", "preview", "pricing",
+        "privacy", "private", "production", "public", "publish", "register", "review",
+        "robots", "root", "save", "seo", "settings", "sign-in", "sign-out", "signin",
+        "signout", "signup", "sitemap", "staging", "static", "status", "support",
+        "system", "template", "template-preview", "templates", "terms", "test",
+        "undefined", "unpublish", "update", "upload", "uploads", "user", "users",
+        "webmaster", "well-known", "workspace", "www"
+      ];
+    }
+
     // User account document rules
     match /users/{userId} {
       allow read: if isOwner(userId);
@@ -71,9 +89,14 @@ service cloud.firestore {
           "seo",
           "discoverability",
           "design",
+          "publicSlug",
           "publishedAt",
           "updatedAt"
         ];
+      }
+
+      function activeSlugRecord(slug) {
+        return getAfter(/databases/$(database)/documents/portfolioSlugs/$(slug));
       }
 
       allow read: if resource.data.publicId == publicId
@@ -113,6 +136,23 @@ service cloud.firestore {
             && request.resource.data.discoverability.faqs.size() <= 8
           )
         )
+        && (
+          !("publicSlug" in request.resource.data)
+          || (
+            request.resource.data.publicSlug is string
+            && request.resource.data.publicSlug.size() <= 48
+            && (
+              request.resource.data.publicSlug == ""
+              || (
+                request.resource.data.publicSlug.size() >= 3
+                && request.resource.data.publicSlug.matches('^[a-z0-9]+(-[a-z0-9]+)*$')
+                && request.resource.data.publicSlug == privatePortfolioAfter().data.publicSlug
+                && activeSlugRecord(request.resource.data.publicSlug).data.role == "active"
+                && activeSlugRecord(request.resource.data.publicSlug).data.portfolioId == publicId
+              )
+            )
+          )
+        )
         && request.resource.data.design is map
         && request.resource.data.design.keys().hasOnly(["palette"])
         && request.resource.data.updatedAt == request.time
@@ -145,13 +185,107 @@ service cloud.firestore {
       allow create, update: if isSignedIn()
         && privatePortfolioAfter().data.ownerId == request.auth.uid
         && isPublished(privatePortfolioAfter().data)
-        && request.resource.data.keys().hasOnly(["publicId", "updatedAt"])
+        && request.resource.data.keys().hasOnly(["publicId", "updatedAt", "slug"])
         && request.resource.data.publicId == publicId
-        && request.resource.data.updatedAt == request.time;
+        && request.resource.data.updatedAt == request.time
+        && (
+          !("slug" in request.resource.data)
+          || request.resource.data.slug == (
+            privatePortfolioAfter().data.keys().hasAny(["publicSlug"])
+              ? privatePortfolioAfter().data.publicSlug
+              : ""
+          )
+        );
 
       allow delete: if isSignedIn()
         && privatePortfolioAfter().data.ownerId == request.auth.uid
         && !isPublished(privatePortfolioAfter().data);
+    }
+
+    // Permanent portfolio ids. The document stores the id and nothing about the owner.
+    // Signed-in clients may read one id while claiming a slug. Listing the collection is denied.
+    match /portfolioIds/{portfolioId} {
+      allow get: if isSignedIn();
+      allow list: if false;
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(["portfolioId"])
+        && request.resource.data.portfolioId == portfolioId
+        && getAfter(/databases/$(database)/documents/portfolios/$(portfolioId)).data.ownerId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // One slug belongs to one portfolio. The document does not store the owner account.
+    // Anonymous reads succeed only while that portfolio is published.
+    match /portfolioSlugs/{slug} {
+      function portfolioAfter() {
+        return getAfter(/databases/$(database)/documents/portfolios/$(request.resource.data.portfolioId));
+      }
+
+      function portfolioNow() {
+        return get(/databases/$(database)/documents/portfolios/$(resource.data.portfolioId));
+      }
+
+      function isPublished(portfolioData) {
+        return portfolioData.keys().hasAny(["publishing"])
+          ? portfolioData.publishing.status == "published"
+          : portfolioData.published == true;
+      }
+
+      function slugShape() {
+        return slug.size() >= 3
+          && slug.size() <= 48
+          && slug.matches('^[a-z0-9]+(-[a-z0-9]+)*$')
+          && !isReservedSlug(slug);
+      }
+
+      allow get: if resource.data.portfolioId is string
+        && (
+          (isSignedIn() && portfolioNow().data.ownerId == request.auth.uid)
+          || (
+            exists(/databases/$(database)/documents/publicPortfolios/$(resource.data.portfolioId))
+            && isPublished(portfolioNow().data)
+          )
+        );
+      allow list: if false;
+
+      allow create: if isSignedIn()
+        && slugShape()
+        && request.resource.data.keys().hasOnly(["slug", "portfolioId", "role"])
+        && request.resource.data.slug == slug
+        && request.resource.data.role == "active"
+        && request.resource.data.portfolioId is string
+        && request.resource.data.portfolioId.size() > 0
+        && request.resource.data.portfolioId.size() <= 128
+        && portfolioAfter().data.ownerId == request.auth.uid
+        && portfolioAfter().data.publicSlug == slug
+        && portfolioAfter().data.publicSlugAliases is list
+        && portfolioAfter().data.publicSlugAliases.size() <= 8
+        && !exists(/databases/$(database)/documents/portfolios/$(slug))
+        && !exists(/databases/$(database)/documents/portfolioIds/$(slug));
+
+      allow update: if isSignedIn()
+        && slugShape()
+        && resource.data.portfolioId == request.resource.data.portfolioId
+        && resource.data.slug == slug
+        && request.resource.data.keys().hasOnly(["slug", "portfolioId", "role"])
+        && request.resource.data.slug == slug
+        && request.resource.data.role in ["active", "alias"]
+        && portfolioAfter().data.ownerId == request.auth.uid
+        && portfolioAfter().data.publicSlugAliases is list
+        && portfolioAfter().data.publicSlugAliases.size() <= 8
+        && (
+          (
+            request.resource.data.role == "active"
+            && portfolioAfter().data.publicSlug == slug
+          )
+          || (
+            request.resource.data.role == "alias"
+            && portfolioAfter().data.publicSlug != slug
+            && slug in portfolioAfter().data.publicSlugAliases
+          )
+        );
+
+      allow delete: if false;
     }
 
     // Default deny all other collections

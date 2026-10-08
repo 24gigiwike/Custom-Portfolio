@@ -36,6 +36,7 @@ function attach(shellPath: string, transform?: (url: string, html: string) => Pr
     const shell = transform ? await transform(req.url ?? "/", rawShell) : rawShell;
     const result = await publicPortfolioHtml(publicId, shell, "development");
     res.statusCode = result.status;
+    if (result.location) res.setHeader("location", result.location);
     res.setHeader("content-type", "text/html; charset=utf-8");
     res.setHeader("cache-control", "public, max-age=0, must-revalidate");
     res.end(result.html);

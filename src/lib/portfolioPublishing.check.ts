@@ -19,7 +19,7 @@ import {
   unpublishDocumentFields,
 } from "./portfolioPublishing";
 
-const CONTENT_KEYS = ["selectedTemplate", "profile", "socialLinks", "projects", "contact", "seo", "design", "ownerId", "id", "createdAt"];
+const CONTENT_KEYS = ["selectedTemplate", "profile", "socialLinks", "projects", "contact", "seo", "design", "publicSlug", "publicSlugAliases", "ownerId", "id", "createdAt"];
 
 function portfolio(overrides: Partial<UserPortfolio> = {}): UserPortfolio {
   return {
@@ -60,6 +60,8 @@ function portfolio(overrides: Partial<UserPortfolio> = {}): UserPortfolio {
     },
     discoverability: { identity: "", serviceRegion: "", faqs: [] },
     design: { palette: "ocean" },
+    publicSlug: "",
+    publicSlugAliases: [],
     publishing: { status: "draft" },
     createdAt: "2024-01-01",
     updatedAt: "2024-06-01",
