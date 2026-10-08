@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { FieldError, fieldClass } from "../onboarding/StepFrame";
+import { imagePhaseLabel } from "../../lib/imageAttempt";
 import type { ImageUploadStatus } from "../../lib/storage";
+import { FieldError, fieldClass } from "../onboarding/StepFrame";
 
 type ImageFieldProps = {
   id: string;
@@ -8,22 +9,20 @@ type ImageFieldProps = {
   hint: string;
   value: string;
   error?: string;
+  localUrl?: string | null;
   status: ImageUploadStatus | null;
   disabled?: boolean;
+  canRetry?: boolean;
+  canCancel?: boolean;
   shape: "portrait" | "logo" | "share";
   onUpload: (file: File) => void;
   onValueChange: (value: string) => void;
+  onRetry?: () => void;
+  onCancel?: () => void;
 };
 
 export function imageStatusLabel(status: ImageUploadStatus | null): string | null {
-  if (!status) return null;
-  if (status.phase === "preparing") return "Preparing image…";
-  if (status.phase === "optimizing") return "Optimizing…";
-  if (status.phase === "uploading") {
-    return status.percent === null ? "Uploading…" : `Uploading ${status.percent}%…`;
-  }
-  if (status.phase === "ready") return "Ready";
-  return null;
+  return imagePhaseLabel(status);
 }
 
 export function ImageField({
@@ -32,15 +31,21 @@ export function ImageField({
   hint,
   value,
   error,
+  localUrl = null,
   status,
   disabled = false,
+  canRetry = false,
+  canCancel = false,
   shape,
   onUpload,
   onValueChange,
+  onRetry,
+  onCancel,
 }: ImageFieldProps) {
   const [mode, setMode] = useState<"upload" | "link">(value && !value.startsWith("https://firebasestorage.googleapis.com") && !value.includes("/portfolio-assets/") ? "link" : "upload");
-  const busy = status?.phase === "preparing" || status?.phase === "optimizing" || status?.phase === "uploading";
+  const busy = status?.phase === "preparing" || status?.phase === "optimizing" || status?.phase === "uploading" || status?.phase === "finalizing";
   const statusText = imageStatusLabel(status);
+  const preview = localUrl || value;
 
   return (
     <div className="min-w-0">
@@ -55,17 +60,17 @@ export function ImageField({
       </div>
 
       <div className="mt-4 flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
-        <ImagePreview src={value} shape={shape} />
+        <ImagePreview src={preview} shape={shape} />
         <div className="min-w-0 flex-1">
           {mode === "upload" ? (
             <label className="inline-flex h-11 max-w-full cursor-pointer items-center rounded-xl border border-[#D5E6E5] bg-white px-5 text-sm font-bold tracking-[-0.02em]">
-              {busy ? statusText : value ? "Replace image" : "Choose image"}
+              {busy ? "Replace image" : value || localUrl ? "Replace image" : "Choose image"}
               <input
                 id={id}
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/gif"
                 className="sr-only"
-                disabled={disabled || busy}
+                disabled={disabled}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   event.target.value = "";
@@ -89,6 +94,20 @@ export function ImageField({
             </label>
           )}
           {statusText && <p className="mt-2 text-sm font-medium text-[#3E7574]" aria-live="polite">{statusText}</p>}
+          {(canCancel || canRetry) && (
+            <div className="mt-3 flex flex-wrap gap-4">
+              {canCancel && onCancel && (
+                <button type="button" className="text-sm font-bold text-[#3E7574]" onClick={onCancel}>
+                  Cancel
+                </button>
+              )}
+              {canRetry && onRetry && (
+                <button type="button" className="text-sm font-bold text-[#3E7574]" onClick={onRetry}>
+                  Try again
+                </button>
+              )}
+            </div>
+          )}
           <p className="mt-2 break-words text-sm leading-relaxed text-[#5C7372]">{hint}</p>
           <FieldError message={error} />
         </div>
@@ -145,6 +164,7 @@ function ImagePreview({ src, shape }: { src: string; shape: "portrait" | "logo" 
     <img
       src={src}
       alt=""
+      decoding="async"
       className={`${frame} shrink-0 bg-[#E7F3F2] ${shape === "logo" ? "object-contain" : "object-cover"}`}
       onError={() => setBroken(true)}
     />

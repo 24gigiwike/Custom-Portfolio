@@ -5,10 +5,15 @@ import {
   getDownloadURL,
   deleteObject,
   type FirebaseStorage,
+  type UploadTask,
   type UploadTaskSnapshot,
 } from "firebase/storage";
 import app, { auth } from "./firebase";
-import { optimizeImageForUpload, type OptimizedImageResult } from "./imageOptimizer";
+import { ImageUploadCancelled } from "./imageAttempt";
+import { optimizeImageForUpload, ImagePreparationError, type ImageUse, type OptimizedImageResult } from "./imageOptimizer";
+import type { ImageUploadStatus } from "./imageAttempt";
+
+export type { ImageUploadStatus };
 
 let storageInstance: FirebaseStorage | null = null;
 
@@ -101,7 +106,7 @@ export async function uploadProjectImage(
   }
 
   // 1. Client-Side Adaptive Optimization
-  const optimizationResult = await optimizeImageForUpload(file);
+  const optimizationResult = await optimizeImageForUpload(file, undefined, "project");
   if (onOptimized) {
     onOptimized(optimizationResult);
   }
@@ -275,13 +280,148 @@ export async function uploadAccountProfileImage(
 
 export type PortfolioImageFolder = "portrait" | "logo" | "social";
 
-export type ImageUploadStatus = {
-  phase: "preparing" | "optimizing" | "uploading" | "ready";
-  percent: number | null;
+function profileForFolder(folder: PortfolioImageFolder): ImageUse {
+  if (folder === "logo") return "logo";
+  if (folder === "social") return "social";
+  return "portrait";
+}
+
+function uploadFailureMessage(folder: PortfolioImageFolder): string {
+  if (folder === "logo") return "Couldn't upload this logo. Try again.";
+  if (folder === "social") return "Couldn't upload this image. Try again.";
+  return "Couldn't upload this portrait. Try again.";
+}
+
+function isCancelledUpload(error: unknown): boolean {
+  if (error instanceof ImageUploadCancelled) return true;
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+  return code === "storage/canceled";
+}
+
+export type PortfolioImageUpload = {
+  cancel: () => void;
+  done: Promise<UploadedProjectImage>;
 };
 
 /**
- * Upload a portfolio image. Firestore stores the download URL only.
+ * Prepare and upload one portfolio image.
+ * Cancel stops the resumable task. A cancelled attempt does not resolve a URL.
+ */
+export function beginPortfolioImageUpload(
+  portfolioId: string,
+  file: File,
+  folder: PortfolioImageFolder,
+  onStatus?: (status: ImageUploadStatus) => void,
+): PortfolioImageUpload {
+  let cancelled = false;
+  let uploadTask: UploadTask | null = null;
+
+  const done = (async () => {
+    const validation = validateImageFile(file);
+    if (!validation.valid) throw new Error(validation.error || "Please choose a valid image.");
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error("You must be signed in to upload an image.");
+    if (!portfolioId) throw new Error("Your portfolio needs to finish loading before an image can be added.");
+
+    onStatus?.({ phase: "preparing", percent: null });
+    const optimizationResult = await optimizeImageForUpload(
+      file,
+      (phase) => onStatus?.({ phase, percent: null }),
+      profileForFolder(folder),
+    );
+    if (cancelled) throw new ImageUploadCancelled();
+
+    const fileToUpload = optimizationResult.file;
+    const cleanFileName = fileToUpload.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+    const storagePath = `portfolio-assets/${currentUser.uid}/${portfolioId}/${folder}/${Date.now()}_${cleanFileName}`;
+    const fileRef = ref(getStorageInstance(), storagePath);
+    uploadTask = uploadBytesResumable(fileRef, fileToUpload, {
+      contentType: fileToUpload.type,
+      customMetadata: {
+        ownerId: currentUser.uid,
+        portfolioId,
+        purpose: folder === "logo" ? "portfolio-logo" : folder === "social" ? "portfolio-social" : "portfolio-portrait",
+        originalName: file.name,
+      },
+    });
+    if (cancelled) {
+      uploadTask.cancel();
+      throw new ImageUploadCancelled();
+    }
+
+    return await new Promise<UploadedProjectImage>((resolve, reject) => {
+      onStatus?.({ phase: "uploading", percent: null });
+      uploadTask?.on(
+        "state_changed",
+        (snapshot: UploadTaskSnapshot) => {
+          if (snapshot.totalBytes > 0 && onStatus) {
+            const percent = Math.min(
+              100,
+              Math.max(0, Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)),
+            );
+            onStatus({ phase: "uploading", percent });
+          }
+        },
+        (error) => {
+          if (isCancelledUpload(error)) {
+            reject(new ImageUploadCancelled());
+            return;
+          }
+          console.error("Portfolio image upload error:", error);
+          const msg = error.message || String(error);
+          if (msg.includes("unauthorized") || msg.includes("permission")) {
+            reject(new Error("You do not have permission to upload this image."));
+          } else {
+            reject(new Error(uploadFailureMessage(folder)));
+          }
+        },
+        async () => {
+          if (cancelled || !uploadTask) {
+            reject(new ImageUploadCancelled());
+            return;
+          }
+          try {
+            onStatus?.({ phase: "finalizing", percent: null });
+            const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+            if (cancelled) {
+              reject(new ImageUploadCancelled());
+              return;
+            }
+            onStatus?.({ phase: "ready", percent: null });
+            resolve({ downloadUrl, storagePath });
+          } catch (err) {
+            if (isCancelledUpload(err)) {
+              reject(new ImageUploadCancelled());
+              return;
+            }
+            console.error("Failed to get portfolio image URL:", err);
+            reject(new Error(uploadFailureMessage(folder)));
+          }
+        },
+      );
+    });
+  })().catch((error: unknown) => {
+    if (error instanceof ImagePreparationError) throw error;
+    if (isCancelledUpload(error)) throw new ImageUploadCancelled();
+    throw error;
+  });
+
+  return {
+    cancel() {
+      cancelled = true;
+      uploadTask?.cancel();
+    },
+    done,
+  };
+}
+
+/**
+ * Upload a portfolio image. The editor stores the download URL only.
+ * A replacement is not deleted: Save has not happened yet, and an older
+ * published document may still reference the previous object.
  * Portrait: portfolio-assets/{uid}/{portfolioId}/portrait/{timestamp}_{file}
  * Logo: portfolio-assets/{uid}/{portfolioId}/logo/{timestamp}_{file}
  * Social: portfolio-assets/{uid}/{portfolioId}/social/{timestamp}_{file}
@@ -290,75 +430,9 @@ export async function uploadPortfolioImage(
   portfolioId: string,
   file: File,
   folder: PortfolioImageFolder,
-  onStatus?: (status: ImageUploadStatus) => void
+  onStatus?: (status: ImageUploadStatus) => void,
 ): Promise<UploadedProjectImage> {
-  const validation = validateImageFile(file);
-  if (!validation.valid) {
-    throw new Error(validation.error || "Please choose a valid image.");
-  }
-
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    throw new Error("You must be signed in to upload an image.");
-  }
-  if (!portfolioId) {
-    throw new Error("Your portfolio needs to finish loading before an image can be added.");
-  }
-
-  const label = folder === "logo" ? "logo" : "portrait";
-  onStatus?.({ phase: "preparing", percent: null });
-  const optimizationResult = await optimizeImageForUpload(file, (phase) => {
-    onStatus?.({ phase, percent: null });
-  });
-  const fileToUpload = optimizationResult.file;
-  const cleanFileName = fileToUpload.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-  const storagePath = `portfolio-assets/${currentUser.uid}/${portfolioId}/${folder}/${Date.now()}_${cleanFileName}`;
-  const fileRef = ref(getStorageInstance(), storagePath);
-
-  const uploadTask = uploadBytesResumable(fileRef, fileToUpload, {
-    contentType: fileToUpload.type,
-    customMetadata: {
-      ownerId: currentUser.uid,
-      portfolioId,
-      purpose: folder === "logo" ? "portfolio-logo" : folder === "social" ? "portfolio-social" : "portfolio-portrait",
-      originalName: file.name,
-    },
-  });
-
-  return await new Promise<UploadedProjectImage>((resolve, reject) => {
-    onStatus?.({ phase: "uploading", percent: null });
-    uploadTask.on(
-      "state_changed",
-      (snapshot: UploadTaskSnapshot) => {
-        if (snapshot.totalBytes > 0 && onStatus) {
-          const percent = Math.min(
-            100,
-            Math.max(0, Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100))
-          );
-          onStatus({ phase: "uploading", percent });
-        }
-      },
-      (error) => {
-        console.error(`Portfolio ${label} upload error:`, error);
-        const msg = error.message || String(error);
-        if (msg.includes("unauthorized") || msg.includes("permission")) {
-          reject(new Error(`You do not have permission to upload this ${label}.`));
-        } else {
-          reject(new Error(`Couldn't upload this ${label}. Try again.`));
-        }
-      },
-      async () => {
-        try {
-          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-          onStatus?.({ phase: "ready", percent: null });
-          resolve({ downloadUrl, storagePath });
-        } catch (err) {
-          console.error(`Failed to get portfolio ${label} URL:`, err);
-          reject(new Error(`We couldn't prepare this ${label}. Try another image.`));
-        }
-      }
-    );
-  });
+  return beginPortfolioImageUpload(portfolioId, file, folder, onStatus).done;
 }
 
 /**

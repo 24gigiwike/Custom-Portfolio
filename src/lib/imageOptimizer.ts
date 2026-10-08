@@ -16,11 +16,57 @@ export interface OptimizedImageResult {
   wasOptimized: boolean;
 }
 
-const MAX_DIMENSION = 2048; // Maximum width or height on longest side for high-DPI displays
-const COMPRESSION_QUALITY = 0.84; // Quality factor (0.80 - 0.85 delivers artifact-free retina clarity)
-const ALREADY_OPTIMIZED_THRESHOLD_BYTES = 350 * 1024; // 350KB
+const MAX_DIMENSION = 2048;
+const MAX_PROCESSABLE_BYTES = 30 * 1024 * 1024;
+
+/** GIFs are not re-encoded, so the animation stays intact. Larger GIFs are refused. */
+export const GIF_MAX_BYTES = 2 * 1024 * 1024;
+
+export const GIF_TOO_LARGE_MESSAGE =
+  "GIFs keep their animation and are not resized. Please choose a GIF under 2 MB.";
+
+export const IMAGE_PREPARATION_FAILED_MESSAGE =
+  "This image couldn't be prepared. Please choose a smaller JPG, PNG, or WEBP.";
+
+export class ImagePreparationError extends Error {
+  readonly name = "ImagePreparationError";
+
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+export type ImageUse = "portrait" | "logo" | "social" | "project";
+
+export type ImageProfile = {
+  maxLongSide: number;
+  quality: number;
+  /** Within the long-side limit and at or below this size: upload the file unchanged. */
+  passThroughMaxBytes: number;
+  /** If encoding fails, an original within the long-side limit and this size may still upload. */
+  safeOriginalMaxBytes: number;
+};
+
+/**
+ * Portrait stays large because the same file is the hero and the small avatar.
+ * Logo and social images are not shown that large, so their caps are lower.
+ * Nothing is upscaled.
+ */
+export const IMAGE_PROFILES: Record<ImageUse, ImageProfile> = {
+  portrait: { maxLongSide: 2048, quality: 0.84, passThroughMaxBytes: 500 * 1024, safeOriginalMaxBytes: 2 * 1024 * 1024 },
+  logo: { maxLongSide: 800, quality: 0.9, passThroughMaxBytes: 250 * 1024, safeOriginalMaxBytes: 1024 * 1024 },
+  social: { maxLongSide: 1600, quality: 0.86, passThroughMaxBytes: 450 * 1024, safeOriginalMaxBytes: 2 * 1024 * 1024 },
+  project: { maxLongSide: 2048, quality: 0.84, passThroughMaxBytes: 350 * 1024, safeOriginalMaxBytes: 2 * 1024 * 1024 },
+};
+
+export type ImagePlan =
+  | { action: "passthrough"; reason: "gif" | "already-efficient" }
+  | { action: "optimize" }
+  | { action: "reject"; message: string };
 
 export type ImagePreparePhase = "preparing" | "optimizing";
+
+const RASTER_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
 
 export function fittedLongSide(
   width: number,
@@ -38,20 +84,91 @@ export function fittedLongSide(
   };
 }
 
-/** Small raster files that already fit the long-side limit can upload as-is. */
-export function canUploadOriginal(input: { type: string; size: number; width: number; height: number }): boolean {
-  const raster =
-    input.type === "image/jpeg" ||
-    input.type === "image/jpg" ||
-    input.type === "image/png" ||
-    input.type === "image/webp";
+export function planImageFile(input: {
+  type: string;
+  size: number;
+  width: number;
+  height: number;
+  profile?: ImageUse;
+}): ImagePlan {
+  const type = input.type.toLowerCase();
+  const limits = IMAGE_PROFILES[input.profile ?? "project"];
+  if (type === "image/gif") {
+    if (input.size <= GIF_MAX_BYTES) return { action: "passthrough", reason: "gif" };
+    return { action: "reject", message: GIF_TOO_LARGE_MESSAGE };
+  }
+  if (type === "image/svg+xml") return { action: "reject", message: IMAGE_PREPARATION_FAILED_MESSAGE };
+  if (input.size > MAX_PROCESSABLE_BYTES) return { action: "reject", message: IMAGE_PREPARATION_FAILED_MESSAGE };
+  const knownSize = input.width > 0 && input.height > 0;
+  if (
+    knownSize &&
+    RASTER_TYPES.has(type) &&
+    input.width <= limits.maxLongSide &&
+    input.height <= limits.maxLongSide &&
+    input.size <= limits.passThroughMaxBytes
+  ) {
+    return { action: "passthrough", reason: "already-efficient" };
+  }
+  return { action: "optimize" };
+}
+
+/** Small raster files that already fit the profile limit can upload as-is. */
+export function canUploadOriginal(input: {
+  type: string;
+  size: number;
+  width: number;
+  height: number;
+  profile?: ImageUse;
+}): boolean {
+  const plan = planImageFile(input);
+  return plan.action === "passthrough" && plan.reason === "already-efficient";
+}
+
+/** WebP keeps transparency. Without WebP, a transparent image stays PNG instead of becoming JPEG. */
+export function encodedMimeType(input: { hasAlpha: boolean; supportsWebP: boolean }): "image/webp" | "image/png" | "image/jpeg" {
+  if (input.supportsWebP) return "image/webp";
+  if (input.hasAlpha) return "image/png";
+  return "image/jpeg";
+}
+
+export function imageHasTransparency(data: Uint8ClampedArray): boolean {
+  for (let index = 3; index < data.length; index += 4) {
+    if (data[index] < 255) return true;
+  }
+  return false;
+}
+
+export function originalAllowedAfterOptimizationFailure(input: {
+  type: string;
+  size: number;
+  width: number;
+  height: number;
+  profile?: ImageUse;
+}): boolean {
+  const limits = IMAGE_PROFILES[input.profile ?? "project"];
+  const type = input.type.toLowerCase();
+  if (type === "image/gif") return input.size <= GIF_MAX_BYTES && input.size <= limits.safeOriginalMaxBytes;
+  if (!RASTER_TYPES.has(type) || input.size > limits.safeOriginalMaxBytes) return false;
+  if (input.width <= 0 || input.height <= 0) return input.size <= limits.passThroughMaxBytes;
+  return input.width <= limits.maxLongSide && input.height <= limits.maxLongSide;
+}
+
+/** Keep an already-small original when re-encoding would make it larger. Oversized originals are still resized. */
+export function shouldKeepOriginal(input: {
+  originalSize: number;
+  optimizedSize: number;
+  width: number;
+  height: number;
+  profile?: ImageUse;
+}): boolean {
+  const limits = IMAGE_PROFILES[input.profile ?? "project"];
   return (
-    raster &&
-    input.size <= ALREADY_OPTIMIZED_THRESHOLD_BYTES &&
+    input.optimizedSize >= input.originalSize &&
     input.width > 0 &&
     input.height > 0 &&
-    input.width <= MAX_DIMENSION &&
-    input.height <= MAX_DIMENSION
+    input.width <= limits.maxLongSide &&
+    input.height <= limits.maxLongSide &&
+    input.originalSize <= limits.safeOriginalMaxBytes
   );
 }
 
@@ -105,10 +222,10 @@ function loadImageElement(file: File): Promise<{ img: HTMLImageElement; objectUr
  * Adaptively optimize an image File before uploading to Firebase Storage.
  *
  * Rules:
- * 1. Inspects natural dimensions and original file size.
- * 2. If already small (<350KB) and dimensions <= 2048px, leaves file as-is.
- * 3. Otherwise scales down keeping aspect ratio, paints to Canvas, and exports WebP/JPEG.
- * 4. Gracefully falls back to the original file if canvas processing encounters any error.
+ * 1. Uses the field profile for the long-side cap and the pass-through size.
+ * 2. Leaves an already-small file unchanged and never upscales.
+ * 3. Keeps GIF animation by skipping re-encoding, and refuses GIFs over 2 MB.
+ * 4. If preparation fails, uploads the original only when it is already within the profile limits.
  */
 async function decodeBitmap(file: File): Promise<ImageBitmap> {
   if (typeof createImageBitmap !== "function") {
@@ -132,54 +249,95 @@ async function bitmapAtSize(source: ImageBitmap, width: number, height: number):
   }
 }
 
+function unchangedImage(file: File, width: number, height: number): OptimizedImageResult {
+  return {
+    file,
+    originalSize: file.size,
+    optimizedSize: file.size,
+    width,
+    height,
+    format: file.type,
+    wasOptimized: false,
+  };
+}
+
+function encodeCanvas(canvas: HTMLCanvasElement, file: File, profile: ImageUse, sourceWidth: number, sourceHeight: number): Promise<OptimizedImageResult> {
+  const limits = IMAGE_PROFILES[profile];
+  const ctx = canvas.getContext("2d", { alpha: true });
+  if (!ctx) throw new Error("Unable to obtain 2D canvas context.");
+  const hasAlpha = imageHasTransparency(ctx.getImageData(0, 0, canvas.width, canvas.height).data);
+  const targetMimeType = encodedMimeType({ hasAlpha, supportsWebP: checkWebPSupport() });
+  const extension = targetMimeType === "image/webp" ? ".webp" : targetMimeType === "image/png" ? ".png" : ".jpg";
+  const baseName = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
+  const newFileName = `${baseName.replace(/[^a-zA-Z0-9_-]/g, "_")}${extension}`;
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error("Canvas toBlob failed."));
+        return;
+      }
+      const optimizedFile = new File([blob], newFileName, { type: targetMimeType, lastModified: Date.now() });
+      if (
+        shouldKeepOriginal({
+          originalSize: file.size,
+          optimizedSize: optimizedFile.size,
+          width: sourceWidth,
+          height: sourceHeight,
+          profile,
+        })
+      ) {
+        resolve(unchangedImage(file, sourceWidth, sourceHeight));
+        return;
+      }
+      resolve({
+        file: optimizedFile,
+        originalSize: file.size,
+        optimizedSize: optimizedFile.size,
+        width: canvas.width,
+        height: canvas.height,
+        format: targetMimeType,
+        wasOptimized: true,
+      });
+    }, targetMimeType, limits.quality);
+  });
+}
+
 export async function optimizeImageForUpload(
   file: File,
-  onPhase?: (phase: ImagePreparePhase) => void
+  onPhase?: (phase: ImagePreparePhase) => void,
+  profile: ImageUse = "project",
 ): Promise<OptimizedImageResult> {
   const originalSize = file.size;
-  const isGif = file.type === "image/gif";
-
   onPhase?.("preparing");
   await yieldToPaint();
 
-  // If it is a GIF (which might be animated) or SVG, do not re-encode via canvas
-  if (isGif || file.type === "image/svg+xml") {
-    return {
-      file,
-      originalSize,
-      optimizedSize: originalSize,
-      width: 0,
-      height: 0,
-      format: file.type,
-      wasOptimized: false,
-    };
-  }
+  const early = planImageFile({ type: file.type, size: originalSize, width: 0, height: 0, profile });
+  if (early.action === "reject") throw new ImagePreparationError(early.message);
+  if (early.action === "passthrough") return unchangedImage(file, 0, 0);
 
   let bitmap: ImageBitmap | null = null;
+  let knownWidth = 0;
+  let knownHeight = 0;
 
   try {
     bitmap = await decodeBitmap(file);
-    const naturalWidth = bitmap.width;
-    const naturalHeight = bitmap.height;
-
-    if (canUploadOriginal({ type: file.type, size: originalSize, width: naturalWidth, height: naturalHeight })) {
-      bitmap.close();
-      bitmap = null;
-      return {
-        file,
-        originalSize,
-        optimizedSize: originalSize,
-        width: naturalWidth,
-        height: naturalHeight,
-        format: file.type,
-        wasOptimized: false,
-      };
-    }
+    knownWidth = bitmap.width;
+    knownHeight = bitmap.height;
+    const planned = planImageFile({
+      type: file.type,
+      size: originalSize,
+      width: knownWidth,
+      height: knownHeight,
+      profile,
+    });
+    if (planned.action === "reject") throw new ImagePreparationError(planned.message);
+    if (planned.action === "passthrough") return unchangedImage(file, knownWidth, knownHeight);
 
     onPhase?.("optimizing");
     await yieldToPaint();
 
-    const target = fittedLongSide(naturalWidth, naturalHeight);
+    const limits = IMAGE_PROFILES[profile];
+    const target = fittedLongSide(knownWidth, knownHeight, limits.maxLongSide);
     bitmap = await bitmapAtSize(bitmap, target.width, target.height);
 
     const canvas = document.createElement("canvas");
@@ -190,61 +348,47 @@ export async function optimizeImageForUpload(
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(bitmap, 0, 0);
-    bitmap.close();
-    bitmap = null;
-
-    const supportsWebP = checkWebPSupport();
-    const targetMimeType = supportsWebP ? "image/webp" : "image/jpeg";
-    const extension = supportsWebP ? ".webp" : ".jpg";
-    const baseName = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
-    const cleanBaseName = baseName.replace(/[^a-zA-Z0-9_-]/g, "_");
-    const newFileName = `${cleanBaseName}${extension}`;
-
-    const blob: Blob | null = await new Promise((resolve) => {
-      canvas.toBlob((result) => resolve(result), targetMimeType, COMPRESSION_QUALITY);
-    });
-    if (!blob) throw new Error("Canvas toBlob failed.");
-
-    const optimizedFile = new File([blob], newFileName, {
-      type: targetMimeType,
-      lastModified: Date.now(),
-    });
-
-    return {
-      file: optimizedFile,
-      originalSize,
-      optimizedSize: optimizedFile.size,
-      width: canvas.width,
-      height: canvas.height,
-      format: targetMimeType,
-      wasOptimized: true,
-    };
+    return await encodeCanvas(canvas, file, profile, knownWidth, knownHeight);
   } catch (err) {
-    bitmap?.close();
+    if (err instanceof ImagePreparationError) throw err;
     try {
-      return await optimizeWithImageElement(file);
+      return await optimizeWithImageElement(file, profile);
     } catch (fallbackError) {
-      console.warn("Client-side image optimization fallback triggered:", err, fallbackError);
-      return {
-        file,
-        originalSize,
-        optimizedSize: originalSize,
-        width: 0,
-        height: 0,
-        format: file.type,
-        wasOptimized: false,
-      };
+      if (fallbackError instanceof ImagePreparationError) throw fallbackError;
+      if (
+        originalAllowedAfterOptimizationFailure({
+          type: file.type,
+          size: originalSize,
+          width: knownWidth,
+          height: knownHeight,
+          profile,
+        })
+      ) {
+        return unchangedImage(file, knownWidth, knownHeight);
+      }
+      console.warn("Client-side image optimization failed:", err, fallbackError);
+      throw new ImagePreparationError(IMAGE_PREPARATION_FAILED_MESSAGE);
     }
+  } finally {
+    bitmap?.close();
   }
 }
 
-async function optimizeWithImageElement(file: File): Promise<OptimizedImageResult> {
-  const originalSize = file.size;
+async function optimizeWithImageElement(file: File, profile: ImageUse): Promise<OptimizedImageResult> {
   const { img, objectUrl } = await loadImageElement(file);
   try {
     const naturalWidth = img.naturalWidth || img.width;
     const naturalHeight = img.naturalHeight || img.height;
-    const target = fittedLongSide(naturalWidth, naturalHeight);
+    const planned = planImageFile({
+      type: file.type,
+      size: file.size,
+      width: naturalWidth,
+      height: naturalHeight,
+      profile,
+    });
+    if (planned.action === "reject") throw new ImagePreparationError(planned.message);
+    if (planned.action === "passthrough") return unchangedImage(file, naturalWidth, naturalHeight);
+    const target = fittedLongSide(naturalWidth, naturalHeight, IMAGE_PROFILES[profile].maxLongSide);
     const canvas = document.createElement("canvas");
     canvas.width = target.width || naturalWidth;
     canvas.height = target.height || naturalHeight;
@@ -253,25 +397,7 @@ async function optimizeWithImageElement(file: File): Promise<OptimizedImageResul
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    const supportsWebP = checkWebPSupport();
-    const targetMimeType = supportsWebP ? "image/webp" : "image/jpeg";
-    const extension = supportsWebP ? ".webp" : ".jpg";
-    const baseName = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
-    const newFileName = `${baseName.replace(/[^a-zA-Z0-9_-]/g, "_")}${extension}`;
-    const blob: Blob | null = await new Promise((resolve) => {
-      canvas.toBlob((result) => resolve(result), targetMimeType, COMPRESSION_QUALITY);
-    });
-    if (!blob) throw new Error("Canvas toBlob failed.");
-    const optimizedFile = new File([blob], newFileName, { type: targetMimeType, lastModified: Date.now() });
-    return {
-      file: optimizedFile,
-      originalSize,
-      optimizedSize: optimizedFile.size,
-      width: canvas.width,
-      height: canvas.height,
-      format: targetMimeType,
-      wasOptimized: true,
-    };
+    return await encodeCanvas(canvas, file, profile, naturalWidth, naturalHeight);
   } finally {
     URL.revokeObjectURL(objectUrl);
   }

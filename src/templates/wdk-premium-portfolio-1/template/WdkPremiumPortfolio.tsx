@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { Contact } from '../components/Contact.tsx'
+import { cssImageUrl } from '../presentation/cssImageUrl.ts'
 import { wdkPaletteVariables } from '../design/palettes.ts'
 import { Hero } from '../components/Hero.tsx'
 import { ProjectSpotlight } from '../components/ProjectSpotlight.tsx'
@@ -24,8 +25,8 @@ export function WdkPremiumPortfolio({ data, palette = "original", robots = "noin
     usePortfolioSeo(data.seo, robots)
 
     const style = {
-        '--hero-image': `url("${data.profile.heroImage}")`,
-        '--hero-image-mobile': `url("${data.profile.heroImageMobile}")`,
+        '--hero-image': cssImageUrl(data.profile.heroImage),
+        '--hero-image-mobile': cssImageUrl(data.profile.heroImageMobile),
         ...wdkPaletteVariables(palette),
     } as CSSProperties
 

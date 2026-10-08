@@ -13,7 +13,7 @@ import {
   templateOffersSeo,
 } from "../../lib/portfolioSeo";
 import type { PortfolioIdentity } from "../../types/discoverability";
-import { uploadPortfolioImage, type ImageUploadStatus } from "../../lib/storage";
+import { usePortfolioImageField } from "../portfolio-editor/usePortfolioImageField";
 import { getPortfolioByOwner, updatePortfolio, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
 import type { UserPortfolio } from "../../types/userPortfolio";
 import { TEMPLATE_DISCOVERY_PATH } from "../discover/templateDiscoveryPath";
@@ -36,11 +36,11 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
   const [serviceRegion, setServiceRegion] = useState("");
   const [faqs, setFaqs] = useState<{ question: string; answer: string }[]>([]);
   const [savedKey, setSavedKey] = useState("");
+  const [savedImage, setSavedImage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
-  const [imageStatus, setImageStatus] = useState<ImageUploadStatus | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const savingRef = useRef(false);
   const [justSaved, setJustSaved] = useState(false);
@@ -50,11 +50,13 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
     setTitle(next.seo.title);
     setDescription(next.seo.description);
     const facts = normalizeDiscoverability(next.discoverability);
-    setImage(next.seo.ogImage || next.seo.twitterImage);
+    const sharedImage = next.seo.ogImage || next.seo.twitterImage;
+    setImage(sharedImage);
+    setSavedImage(sharedImage);
     setIdentity(facts.identity);
     setServiceRegion(facts.serviceRegion);
     setFaqs(facts.faqs);
-    setSavedKey(snapshot(next.seo.title, next.seo.description, next.seo.ogImage || next.seo.twitterImage, facts));
+    setSavedKey(snapshot(next.seo.title, next.seo.description, sharedImage, facts));
   };
 
   const load = () => {
@@ -76,23 +78,19 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
     load();
   }, []);
 
-  const upload = (file: File) => {
-    if (!portfolio) return;
-    setImageError(null);
-    setImageStatus({ phase: "preparing", percent: null });
-    void uploadPortfolioImage(portfolio.id, file, "social", (status) => setImageStatus(status))
-      .then((uploaded) => {
-        setImage(uploaded.downloadUrl);
-        setJustSaved(false);
-      })
-      .catch((error: unknown) => {
-        setImageStatus(null);
-        setImageError(readableSaveError(error, "Couldn't upload this image. Try again."));
-      });
-  };
+  const socialImage = usePortfolioImageField({
+    portfolioId: portfolio?.id ?? null,
+    folder: "social",
+    savedUrl: savedImage,
+    onUploaded: (url) => {
+      setImage(url);
+      setJustSaved(false);
+      setImageError(null);
+    },
+  });
 
   const save = () => {
-    if (savingRef.current || !portfolio) return;
+    if (savingRef.current || socialImage.busy || !portfolio) return;
     if (image.trim() && !image.trim().toLowerCase().startsWith("https://")) {
       setImageError("Use an https image address.");
       return;
@@ -139,7 +137,7 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
     brandName: portfolio?.profile.brandName,
   });
   const previewUrl = portfolio ? canonicalPortfolioUrl(portfolio.id, portfolio.publicSlug) : null;
-  const imageBusy = imageStatus?.phase === "preparing" || imageStatus?.phase === "optimizing" || imageStatus?.phase === "uploading";
+  const imageBusy = socialImage.busy;
   useUnsavedChanges(dirty);
   const leave = () => confirmDiscard(dirty);
 
@@ -214,11 +212,16 @@ export function PortfolioSeo({ onOpenPath }: PortfolioSeoProps) {
                 label="Social sharing image"
                 hint="A wide image for link previews. A portrait is not used automatically."
                 value={image}
-                error={imageError ?? undefined}
-                status={imageStatus}
+                localUrl={socialImage.localUrl}
+                error={imageError || socialImage.error || undefined}
+                status={socialImage.status}
+                canRetry={socialImage.canRetry}
+                canCancel={socialImage.canCancel}
                 shape="share"
                 disabled={isSaving}
-                onUpload={upload}
+                onUpload={socialImage.choose}
+                onRetry={socialImage.retry}
+                onCancel={socialImage.cancel}
                 onValueChange={(value) => {
                   setImage(value);
                   setJustSaved(false);

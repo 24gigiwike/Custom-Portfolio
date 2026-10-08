@@ -157,6 +157,10 @@ function Overview({
   const summary = workspaceOverview(portfolio);
   const headline = portfolio.profile.headline.trim();
   const portrait = portfolio.profile.heroImage || portfolio.profile.heroImageMobile;
+  const [portraitBroken, setPortraitBroken] = useState(false);
+  useEffect(() => {
+    setPortraitBroken(false);
+  }, [portrait]);
   const projectCount = portfolio.projects.length;
   const [copyState, setCopyState] = useState<"idle" | "copied" | "manual">("idle");
   const copyLink = () => {
@@ -175,8 +179,18 @@ function Overview({
     <div className="max-w-3xl">
       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">Your portfolio</p>
       <div className="mt-8 flex flex-col gap-6 sm:flex-row sm:items-end">
-        {portrait ? (
-          <img src={portrait} alt="" className="h-24 w-24 shrink-0 rounded-full object-cover sm:h-28 sm:w-28" />
+        {portrait && !portraitBroken ? (
+          <img
+            src={portrait}
+            alt=""
+            width={112}
+            height={112}
+            decoding="async"
+            fetchPriority="high"
+            loading="eager"
+            className="h-24 w-24 shrink-0 rounded-full object-cover sm:h-28 sm:w-28"
+            onError={() => setPortraitBroken(true)}
+          />
         ) : (
           <div className="h-24 w-24 shrink-0 rounded-full bg-[#E7F3F2] sm:h-28 sm:w-28" />
         )}
