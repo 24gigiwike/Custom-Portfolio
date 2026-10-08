@@ -6,6 +6,7 @@ import type {
   ProfessionalProfile,
   UserProfile,
 } from "../types";
+import { normalizeWhatsappNumber, readAccountContact } from "./accountContact";
 
 export const PROFESSIONAL_CATEGORIES = [
   "Designer",
@@ -55,6 +56,10 @@ export function emptyDraft(): FoundationDraft {
     description: "",
     goals: [],
     otherGoal: "",
+    whatsappNumber: "",
+    emailUpdatesOptIn: false,
+    emailUpdatesConsentAt: null,
+    emailUpdatesConsentVersion: null,
   };
 }
 
@@ -112,6 +117,14 @@ export function draftFromAccount(
     draft.otherGoal = customGoal;
   }
 
+  const contact = readAccountContact(
+    account ? { contact: account.contact, marketing: account.marketing } : null,
+  );
+  draft.whatsappNumber = contact.contact.whatsappNumber;
+  draft.emailUpdatesOptIn = contact.marketing.emailUpdatesOptIn;
+  draft.emailUpdatesConsentAt = contact.marketing.emailUpdatesConsentAt;
+  draft.emailUpdatesConsentVersion = contact.marketing.emailUpdatesConsentVersion;
+
   return draft;
 }
 
@@ -128,14 +141,21 @@ export function validateAbout(draft: FoundationDraft): { firstName?: string; las
   return errors;
 }
 
-export function validatePersonal(draft: FoundationDraft): { dateOfBirth?: string } {
-  if (!draft.dateOfBirth) return { dateOfBirth: "Please enter your date of birth." };
-  const parsed = new Date(`${draft.dateOfBirth}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return { dateOfBirth: "Please enter a valid date of birth." };
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (parsed > today) return { dateOfBirth: "Date of birth can't be in the future." };
-  return {};
+export function validatePersonal(draft: FoundationDraft): { dateOfBirth?: string; whatsappNumber?: string } {
+  const errors: { dateOfBirth?: string; whatsappNumber?: string } = {};
+  if (!draft.dateOfBirth) errors.dateOfBirth = "Please enter your date of birth.";
+  else {
+    const parsed = new Date(`${draft.dateOfBirth}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) errors.dateOfBirth = "Please enter a valid date of birth.";
+    else {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (parsed > today) errors.dateOfBirth = "Date of birth can't be in the future.";
+    }
+  }
+  const phone = normalizeWhatsappNumber(draft.whatsappNumber);
+  if (phone.ok === false) errors.whatsappNumber = phone.error;
+  return errors;
 }
 
 export function validateProfessional(draft: FoundationDraft): {

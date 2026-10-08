@@ -18,6 +18,17 @@ export interface AccountPrivate {
   email: string;
 }
 
+/** Private account contact. This is not the public portfolio contact block. */
+export interface AccountContact {
+  whatsappNumber: string;
+}
+
+export interface AccountMarketing {
+  emailUpdatesOptIn: boolean;
+  emailUpdatesConsentAt: string | null;
+  emailUpdatesConsentVersion: string | null;
+}
+
 export interface ProfessionalProfile {
   categories: string[];
   title: string;
@@ -51,6 +62,8 @@ export interface UserProfile {
   location?: string;
   onboarding?: OnboardingProgress;
   accountPrivate?: AccountPrivate;
+  contact?: AccountContact;
+  marketing?: AccountMarketing;
   professionalProfile?: ProfessionalProfile;
   portfolioPreferences?: PortfolioPreferences;
 }
@@ -67,6 +80,10 @@ export interface FoundationDraft {
   description: string;
   goals: string[];
   otherGoal: string;
+  whatsappNumber: string;
+  emailUpdatesOptIn: boolean;
+  emailUpdatesConsentAt: string | null;
+  emailUpdatesConsentVersion: string | null;
 }
 
 export type AuthPhase = 

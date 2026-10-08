@@ -63,6 +63,11 @@ const PRIVATE_KEYS = [
   "accountPrivate",
   "uid",
   "storagePath",
+  "whatsappNumber",
+  "marketing",
+  "emailUpdatesOptIn",
+  "emailUpdatesConsentAt",
+  "emailUpdatesConsentVersion",
 ] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {

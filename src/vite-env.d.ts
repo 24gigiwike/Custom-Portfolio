@@ -8,6 +8,8 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_MESSAGING_SENDER_ID?: string;
   readonly VITE_FIREBASE_APP_ID?: string;
   readonly VITE_PORTFOLIO_PUBLIC_ORIGIN?: string;
+  /** E.164 BroadBrand support WhatsApp number. Empty hides Contact Support. */
+  readonly VITE_BROADBRAND_SUPPORT_WHATSAPP?: string;
 }
 
 interface ImportMeta {

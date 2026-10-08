@@ -1,11 +1,12 @@
 import React from "react";
+import { AccountContactFields } from "../account/AccountContactFields";
 import { FieldError, fieldClass, StepFrame } from "./StepFrame";
 import type { FoundationDraft } from "../../types";
 
 interface PersonalDetailsStepProps {
   draft: FoundationDraft;
   email: string;
-  errors: { dateOfBirth?: string };
+  errors: { dateOfBirth?: string; whatsappNumber?: string };
   saveError: string | null;
   isSaving: boolean;
   onChange: (patch: Partial<FoundationDraft>) => void;
@@ -61,6 +62,16 @@ export const PersonalDetailsStep: React.FC<PersonalDetailsStepProps> = ({
             className={`${fieldClass} bg-[#F3FAF9] text-[#5C7372]`}
           />
         </label>
+        <div className="mt-6 border-t border-[#D5E6E5] pt-6">
+          <AccountContactFields
+            idPrefix="onboarding"
+            whatsappNumber={draft.whatsappNumber}
+            whatsappError={errors.whatsappNumber}
+            emailUpdatesOptIn={draft.emailUpdatesOptIn}
+            onWhatsappChange={(whatsappNumber) => onChange({ whatsappNumber })}
+            onEmailUpdatesChange={(emailUpdatesOptIn) => onChange({ emailUpdatesOptIn })}
+          />
+        </div>
       </div>
     </StepFrame>
   );

@@ -13,6 +13,7 @@ import { PORTFOLIO_EDITOR_PATH } from "../portfolio-editor/portfolioEditorPath";
 import { PORTFOLIO_PUBLISH_PATH } from "../portfolio-publish/portfolioPublishPath";
 import { PORTFOLIO_SEO_PATH } from "../portfolio-seo/portfolioSeoPath";
 import { PORTFOLIO_REVIEW_PATH } from "../portfolio-review/portfolioReviewPath";
+import { AccountContactPreferences, ContactSupportLink } from "./AccountContactPreferences";
 import { PortfolioSectionNav, SignOutControl } from "./PortfolioSectionNav";
 
 type PortfolioWorkspaceProps = {
@@ -75,7 +76,10 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
                 <p className="mt-1 truncate text-xs font-medium text-[#5C7372]">Signed in as {accountName}</p>
               )}
             </div>
-            <SignOutControl onSignOut={() => void signOutUser()} />
+            <div className="flex shrink-0 items-center gap-3">
+              <ContactSupportLink />
+              <SignOutControl onSignOut={() => void signOutUser()} />
+            </div>
           </div>
           <PortfolioSectionNav current="overview" onOpenPath={onOpenPath} />
         </div>
@@ -132,6 +136,7 @@ export function PortfolioWorkspace({ onOpenPath }: PortfolioWorkspaceProps) {
         ) : (
           <Status title="Your portfolio could not be loaded." />
         )}
+        {!isLoading && <AccountContactPreferences />}
       </main>
     </div>
   );

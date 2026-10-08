@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { brand } from "../../config/branding";
 import { useAuth } from "../../lib/authContext";
 import { userFacingWriteError } from "../../lib/accountLoad";
+import { normalizeWhatsappNumber } from "../../lib/accountContact";
 import {
   draftFromAccount,
   hasErrors,
@@ -47,27 +48,45 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onDiscover }
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const patchDraft = (patch: Partial<FoundationDraft>) => {
     setDraft((current) => ({ ...current, ...patch }));
     setFieldErrors({});
   };
 
+  const whatsappError = () => {
+    const phone = normalizeWhatsappNumber(draft.whatsappNumber);
+    return phone.ok === false ? phone.error : null;
+  };
+
   const persist = async (nextStep: OnboardingStep, ready = false) => {
+    if (savingRef.current) return;
+    const invalidWhatsapp = whatsappError();
+    if (invalidWhatsapp) {
+      setFieldErrors({ whatsappNumber: invalidWhatsapp });
+      setStep("personal");
+      return;
+    }
+    savingRef.current = true;
     setIsSaving(true);
     setSaveError(null);
     try {
-      if (ready) {
-        await finishOnboardingFoundation(draft);
-        onDiscover();
-      } else {
-        await saveOnboardingProgress(draft, nextStep);
-        setStep(nextStep);
-      }
+      const updated = ready ? await finishOnboardingFoundation(draft) : await saveOnboardingProgress(draft, nextStep);
+      setDraft((current) => ({
+        ...current,
+        whatsappNumber: updated.contact?.whatsappNumber ?? "",
+        emailUpdatesOptIn: updated.marketing?.emailUpdatesOptIn ?? false,
+        emailUpdatesConsentAt: updated.marketing?.emailUpdatesConsentAt ?? null,
+        emailUpdatesConsentVersion: updated.marketing?.emailUpdatesConsentVersion ?? null,
+      }));
+      if (ready) onDiscover();
+      else setStep(nextStep);
     } catch (error) {
       console.error("Onboarding save failed:", error);
       setSaveError(userFacingWriteError(error, "We couldn't save your information. Please try again."));
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -118,13 +137,26 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onDiscover }
 
   const goBack = () => {
     const previous = PREVIOUS_STEP[step];
-    if (!previous) return;
+    if (!previous || savingRef.current) return;
+    const invalidWhatsapp = whatsappError();
+    if (invalidWhatsapp) {
+      setFieldErrors({ whatsappNumber: invalidWhatsapp });
+      setStep("personal");
+      return;
+    }
     setFieldErrors({});
     setStep(previous);
-    void saveOnboardingProgress(draft, previous).catch((error) => {
-      console.error("Onboarding back-save failed:", error);
-      setSaveError(userFacingWriteError(error, "We couldn't save your information. Please try again."));
-    });
+    savingRef.current = true;
+    setIsSaving(true);
+    void saveOnboardingProgress(draft, previous)
+      .catch((error) => {
+        console.error("Onboarding back-save failed:", error);
+        setSaveError(userFacingWriteError(error, "We couldn't save your information. Please try again."));
+      })
+      .finally(() => {
+        savingRef.current = false;
+        setIsSaving(false);
+      });
   };
 
   const progressIndex = FORM_STEP_INDEX[step];
