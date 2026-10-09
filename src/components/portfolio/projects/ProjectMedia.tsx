@@ -11,7 +11,15 @@ import {
   RotateCcw,
   Check,
 } from "lucide-react";
-import { deleteStoredImage, uploadProjectImage, validateImageFile } from "../../../lib/storage";
+import { imagePhaseLabel, ImageUploadCancelled } from "../../../lib/imageAttempt";
+import {
+  claimOptimizingItems,
+  finishGalleryRun,
+  idleGalleryQueue,
+  requestGalleryRun,
+  type GalleryQueueState,
+} from "../../../lib/galleryUploadQueue";
+import { deleteStoredImage, beginProjectImageUpload, validateImageFile, type PortfolioImageUpload } from "../../../lib/storage";
 
 interface ProjectMediaProps {
   portfolioId: string;
@@ -37,6 +45,9 @@ interface GalleryItem {
   status: "optimizing" | "uploading" | "complete" | "error";
   progress: number;
   error?: string;
+  /** Blob preview kept until the saved download URL has loaded. */
+  previewUrl?: string;
+  statusText?: string;
 }
 
 function completedGallery(items: GalleryItem[]): { urls: string[]; paths: string[] } {
@@ -89,6 +100,11 @@ export const ProjectMedia = React.forwardRef<ProjectMediaHandle, ProjectMediaPro
   });
 
   const cancelledRef = useRef(false);
+  const coverGeneration = useRef(0);
+  const coverSession = useRef<PortfolioImageUpload | null>(null);
+  const gallerySessions = useRef(new Map<string, PortfolioImageUpload>());
+  const galleryQueue = useRef<GalleryQueueState>(idleGalleryQueue());
+  const galleryInFlight = useRef(new Set<string>());
   const knownCoverRef = useRef<{ url: string; storagePath: string } | null>(
     coverImage && coverImagePath ? { url: coverImage, storagePath: coverImagePath } : null
   );
@@ -96,6 +112,9 @@ export const ProjectMedia = React.forwardRef<ProjectMediaHandle, ProjectMediaPro
   useImperativeHandle(ref, () => ({
     cancelPendingUploads() {
       cancelledRef.current = true;
+      coverSession.current?.cancel();
+      gallerySessions.current.forEach((session) => session.cancel());
+      gallerySessions.current.clear();
     },
   }), []);
 
@@ -122,6 +141,10 @@ export const ProjectMedia = React.forwardRef<ProjectMediaHandle, ProjectMediaPro
   useEffect(() => {
     const urls = activeObjectUrls.current;
     return () => {
+      cancelledRef.current = true;
+      coverSession.current?.cancel();
+      gallerySessions.current.forEach((session) => session.cancel());
+      gallerySessions.current.clear();
       urls.forEach((url) => {
         try {
           URL.revokeObjectURL(url);
@@ -153,9 +176,11 @@ export const ProjectMedia = React.forwardRef<ProjectMediaHandle, ProjectMediaPro
         return prev;
       }
 
+      const previewByUrl = new Map(prev.flatMap((item) => (item.previewUrl ? [[item.url, item.previewUrl] as const] : [])));
       const newRemoteItems: GalleryItem[] = images.map((url, idx) => ({
         id: `remote_${idx}_${url}`,
         url,
+        previewUrl: previewByUrl.get(url),
         storagePath: imagePaths?.[idx] || "",
         isLocal: false,
         status: "complete",
@@ -173,66 +198,77 @@ export const ProjectMedia = React.forwardRef<ProjectMediaHandle, ProjectMediaPro
    * COVER IMAGE UPLOAD PIPELINE
    * ------------------------------------------------------------------ */
 
-  const startCoverUpload = async (file: File) => {
+  const startCoverUpload = (file: File) => {
     const validation = validateImageFile(file);
     if (!validation.valid) {
       setMediaError(validation.error || "Please select a valid image file.");
       return;
     }
 
+    coverSession.current?.cancel();
+    const generation = ++coverGeneration.current;
     setMediaError(null);
     setCoverLocalFile(file);
-
-    // Immediate Local Preview
     const localUrl = registerObjectUrl(URL.createObjectURL(file));
-    setCoverLocalPreview(localUrl);
+    setCoverLocalPreview((current) => {
+      if (current && current !== localUrl) revokeObjectUrl(current);
+      return localUrl;
+    });
     setCoverUploadState({
       isUploading: true,
       progress: 0,
-      statusText: "Preparing...",
+      statusText: "Preparing image…",
     });
 
-    try {
-      const uploaded = await uploadProjectImage(portfolioId, projectId, file, {
-        folder: "cover",
-        onProgress: (percent) => {
-          setCoverUploadState((prev) => ({
-            ...prev,
-            progress: percent,
-            statusText: percent < 100 ? `Uploading ${percent}%` : "Finalizing...",
-          }));
-        },
-      });
-
-      if (cancelledRef.current) {
-        try {
-          await deleteStoredImage(uploaded.storagePath);
-        } catch (deleteError) {
-          console.error("Cancelled cover upload cleanup failed:", deleteError);
+    const session = beginProjectImageUpload(portfolioId, projectId, file, {
+      folder: "cover",
+      onStatus: (status) => {
+        if (coverGeneration.current !== generation) return;
+        const progress = status.phase === "uploading" && status.percent !== null ? status.percent : 0;
+        setCoverUploadState({
+          isUploading: status.phase !== "ready" && status.phase !== "stalled",
+          progress,
+          statusText: imagePhaseLabel(status) || "Preparing image…",
+        });
+      },
+    });
+    coverSession.current = session;
+    void session.done.then(
+      (uploaded) => {
+        if (coverGeneration.current !== generation) {
+          if (cancelledRef.current) {
+            void deleteStoredImage(uploaded.storagePath).catch((deleteError) => {
+              console.error("Cancelled cover upload cleanup failed:", deleteError);
+            });
+          }
+          return;
         }
-        return;
-      }
-
-      knownCoverRef.current = { url: uploaded.downloadUrl, storagePath: uploaded.storagePath };
-      onCoverImageChange(uploaded.downloadUrl, uploaded.storagePath);
-      setCoverUploadState({
-        isUploading: false,
-        progress: 100,
-        statusText: "",
-      });
-      revokeObjectUrl(localUrl);
-      setCoverLocalPreview(null);
-      setCoverLocalFile(null);
-    } catch (err) {
-      console.error("Cover upload error:", err);
-      const msg = err instanceof Error ? err.message : "Cover image upload failed.";
-      setCoverUploadState({
-        isUploading: false,
-        progress: 0,
-        statusText: "",
-        error: msg,
-      });
-    }
+        knownCoverRef.current = { url: uploaded.downloadUrl, storagePath: uploaded.storagePath };
+        onCoverImageChange(uploaded.downloadUrl, uploaded.storagePath);
+        setCoverLocalFile(null);
+        setCoverUploadState({ isUploading: false, progress: 0, statusText: "" });
+        const probe = new Image();
+        probe.onload = () => {
+          if (coverGeneration.current !== generation) return;
+          revokeObjectUrl(localUrl);
+          setCoverLocalPreview((current) => (current === localUrl ? null : current));
+        };
+        probe.onerror = () => {
+          // Keep the local preview when the remote file has not loaded.
+        };
+        probe.src = uploaded.downloadUrl;
+      },
+      (err: unknown) => {
+        if (coverGeneration.current !== generation || err instanceof ImageUploadCancelled) return;
+        const msg = err instanceof Error ? err.message : "Upload failed. Try again.";
+        setCoverUploadState({
+          isUploading: false,
+          progress: 0,
+          statusText: "",
+          error: msg,
+        });
+      },
+    );
   };
 
   const handleCoverFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -249,6 +285,9 @@ export const ProjectMedia = React.forwardRef<ProjectMediaHandle, ProjectMediaPro
   };
 
   const handleRemoveCover = () => {
+    coverSession.current?.cancel();
+    coverSession.current = null;
+    coverGeneration.current += 1;
     if (coverLocalPreview) {
       revokeObjectUrl(coverLocalPreview);
     }
@@ -266,116 +305,120 @@ export const ProjectMedia = React.forwardRef<ProjectMediaHandle, ProjectMediaPro
    * GALLERY UPLOAD PIPELINE (Controlled Concurrency: 2 simultaneous)
    * ------------------------------------------------------------------ */
 
-  const uploadQueueActive = useRef(false);
+  const scheduleGalleryRun = useCallback((itemsToProcess: GalleryItem[], alreadyActive = false) => {
+    if (!alreadyActive) {
+      const decision = requestGalleryRun(galleryQueue.current);
+      galleryQueue.current = decision.state;
+      if (!decision.start) return;
+    }
 
-  const processGalleryQueue = useCallback(
-    async (itemsToProcess: GalleryItem[]) => {
-      if (uploadQueueActive.current) return;
-      uploadQueueActive.current = true;
+    const CONCURRENCY_LIMIT = 2;
+    const pendingItems = claimOptimizingItems(itemsToProcess, galleryInFlight.current).filter((item) => item.file);
 
-      const CONCURRENCY_LIMIT = 2;
-      const pendingItems = itemsToProcess.filter(
-        (item) => item.status === "optimizing" && item.file
-      );
-
-      if (pendingItems.length === 0) {
-        uploadQueueActive.current = false;
+    const finishAndMaybeContinue = () => {
+      if (cancelledRef.current) {
+        galleryQueue.current = { active: false, rerun: false };
         return;
       }
+      const finished = finishGalleryRun(galleryQueue.current);
+      galleryQueue.current = finished.state;
+      if (!finished.start) return;
+      setGalleryItems((current) => {
+        queueMicrotask(() => scheduleGalleryRun(current, true));
+        return current;
+      });
+    };
 
-      // Worker pool
-      let index = 0;
+    if (pendingItems.length === 0) {
+      finishAndMaybeContinue();
+      return;
+    }
 
-      const worker = async () => {
-        while (index < pendingItems.length) {
-          if (cancelledRef.current) return;
-          const currentItem = pendingItems[index++];
-          if (!currentItem || !currentItem.file) continue;
-
-          // Update status to uploading
-          setGalleryItems((prev) =>
-            prev.map((it) =>
-              it.id === currentItem.id
-                ? { ...it, status: "uploading", progress: 5 }
-                : it
-            )
-          );
-
-          try {
-            const uploaded = await uploadProjectImage(
-              portfolioId,
-              projectId,
-              currentItem.file,
-              {
-                folder: "gallery",
-                onProgress: (percent) => {
-                  setGalleryItems((prev) =>
-                    prev.map((it) =>
-                      it.id === currentItem.id
-                        ? { ...it, progress: percent }
-                        : it
-                    )
-                  );
-                },
-              }
-            );
-
-            if (cancelledRef.current) {
-              try {
-                await deleteStoredImage(uploaded.storagePath);
-              } catch (deleteError) {
-                console.error("Cancelled gallery upload cleanup failed:", deleteError);
-              }
-              return;
-            }
-
-            // Item succeeded
-            revokeObjectUrl(currentItem.url);
-
-            setGalleryItems((prev) => {
-              const updated = prev.map((it) =>
-                it.id === currentItem.id
-                  ? {
-                      ...it,
-                      url: uploaded.downloadUrl,
-                      storagePath: uploaded.storagePath,
-                      isLocal: false,
-                      status: "complete" as const,
-                      progress: 100,
-                    }
-                  : it
-              );
-
-              const completed = completedGallery(updated);
-              onImagesChange(completed.urls, completed.paths);
-
-              return updated;
-            });
-          } catch (err) {
-            console.error("Gallery item upload failed:", err);
-            const msg = err instanceof Error ? err.message : "Upload failed.";
+    let index = 0;
+    const worker = async () => {
+      while (index < pendingItems.length) {
+        if (cancelledRef.current) return;
+        const currentItem = pendingItems[index++];
+        if (!currentItem?.file || galleryInFlight.current.has(currentItem.id)) continue;
+        galleryInFlight.current.add(currentItem.id);
+        const file = currentItem.file;
+        const blobUrl = currentItem.url;
+        const session = beginProjectImageUpload(portfolioId, projectId, file, {
+          folder: "gallery",
+          onStatus: (status) => {
+            const progress = status.phase === "uploading" && status.percent !== null ? status.percent : 0;
             setGalleryItems((prev) =>
               prev.map((it) =>
                 it.id === currentItem.id
-                  ? { ...it, status: "error", error: msg }
-                  : it
-              )
+                  ? {
+                      ...it,
+                      status: status.phase === "uploading" || status.phase === "finalizing" ? "uploading" : "optimizing",
+                      progress,
+                      statusText: imagePhaseLabel(status) || "Compressing image…",
+                    }
+                  : it,
+              ),
             );
+          },
+        });
+        gallerySessions.current.set(currentItem.id, session);
+        try {
+          const uploaded = await session.done;
+          gallerySessions.current.delete(currentItem.id);
+          galleryInFlight.current.delete(currentItem.id);
+          if (cancelledRef.current) {
+            void deleteStoredImage(uploaded.storagePath).catch((deleteError) => {
+              console.error("Cancelled gallery upload cleanup failed:", deleteError);
+            });
+            return;
           }
+          setGalleryItems((prev) => {
+            const updated = prev.map((it) =>
+              it.id === currentItem.id
+                ? {
+                    ...it,
+                    url: uploaded.downloadUrl,
+                    previewUrl: blobUrl,
+                    storagePath: uploaded.storagePath,
+                    isLocal: false,
+                    file: undefined,
+                    status: "complete" as const,
+                    progress: 0,
+                    statusText: "",
+                  }
+                : it,
+            );
+            const completed = completedGallery(updated);
+            onImagesChange(completed.urls, completed.paths);
+            return updated;
+          });
+          const probe = new Image();
+          probe.onload = () => {
+            revokeObjectUrl(blobUrl);
+            setGalleryItems((prev) => prev.map((it) => (it.previewUrl === blobUrl ? { ...it, previewUrl: undefined } : it)));
+          };
+          probe.onerror = () => {
+            // Keep the blob preview when the remote file has not loaded.
+          };
+          probe.src = uploaded.downloadUrl;
+        } catch (err) {
+          gallerySessions.current.delete(currentItem.id);
+          galleryInFlight.current.delete(currentItem.id);
+          if (err instanceof ImageUploadCancelled || cancelledRef.current) return;
+          const msg = err instanceof Error ? err.message : "Upload failed. Try again.";
+          setGalleryItems((prev) =>
+            prev.map((it) => (it.id === currentItem.id ? { ...it, status: "error", error: msg, progress: 0 } : it)),
+          );
         }
-      };
+      }
+    };
 
-      // Run up to CONCURRENCY_LIMIT workers in parallel
-      const workers = Array.from(
-        { length: Math.min(CONCURRENCY_LIMIT, pendingItems.length) },
-        () => worker()
-      );
-      await Promise.all(workers);
+    void Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY_LIMIT, pendingItems.length) }, () => worker()),
+    ).then(finishAndMaybeContinue);
+  }, [onImagesChange, portfolioId, projectId]);
 
-      uploadQueueActive.current = false;
-    },
-    [portfolioId, projectId, onImagesChange]
-  );
+  const processGalleryQueue = scheduleGalleryRun;
 
   const handleGalleryFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -429,9 +472,11 @@ export const ProjectMedia = React.forwardRef<ProjectMediaHandle, ProjectMediaPro
   };
 
   const handleRemoveGalleryItem = (itemToRemove: GalleryItem) => {
-    if (itemToRemove.isLocal) {
-      revokeObjectUrl(itemToRemove.url);
-    }
+    gallerySessions.current.get(itemToRemove.id)?.cancel();
+    gallerySessions.current.delete(itemToRemove.id);
+    galleryInFlight.current.delete(itemToRemove.id);
+    if (itemToRemove.isLocal) revokeObjectUrl(itemToRemove.url);
+    if (itemToRemove.previewUrl) revokeObjectUrl(itemToRemove.previewUrl);
     setGalleryItems((prev) => {
       const updated = prev.filter((it) => it.id !== itemToRemove.id);
       const completed = completedGallery(updated);
@@ -544,7 +589,7 @@ export const ProjectMedia = React.forwardRef<ProjectMediaHandle, ProjectMediaPro
                   <div className="absolute inset-0 bg-[#243838]/60 backdrop-blur-[2px] flex flex-col items-center justify-center p-4 text-center text-white">
                     <Loader2 className="w-5 h-5 animate-spin text-[#94CEBB] mb-2" />
                     <span className="font-mono text-xs font-medium text-white mb-1">
-                      {coverUploadState.statusText || "Preparing..."}
+                      {coverUploadState.statusText || "Preparing image…"}
                     </span>
                     {coverUploadState.progress > 0 && (
                       <div className="w-24 bg-white/20 h-1 rounded-full overflow-hidden mt-1">
@@ -561,7 +606,7 @@ export const ProjectMedia = React.forwardRef<ProjectMediaHandle, ProjectMediaPro
                 {coverUploadState.error && !isCoverActive && (
                   <div className="absolute inset-0 bg-[#8C3030]/85 backdrop-blur-[1px] flex flex-col items-center justify-center p-3 text-center text-white">
                     <AlertCircle className="w-4 h-4 text-white mb-1" />
-                    <span className="text-[11px] leading-tight mb-2">Upload failed</span>
+                    <span className="text-[11px] leading-tight mb-2">{coverUploadState.error || "Upload failed"}</span>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
@@ -629,7 +674,7 @@ export const ProjectMedia = React.forwardRef<ProjectMediaHandle, ProjectMediaPro
                 ) : (
                   <UploadCloud className="w-3.5 h-3.5 text-[#5C7372]" />
                 )}
-                <span>{isCoverActive ? "Uploading..." : "Upload image file"}</span>
+                <span>{isCoverActive ? (coverUploadState.statusText || "Preparing image…") : "Upload image file"}</span>
               </button>
 
               <button
@@ -707,7 +752,7 @@ export const ProjectMedia = React.forwardRef<ProjectMediaHandle, ProjectMediaPro
                   className="relative group rounded-2xl border border-[#D5E6E5] overflow-hidden bg-[#F7FBFA] aspect-[4/3] flex items-center justify-center"
                 >
                   <img
-                    src={item.url}
+                    src={item.previewUrl || item.url}
                     alt={`Gallery item ${idx + 1}`}
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover transition-opacity duration-300"
@@ -718,11 +763,11 @@ export const ProjectMedia = React.forwardRef<ProjectMediaHandle, ProjectMediaPro
                     <div className="absolute inset-0 bg-[#243838]/60 backdrop-blur-[1px] flex flex-col items-center justify-center p-2 text-center text-white">
                       <Loader2 className="w-4 h-4 animate-spin text-[#94CEBB] mb-1.5" />
                       <span className="font-mono text-[10px] text-white">
-                        {item.status === "optimizing"
-                          ? "Optimizing..."
-                          : `${item.progress}%`}
+                        {item.status === "uploading" && item.progress > 0
+                          ? `Uploading image ${item.progress}%`
+                          : item.statusText || "Compressing image…"}
                       </span>
-                      {item.progress > 0 && (
+                      {item.status === "uploading" && item.progress > 0 && (
                         <div className="w-16 bg-white/20 h-1 rounded-full overflow-hidden mt-1">
                           <div
                             className="bg-[#94CEBB] h-full transition-all duration-150"
@@ -738,7 +783,7 @@ export const ProjectMedia = React.forwardRef<ProjectMediaHandle, ProjectMediaPro
                     <div className="absolute inset-0 bg-[#8C3030]/85 backdrop-blur-[1px] flex flex-col items-center justify-center p-2 text-center text-white">
                       <AlertCircle className="w-3.5 h-3.5 text-white mb-1" />
                       <span className="text-[10px] font-medium leading-tight mb-1.5">
-                        Upload failed
+                        {item.error || "Upload failed"}
                       </span>
                       <div className="flex items-center gap-1.5">
                         <button

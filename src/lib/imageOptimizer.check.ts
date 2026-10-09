@@ -10,7 +10,13 @@ import {
   IMAGE_PROFILES,
   originalAllowedAfterOptimizationFailure,
   planImageFile,
+  bytesToMaxSizeMB,
+  COMPRESSION_MAX_ITERATIONS,
+  imageCompressionBackend,
+  outputMimeForUpload,
+  settleCompressedOutput,
   shouldKeepOriginal,
+  ImagePreparationError,
 } from "./imageOptimizer";
 
 assert.deepEqual(fittedLongSide(4000, 3000), { width: 2048, height: 1536, resized: true });
@@ -36,6 +42,16 @@ assert.equal(IMAGE_PROFILES.portrait.maxLongSide, 2048);
 assert.equal(IMAGE_PROFILES.logo.maxLongSide, 800);
 assert.equal(IMAGE_PROFILES.social.maxLongSide, 1600);
 assert.equal(IMAGE_PROFILES.project.maxLongSide, 2048);
+assert.equal(IMAGE_PROFILES.account.maxLongSide, 1024);
+assert.equal(IMAGE_PROFILES.account.quality, 0.85);
+assert.equal(IMAGE_PROFILES.portrait.maxBytes, 800 * 1024);
+assert.equal(IMAGE_PROFILES.logo.maxBytes, 350 * 1024);
+assert.equal(IMAGE_PROFILES.social.maxBytes, 600 * 1024);
+assert.equal(IMAGE_PROFILES.project.maxBytes, 800 * 1024);
+assert.equal(IMAGE_PROFILES.account.maxBytes, 350 * 1024);
+assert.equal(COMPRESSION_MAX_ITERATIONS, 6);
+assert.equal(imageCompressionBackend(), "browser");
+assert.equal(Math.round(bytesToMaxSizeMB(800 * 1024) * 1000) / 1000, Math.round((800 / 1024) * 1000) / 1000);
 assert.deepEqual(fittedLongSide(4000, 3000, IMAGE_PROFILES.portrait.maxLongSide), { width: 2048, height: 1536, resized: true });
 assert.deepEqual(fittedLongSide(4000, 3000, IMAGE_PROFILES.logo.maxLongSide), { width: 800, height: 600, resized: true });
 assert.deepEqual(fittedLongSide(2400, 1260, IMAGE_PROFILES.social.maxLongSide), { width: 1600, height: 840, resized: true });
@@ -108,5 +124,70 @@ assert.equal(encodedMimeType({ hasAlpha: true, supportsWebP: false }), "image/pn
 assert.equal(encodedMimeType({ hasAlpha: false, supportsWebP: false }), "image/jpeg");
 assert.equal(imageHasTransparency(new Uint8ClampedArray([255, 0, 0, 255, 0, 0, 0, 254])), true);
 assert.equal(imageHasTransparency(new Uint8ClampedArray([255, 0, 0, 255])), false);
+assert.equal(outputMimeForUpload("image/png", true), "image/webp");
+assert.equal(outputMimeForUpload("image/png", false), "image/png");
+assert.equal(outputMimeForUpload("image/jpeg", false), "image/jpeg");
+assert.equal(outputMimeForUpload("image/webp", false), "image/png");
+
+function fileOf(bytes: number, type = "image/jpeg"): File {
+  return new File([new Uint8Array(bytes)], "photo.jpg", { type });
+}
+
+const underTarget = settleCompressedOutput({
+  original: fileOf(900 * 1024),
+  compressed: fileOf(400 * 1024, "image/webp"),
+  width: 1600,
+  height: 1200,
+  sourceWidth: 4000,
+  sourceHeight: 3000,
+  profile: "portrait",
+});
+assert.equal(underTarget.wasOptimized, true);
+assert.equal(underTarget.optimizedSize, 400 * 1024);
+
+const missedTarget = settleCompressedOutput({
+  original: fileOf(4 * 1024 * 1024),
+  compressed: fileOf(900 * 1024, "image/webp"),
+  width: 2048,
+  height: 1536,
+  sourceWidth: 4000,
+  sourceHeight: 3000,
+  profile: "portrait",
+});
+assert.equal(missedTarget.wasOptimized, true);
+assert.equal(missedTarget.optimizedSize > IMAGE_PROFILES.portrait.maxBytes, true);
+assert.equal(missedTarget.optimizedSize <= IMAGE_PROFILES.portrait.safeOriginalMaxBytes, true);
+
+const safeOriginal = fileOf(180 * 1024);
+const keptOriginal = settleCompressedOutput({
+  original: safeOriginal,
+  compressed: fileOf(220 * 1024, "image/webp"),
+  width: 1400,
+  height: 900,
+  sourceWidth: 1400,
+  sourceHeight: 900,
+  profile: "portrait",
+});
+assert.equal(keptOriginal.wasOptimized, false);
+assert.equal(keptOriginal.file, safeOriginal);
+assert.equal(keptOriginal.optimizedSize, 180 * 1024);
+
+assert.throws(
+  () => settleCompressedOutput({
+    original: fileOf(8 * 1024 * 1024),
+    compressed: fileOf(3 * 1024 * 1024, "image/webp"),
+    width: 2048,
+    height: 1536,
+    sourceWidth: 4000,
+    sourceHeight: 3000,
+    profile: "portrait",
+  }),
+  (error: unknown) => error instanceof ImagePreparationError,
+);
+
+const smallAccount = planImageFile({ type: "image/jpeg", size: 200 * 1024, width: 800, height: 800, profile: "account" });
+assert.deepEqual(smallAccount, { action: "passthrough", reason: "already-efficient" });
+const gifStillSkipped = planImageFile({ type: "image/gif", size: 100 * 1024, width: 400, height: 400, profile: "account" });
+assert.deepEqual(gifStillSkipped, { action: "passthrough", reason: "gif" });
 
 console.log("image optimizer checks passed");

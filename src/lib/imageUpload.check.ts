@@ -173,15 +173,30 @@ assert.match(seo, /aria-live="polite">Saved/);
 assert.doesNotMatch(seo, /deleteStoredImage/);
 
 const storage = read("./storage.ts");
-const beginUpload = storage.slice(
-  storage.indexOf("export function beginPortfolioImageUpload"),
-  storage.indexOf("export async function uploadPortfolioImage"),
+const transfer = storage.slice(
+  storage.indexOf("export function beginImageTransfer"),
+  storage.indexOf("function forwardProgress"),
 );
-assert.match(beginUpload, /uploadTask\?\.cancel\(\)/);
-assert.match(beginUpload, /phase: "finalizing"/);
-assert.doesNotMatch(beginUpload, /cacheControl|deleteStoredImage|deleteObject/);
-assert.match(storage, /optimizeImageForUpload\(file, undefined, "project"\)/);
+assert.match(transfer, /uploadTask\?\.cancel\(\)/);
+assert.match(transfer, /abort\.abort\(\)/);
+assert.match(transfer, /phase: "finalizing"/);
+assert.match(transfer, /createStallWatch/);
+assert.match(transfer, /getIdToken\(false\)/);
+assert.match(transfer, /signal: abort\.signal/);
+assert.doesNotMatch(transfer, /cacheControl|deleteStoredImage|deleteObject/);
+assert.match(storage, /profile: "project"/);
+assert.match(storage, /profile: "account"/);
+assert.match(storage, /maxUploadRetryTime = UPLOAD_RETRY_LIMIT_MS/);
 assert.doesNotMatch(storage, /cacheControl/);
+assert.doesNotMatch(storage, /getIdToken\(true\)/);
+const about = read("../components/onboarding/AboutYouStep.tsx");
+assert.match(about, /beginAccountProfileImageUpload/);
+assert.doesNotMatch(about, /deleteStoredImage/);
+assert.match(about, /localPreview \|\| draft\.photoURL/);
+const projects = read("../components/portfolio/projects/ProjectMedia.tsx");
+assert.match(projects, /finishGalleryRun/);
+assert.match(projects, /previewUrl/);
+assert.match(projects, /beginProjectImageUpload/);
 
 const review = read("../components/portfolio-review/PortfolioReview.tsx");
 assert.match(review, /getPortfolioByOwner/);

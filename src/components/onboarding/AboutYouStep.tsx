@@ -1,7 +1,8 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { FieldError, fieldClass, StepFrame } from "./StepFrame";
 import type { FoundationDraft } from "../../types";
-import { deleteStoredImage, uploadAccountProfileImage } from "../../lib/storage";
+import { imagePhaseLabel, ImageUploadCancelled } from "../../lib/imageAttempt";
+import { beginAccountProfileImageUpload, type PortfolioImageUpload } from "../../lib/storage";
 
 interface AboutYouStepProps {
   draft: FoundationDraft;
@@ -25,24 +26,64 @@ export const AboutYouStep: React.FC<AboutYouStepProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [statusText, setStatusText] = useState<string | null>(null);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const generationRef = useRef(0);
+  const sessionRef = useRef<PortfolioImageUpload | null>(null);
+  const localPreviewRef = useRef<string | null>(null);
 
-  const handleFile = async (file: File) => {
+  const replacePreview = (next: string | null) => {
+    if (localPreviewRef.current && localPreviewRef.current !== next) URL.revokeObjectURL(localPreviewRef.current);
+    localPreviewRef.current = next;
+    setLocalPreview(next);
+  };
+
+  useEffect(() => {
+    return () => {
+      generationRef.current += 1;
+      sessionRef.current?.cancel();
+      if (localPreviewRef.current) URL.revokeObjectURL(localPreviewRef.current);
+    };
+  }, []);
+
+  const handleFile = (file: File) => {
+    sessionRef.current?.cancel();
+    const generation = ++generationRef.current;
     setUploadError(null);
     setIsUploading(true);
-    const previousPath = draft.photoPath;
-    try {
-      const uploaded = await uploadAccountProfileImage(file);
-      onChange({ photoURL: uploaded.downloadUrl, photoPath: uploaded.storagePath });
-      if (previousPath && previousPath !== uploaded.storagePath) {
-        void deleteStoredImage(previousPath).catch((error) => {
-          console.error("Previous profile image cleanup failed:", error);
-        });
-      }
-    } catch (error) {
-      setUploadError(error instanceof Error ? error.message : "Couldn't upload this picture. Try again.");
-    } finally {
-      setIsUploading(false);
-    }
+    setStatusText("Preparing image…");
+    setSelectedFile(file);
+    const localUrl = URL.createObjectURL(file);
+    replacePreview(localUrl);
+    const session = beginAccountProfileImageUpload(file, (status) => {
+      if (generationRef.current !== generation) return;
+      setStatusText(imagePhaseLabel(status));
+    });
+    sessionRef.current = session;
+    void session.done.then(
+      (uploaded) => {
+        if (generationRef.current !== generation) return;
+        onChange({ photoURL: uploaded.downloadUrl, photoPath: uploaded.storagePath });
+        setIsUploading(false);
+        setStatusText(null);
+        const probe = new Image();
+        probe.onload = () => {
+          if (generationRef.current !== generation) return;
+          if (localPreviewRef.current === localUrl) replacePreview(null);
+        };
+        probe.onerror = () => {
+          // Keep the local preview when the remote picture has not loaded.
+        };
+        probe.src = uploaded.downloadUrl;
+      },
+      (error: unknown) => {
+        if (generationRef.current !== generation || error instanceof ImageUploadCancelled) return;
+        setIsUploading(false);
+        setStatusText(null);
+        setUploadError(error instanceof Error ? error.message : "Upload failed. Try again.");
+      },
+    );
   };
 
   return (
@@ -63,8 +104,8 @@ export const AboutYouStep: React.FC<AboutYouStepProps> = ({
           className="group relative h-28 w-28 flex-shrink-0 overflow-hidden rounded-2xl border border-[#D5E6E5] bg-[#F7FBFA]"
           aria-label="Add a profile picture"
         >
-          {draft.photoURL ? (
-            <img src={draft.photoURL} alt="" className="h-full w-full object-cover" />
+          {localPreview || draft.photoURL ? (
+            <img src={localPreview || draft.photoURL} alt="" className="h-full w-full object-cover" />
           ) : (
             <span className="flex h-full items-center justify-center px-3 text-center text-xs font-semibold text-[#5C7372]">
               Add a photo
@@ -80,8 +121,14 @@ export const AboutYouStep: React.FC<AboutYouStepProps> = ({
             onClick={() => inputRef.current?.click()}
             className="mt-3 text-sm font-bold text-[#3E7574]"
           >
-            {isUploading ? "Uploading…" : draft.photoURL ? "Replace picture" : "Upload picture"}
+            {isUploading ? (statusText || "Uploading image…") : draft.photoURL || localPreview ? "Replace picture" : "Upload picture"}
           </button>
+          {isUploading && statusText && <p className="mt-2 text-sm font-medium text-[#3E7574]">{statusText}</p>}
+          {!isUploading && uploadError && selectedFile && (
+            <button type="button" className="mt-2 text-sm font-bold text-[#3E7574]" onClick={() => handleFile(selectedFile)}>
+              Try again
+            </button>
+          )}
           <input
             ref={inputRef}
             id="profile-picture-input"

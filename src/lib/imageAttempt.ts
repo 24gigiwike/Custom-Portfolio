@@ -1,8 +1,11 @@
-export const IMAGE_UPLOADED_MESSAGE = "Image uploaded. Save your portfolio to keep this change.";
+export const IMAGE_UPLOADED_MESSAGE = "Uploaded — Save to keep changes";
+
+export type UploadStallKind = "before-first-byte" | "mid-transfer";
 
 export type ImageUploadStatus = {
-  phase: "preparing" | "optimizing" | "uploading" | "finalizing" | "ready";
+  phase: "preparing" | "optimizing" | "uploading" | "finalizing" | "ready" | "stalled";
   percent: number | null;
+  stall?: UploadStallKind;
 };
 
 export class ImageUploadCancelled extends Error {
@@ -15,12 +18,13 @@ export class ImageUploadCancelled extends Error {
 
 export type ImageAttemptState = {
   generation: number;
-  phase: "idle" | "preparing" | "optimizing" | "uploading" | "finalizing" | "ready" | "error";
+  phase: "idle" | "preparing" | "optimizing" | "uploading" | "finalizing" | "ready" | "error" | "stalled";
   localUrl: string | null;
   remoteUrl: string | null;
   percent: number | null;
   error: string | null;
   canRetry: boolean;
+  stall: UploadStallKind | null;
 };
 
 export function idleImageAttempt(): ImageAttemptState {
@@ -32,17 +36,24 @@ export function idleImageAttempt(): ImageAttemptState {
     percent: null,
     error: null,
     canRetry: false,
+    stall: null,
   };
 }
 
 export function imagePhaseLabel(status: ImageUploadStatus | null): string | null {
   if (!status) return null;
-  if (status.phase === "preparing" || status.phase === "optimizing") return "Preparing image…";
+  if (status.phase === "preparing") return "Preparing image…";
+  if (status.phase === "optimizing") return "Compressing image…";
   if (status.phase === "uploading") {
-    return status.percent === null ? "Uploading…" : `Uploading ${status.percent}%…`;
+    return status.percent === null ? "Uploading image…" : `Uploading image ${status.percent}%…`;
   }
   if (status.phase === "finalizing") return "Finishing upload…";
   if (status.phase === "ready") return IMAGE_UPLOADED_MESSAGE;
+  if (status.phase === "stalled") {
+    return status.stall === "before-first-byte"
+      ? "Upload stalled before any data was sent. Retry."
+      : "Upload stalled — Retry.";
+  }
   return null;
 }
 
@@ -74,6 +85,7 @@ export function beginImageAttempt(
       percent: null,
       error: null,
       canRetry: false,
+      stall: null,
     },
   };
 }
@@ -103,6 +115,27 @@ export function takeUploadResult(
       percent: null,
       error: null,
       canRetry: false,
+      stall: null,
+    },
+  };
+}
+
+export function takeUploadStall(
+  state: ImageAttemptState,
+  generation: number,
+  stall: UploadStallKind,
+): { applied: boolean; state: ImageAttemptState } {
+  if (state.generation !== generation || !imageAttemptIsBusy(state)) return { applied: false, state };
+  return {
+    applied: true,
+    state: {
+      ...state,
+      phase: "stalled",
+      stall,
+      remoteUrl: null,
+      percent: null,
+      error: null,
+      canRetry: Boolean(state.localUrl),
     },
   };
 }
@@ -122,12 +155,13 @@ export function takeUploadFailure(
       percent: null,
       error: message,
       canRetry: Boolean(state.localUrl),
+      stall: null,
     },
   };
 }
 
 export function retryImageAttempt(state: ImageAttemptState): ImageAttemptState {
-  if (state.phase !== "error" || !state.canRetry || !state.localUrl) return state;
+  if ((state.phase !== "error" && state.phase !== "stalled") || !state.canRetry || !state.localUrl) return state;
   return {
     ...state,
     generation: state.generation + 1,
@@ -136,6 +170,7 @@ export function retryImageAttempt(state: ImageAttemptState): ImageAttemptState {
     percent: null,
     error: null,
     canRetry: false,
+    stall: null,
   };
 }
 
@@ -188,6 +223,7 @@ export function imageAttemptSaved(
         percent: null,
         error: null,
         canRetry: false,
+        stall: null,
       },
     };
   }

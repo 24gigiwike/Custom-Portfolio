@@ -14,6 +14,7 @@ import {
   retryImageAttempt,
   takeUploadFailure,
   takeUploadResult,
+  takeUploadStall,
 } from "./imageAttempt";
 
 const preparing = beginImageAttempt(idleImageAttempt(), "blob:first");
@@ -22,13 +23,14 @@ assert.equal(preparing.state.phase, "preparing");
 assert.equal(preparing.state.localUrl, "blob:first");
 assert.equal(previewSource(preparing.state.localUrl, "https://cdn.example.com/saved.jpg"), "blob:first");
 assert.equal(imagePhaseLabel({ phase: "preparing", percent: null }), "Preparing image…");
-assert.equal(imagePhaseLabel({ phase: "optimizing", percent: null }), "Preparing image…");
+assert.equal(imagePhaseLabel({ phase: "optimizing", percent: null }), "Compressing image…");
 
 const uploading = applyUploadStatus(preparing.state, preparing.state.generation, { phase: "uploading", percent: 40 });
 assert.equal(uploading.phase, "uploading");
 assert.equal(uploading.percent, 40);
-assert.equal(imagePhaseLabel({ phase: "uploading", percent: 40 }), "Uploading 40%…");
-assert.equal(imagePhaseLabel({ phase: "uploading", percent: null }), "Uploading…");
+assert.equal(imagePhaseLabel({ phase: "uploading", percent: 40 }), "Uploading image 40%…");
+assert.equal(imagePhaseLabel({ phase: "uploading", percent: null }), "Uploading image…");
+assert.equal(imagePhaseLabel({ phase: "optimizing", percent: 80 }), "Compressing image…");
 assert.equal(imagePhaseLabel({ phase: "finalizing", percent: null }), "Finishing upload…");
 assert.equal(applyUploadStatus(uploading, uploading.generation, { phase: "ready", percent: null }).phase, "uploading");
 assert.equal(applyUploadStatus(uploading, 0, { phase: "finalizing", percent: null }), uploading);
@@ -46,7 +48,7 @@ assert.equal(uploaded.state.phase, "ready");
 assert.equal(uploaded.state.localUrl, "blob:second");
 assert.equal(uploaded.state.remoteUrl, "https://cdn.example.com/new.jpg");
 assert.equal(imagePhaseLabel({ phase: "ready", percent: null }), IMAGE_UPLOADED_MESSAGE);
-assert.equal(IMAGE_UPLOADED_MESSAGE, "Image uploaded. Save your portfolio to keep this change.");
+assert.equal(IMAGE_UPLOADED_MESSAGE, "Uploaded — Save to keep changes");
 assert.equal(imageChangeIsSaved(uploaded.state.remoteUrl ?? "", "https://cdn.example.com/saved.jpg"), false);
 assert.equal(imageChangeIsSaved("https://cdn.example.com/saved.jpg", "https://cdn.example.com/saved.jpg"), true);
 
@@ -119,6 +121,18 @@ assert.equal(replacementFailed.state.remoteUrl, null);
 assert.equal(replacementFailed.state.phase, "error");
 assert.equal(imagePhaseLabel({ phase: "ready", percent: null }) === replacementFailed.state.error, false);
 assert.equal(previewSource(replacementFailed.state.localUrl, previousDraft), "blob:replacement");
+const stalled = takeUploadStall(uploading, uploading.generation, "before-first-byte");
+assert.equal(stalled.applied, true);
+assert.equal(stalled.state.phase, "stalled");
+assert.equal(stalled.state.localUrl, "blob:first");
+assert.equal(imagePhaseLabel({ phase: "stalled", percent: null, stall: "before-first-byte" }), "Upload stalled before any data was sent. Retry.");
+assert.equal(imagePhaseLabel({ phase: "stalled", percent: null, stall: "mid-transfer" }), "Upload stalled — Retry.");
+assert.equal(takeUploadResult(stalled.state, stalled.state.generation, "https://cdn.example.com/late.jpg").applied, false);
+const retriedStall = retryImageAttempt(stalled.state);
+assert.equal(retriedStall.phase, "preparing");
+assert.equal(retriedStall.localUrl, "blob:first");
+assert.equal(retriedStall.generation, stalled.state.generation + 1);
+
 const retryReplacement = retryImageAttempt(replacementFailed.state);
 assert.equal(retryReplacement.localUrl, "blob:replacement");
 assert.equal(retryReplacement.generation, replacementFailed.state.generation + 1);

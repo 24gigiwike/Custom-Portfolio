@@ -10,6 +10,10 @@ interface ImportMetaEnv {
   readonly VITE_PORTFOLIO_PUBLIC_ORIGIN?: string;
   /** BroadBrand support WhatsApp number: digits with country code, or E.164. Empty hides Contact Support. */
   readonly VITE_BROADBRAND_SUPPORT_WHATSAPP?: string;
+  /** `browser` (default) or `legacy`. Read at build time. */
+  readonly VITE_IMAGE_COMPRESSION_BACKEND?: string;
+  /** `1` prints image upload timings. Unset or `0` keeps production quiet. */
+  readonly VITE_IMAGE_UPLOAD_DEBUG?: string;
 }
 
 interface ImportMeta {

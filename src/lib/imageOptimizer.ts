@@ -4,7 +4,11 @@
  * Automatically inspects, resizes, and compresses images before upload
  * preserving high visual quality for editorial portfolio display while
  * drastically reducing upload time and bandwidth.
+ *
+ * One backend runs per upload. `browser` is the default. `legacy` is the canvas rollback.
  */
+import { ImageUploadCancelled } from "./imageAttempt";
+import { traceImageUpload } from "./imageUploadTrace";
 
 export interface OptimizedImageResult {
   file: File;
@@ -36,14 +40,19 @@ export class ImagePreparationError extends Error {
   }
 }
 
-export type ImageUse = "portrait" | "logo" | "social" | "project";
+export type ImageUse = "portrait" | "logo" | "social" | "project" | "account";
 
 export type ImageProfile = {
   maxLongSide: number;
   quality: number;
+  /** Preferred output size. The browser backend tries to land at or below this. */
+  maxBytes: number;
   /** Within the long-side limit and at or below this size: upload the file unchanged. */
   passThroughMaxBytes: number;
-  /** If encoding fails, an original within the long-side limit and this size may still upload. */
+  /**
+   * Largest file that may still upload when the size target is missed or encoding fails,
+   * and only when the image is already within the long-side limit.
+   */
   safeOriginalMaxBytes: number;
 };
 
@@ -53,11 +62,40 @@ export type ImageProfile = {
  * Nothing is upscaled.
  */
 export const IMAGE_PROFILES: Record<ImageUse, ImageProfile> = {
-  portrait: { maxLongSide: 2048, quality: 0.84, passThroughMaxBytes: 500 * 1024, safeOriginalMaxBytes: 2 * 1024 * 1024 },
-  logo: { maxLongSide: 800, quality: 0.9, passThroughMaxBytes: 250 * 1024, safeOriginalMaxBytes: 1024 * 1024 },
-  social: { maxLongSide: 1600, quality: 0.86, passThroughMaxBytes: 450 * 1024, safeOriginalMaxBytes: 2 * 1024 * 1024 },
-  project: { maxLongSide: 2048, quality: 0.84, passThroughMaxBytes: 350 * 1024, safeOriginalMaxBytes: 2 * 1024 * 1024 },
+  portrait: { maxLongSide: 2048, quality: 0.84, maxBytes: 800 * 1024, passThroughMaxBytes: 500 * 1024, safeOriginalMaxBytes: 2 * 1024 * 1024 },
+  logo: { maxLongSide: 800, quality: 0.9, maxBytes: 350 * 1024, passThroughMaxBytes: 250 * 1024, safeOriginalMaxBytes: 1024 * 1024 },
+  social: { maxLongSide: 1600, quality: 0.86, maxBytes: 600 * 1024, passThroughMaxBytes: 450 * 1024, safeOriginalMaxBytes: 2 * 1024 * 1024 },
+  project: { maxLongSide: 2048, quality: 0.84, maxBytes: 800 * 1024, passThroughMaxBytes: 350 * 1024, safeOriginalMaxBytes: 2 * 1024 * 1024 },
+  /** Account photos are avatars, so they stay smaller than a portfolio hero. */
+  account: { maxLongSide: 1024, quality: 0.85, maxBytes: 350 * 1024, passThroughMaxBytes: 350 * 1024, safeOriginalMaxBytes: 1024 * 1024 },
 };
+
+/** Quality steps inside one compressor. The library multiplies quality by about 0.95 each step. */
+export const COMPRESSION_MAX_ITERATIONS = 6;
+
+export type ImageCompressionBackend = "browser" | "legacy";
+
+/**
+ * `browser` is the default. Set VITE_IMAGE_COMPRESSION_BACKEND=legacy and redeploy to roll back.
+ * Vite reads the variable at build time.
+ */
+export function imageCompressionBackend(): ImageCompressionBackend {
+  const value = (import.meta as { env?: { VITE_IMAGE_COMPRESSION_BACKEND?: string } }).env?.VITE_IMAGE_COMPRESSION_BACKEND;
+  return value === "legacy" ? "legacy" : "browser";
+}
+
+/** The library treats maxSizeMB as 1024×1024 bytes. */
+export function bytesToMaxSizeMB(bytes: number): number {
+  return bytes / (1024 * 1024);
+}
+
+/** WebP keeps transparency. Without WebP, PNG and WebP sources stay PNG instead of becoming JPEG. */
+export function outputMimeForUpload(fileType: string, supportsWebP: boolean): "image/webp" | "image/png" | "image/jpeg" {
+  if (supportsWebP) return "image/webp";
+  const type = fileType.toLowerCase();
+  if (type === "image/png" || type === "image/webp") return "image/png";
+  return "image/jpeg";
+}
 
 export type ImagePlan =
   | { action: "passthrough"; reason: "gif" | "already-efficient" }
@@ -182,74 +220,11 @@ function yieldToPaint(): Promise<void> {
   });
 }
 
-/**
- * Check if the browser supports WebP canvas export
- */
-let supportsWebPCache: boolean | null = null;
-function checkWebPSupport(): boolean {
-  if (supportsWebPCache !== null) return supportsWebPCache;
-  try {
-    const canvas = document.createElement("canvas");
-    canvas.width = 1;
-    canvas.height = 1;
-    const dataUrl = canvas.toDataURL("image/webp");
-    supportsWebPCache = dataUrl.indexOf("image/webp") === 5;
-  } catch {
-    supportsWebPCache = false;
-  }
-  return supportsWebPCache;
-}
+export type OptimizeImageOptions = {
+  signal?: AbortSignal;
+};
 
-/**
- * Safely load an image File into an HTMLImageElement using Object URL
- */
-function loadImageElement(file: File): Promise<{ img: HTMLImageElement; objectUrl: string }> {
-  return new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file);
-    const img = new Image();
-    // Modern browsers use natural orientation according to EXIF data
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve({ img, objectUrl });
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("Failed to decode image file."));
-    };
-    img.src = objectUrl;
-  });
-}
-
-/**
- * Adaptively optimize an image File before uploading to Firebase Storage.
- *
- * Rules:
- * 1. Uses the field profile for the long-side cap and the pass-through size.
- * 2. Leaves an already-small file unchanged and never upscales.
- * 3. Keeps GIF animation by skipping re-encoding, and refuses GIFs over 2 MB.
- * 4. If preparation fails, uploads the original only when it is already within the profile limits.
- */
-async function decodeBitmap(file: File): Promise<ImageBitmap> {
-  if (typeof createImageBitmap !== "function") {
-    throw new Error("ImageBitmap decoding is unavailable.");
-  }
-  return createImageBitmap(file);
-}
-
-async function bitmapAtSize(source: ImageBitmap, width: number, height: number): Promise<ImageBitmap> {
-  if (source.width === width && source.height === height) return source;
-  try {
-    const resized = await createImageBitmap(source, {
-      resizeWidth: width,
-      resizeHeight: height,
-      resizeQuality: "high",
-    });
-    source.close();
-    return resized;
-  } catch {
-    return source;
-  }
-}
-
-function unchangedImage(file: File, width: number, height: number): OptimizedImageResult {
+export function unchangedImage(file: File, width: number, height: number): OptimizedImageResult {
   return {
     file,
     originalSize: file.size,
@@ -261,144 +236,108 @@ function unchangedImage(file: File, width: number, height: number): OptimizedIma
   };
 }
 
-function encodeCanvas(canvas: HTMLCanvasElement, file: File, profile: ImageUse, sourceWidth: number, sourceHeight: number): Promise<OptimizedImageResult> {
-  const limits = IMAGE_PROFILES[profile];
-  const ctx = canvas.getContext("2d", { alpha: true });
-  if (!ctx) throw new Error("Unable to obtain 2D canvas context.");
-  const hasAlpha = imageHasTransparency(ctx.getImageData(0, 0, canvas.width, canvas.height).data);
-  const targetMimeType = encodedMimeType({ hasAlpha, supportsWebP: checkWebPSupport() });
-  const extension = targetMimeType === "image/webp" ? ".webp" : targetMimeType === "image/png" ? ".png" : ".jpg";
-  const baseName = file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
-  const newFileName = `${baseName.replace(/[^a-zA-Z0-9_-]/g, "_")}${extension}`;
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error("Canvas toBlob failed."));
-        return;
-      }
-      const optimizedFile = new File([blob], newFileName, { type: targetMimeType, lastModified: Date.now() });
-      if (
-        shouldKeepOriginal({
-          originalSize: file.size,
-          optimizedSize: optimizedFile.size,
-          width: sourceWidth,
-          height: sourceHeight,
-          profile,
-        })
-      ) {
-        resolve(unchangedImage(file, sourceWidth, sourceHeight));
-        return;
-      }
-      resolve({
-        file: optimizedFile,
-        originalSize: file.size,
-        optimizedSize: optimizedFile.size,
-        width: canvas.width,
-        height: canvas.height,
-        format: targetMimeType,
-        wasOptimized: true,
-      });
-    }, targetMimeType, limits.quality);
-  });
+export function throwIfUploadAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new ImageUploadCancelled();
 }
 
+/**
+ * Accept a compressed file from the one backend that ran.
+ * A result over the preferred size can still upload when it is within the hard ceiling.
+ * A result over that ceiling is refused. The original is kept only when it is already safe
+ * and re-encoding made it larger.
+ */
+export function settleCompressedOutput(input: {
+  original: File;
+  compressed: File;
+  width: number;
+  height: number;
+  sourceWidth: number;
+  sourceHeight: number;
+  profile: ImageUse;
+}): OptimizedImageResult {
+  const limits = IMAGE_PROFILES[input.profile];
+  if (
+    shouldKeepOriginal({
+      originalSize: input.original.size,
+      optimizedSize: input.compressed.size,
+      width: input.sourceWidth,
+      height: input.sourceHeight,
+      profile: input.profile,
+    })
+  ) {
+    return unchangedImage(input.original, input.sourceWidth, input.sourceHeight);
+  }
+  if (input.compressed.size > limits.safeOriginalMaxBytes && input.compressed.size > limits.maxBytes) {
+    throw new ImagePreparationError(IMAGE_PREPARATION_FAILED_MESSAGE);
+  }
+  return {
+    file: input.compressed,
+    originalSize: input.original.size,
+    optimizedSize: input.compressed.size,
+    width: input.width,
+    height: input.height,
+    format: input.compressed.type || input.original.type,
+    wasOptimized: true,
+  };
+}
+
+export type ImageOptimizerRunner = (
+  file: File,
+  profile: ImageUse,
+  options: { signal?: AbortSignal; onPhase?: (phase: ImagePreparePhase) => void },
+) => Promise<OptimizedImageResult>;
+
+/**
+ * Prepare one image for upload.
+ * GIF animation is preserved by skipping the compressor. Small files that already fit are not re-encoded.
+ * The selected backend is the only compressor that runs.
+ */
 export async function optimizeImageForUpload(
   file: File,
   onPhase?: (phase: ImagePreparePhase) => void,
   profile: ImageUse = "project",
+  options?: OptimizeImageOptions,
 ): Promise<OptimizedImageResult> {
-  const originalSize = file.size;
+  const started = typeof performance !== "undefined" ? performance.now() : Date.now();
   onPhase?.("preparing");
   await yieldToPaint();
+  throwIfUploadAborted(options?.signal);
 
-  const early = planImageFile({ type: file.type, size: originalSize, width: 0, height: 0, profile });
+  const early = planImageFile({ type: file.type, size: file.size, width: 0, height: 0, profile });
   if (early.action === "reject") throw new ImagePreparationError(early.message);
-  if (early.action === "passthrough") return unchangedImage(file, 0, 0);
-
-  let bitmap: ImageBitmap | null = null;
-  let knownWidth = 0;
-  let knownHeight = 0;
-
-  try {
-    bitmap = await decodeBitmap(file);
-    knownWidth = bitmap.width;
-    knownHeight = bitmap.height;
-    const planned = planImageFile({
-      type: file.type,
-      size: originalSize,
-      width: knownWidth,
-      height: knownHeight,
+  if (early.action === "passthrough") {
+    traceImageUpload("compress", {
+      backend: imageCompressionBackend(),
       profile,
+      skipped: true,
+      originalBytes: file.size,
+      optimizedBytes: file.size,
+      durationMs: Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - started),
     });
-    if (planned.action === "reject") throw new ImagePreparationError(planned.message);
-    if (planned.action === "passthrough") return unchangedImage(file, knownWidth, knownHeight);
-
-    onPhase?.("optimizing");
-    await yieldToPaint();
-
-    const limits = IMAGE_PROFILES[profile];
-    const target = fittedLongSide(knownWidth, knownHeight, limits.maxLongSide);
-    bitmap = await bitmapAtSize(bitmap, target.width, target.height);
-
-    const canvas = document.createElement("canvas");
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    const ctx = canvas.getContext("2d", { alpha: true });
-    if (!ctx) throw new Error("Unable to obtain 2D canvas context.");
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(bitmap, 0, 0);
-    return await encodeCanvas(canvas, file, profile, knownWidth, knownHeight);
-  } catch (err) {
-    if (err instanceof ImagePreparationError) throw err;
-    try {
-      return await optimizeWithImageElement(file, profile);
-    } catch (fallbackError) {
-      if (fallbackError instanceof ImagePreparationError) throw fallbackError;
-      if (
-        originalAllowedAfterOptimizationFailure({
-          type: file.type,
-          size: originalSize,
-          width: knownWidth,
-          height: knownHeight,
-          profile,
-        })
-      ) {
-        return unchangedImage(file, knownWidth, knownHeight);
-      }
-      console.warn("Client-side image optimization failed:", err, fallbackError);
-      throw new ImagePreparationError(IMAGE_PREPARATION_FAILED_MESSAGE);
-    }
-  } finally {
-    bitmap?.close();
+    return unchangedImage(file, 0, 0);
   }
-}
 
-async function optimizeWithImageElement(file: File, profile: ImageUse): Promise<OptimizedImageResult> {
-  const { img, objectUrl } = await loadImageElement(file);
+  const backend = imageCompressionBackend();
   try {
-    const naturalWidth = img.naturalWidth || img.width;
-    const naturalHeight = img.naturalHeight || img.height;
-    const planned = planImageFile({
-      type: file.type,
-      size: file.size,
-      width: naturalWidth,
-      height: naturalHeight,
-      profile,
-    });
-    if (planned.action === "reject") throw new ImagePreparationError(planned.message);
-    if (planned.action === "passthrough") return unchangedImage(file, naturalWidth, naturalHeight);
-    const target = fittedLongSide(naturalWidth, naturalHeight, IMAGE_PROFILES[profile].maxLongSide);
-    const canvas = document.createElement("canvas");
-    canvas.width = target.width || naturalWidth;
-    canvas.height = target.height || naturalHeight;
-    const ctx = canvas.getContext("2d", { alpha: true });
-    if (!ctx) throw new Error("Unable to obtain 2D canvas context.");
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    return await encodeCanvas(canvas, file, profile, naturalWidth, naturalHeight);
-  } finally {
-    URL.revokeObjectURL(objectUrl);
+    const runner: ImageOptimizerRunner = backend === "legacy"
+      ? (await import("./imageOptimizerLegacy")).optimizeWithLegacyCanvas
+      : (await import("./imageOptimizerBrowser")).optimizeWithBrowserLibrary;
+    throwIfUploadAborted(options?.signal);
+    return await runner(file, profile, { signal: options?.signal, onPhase });
+  } catch (error) {
+    if (error instanceof ImageUploadCancelled || error instanceof ImagePreparationError) throw error;
+    if (
+      originalAllowedAfterOptimizationFailure({
+        type: file.type,
+        size: file.size,
+        width: 0,
+        height: 0,
+        profile,
+      })
+    ) {
+      return unchangedImage(file, 0, 0);
+    }
+    console.warn("Client-side image optimization failed.");
+    throw new ImagePreparationError(IMAGE_PREPARATION_FAILED_MESSAGE);
   }
 }
