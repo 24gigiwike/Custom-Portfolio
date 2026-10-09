@@ -12,11 +12,14 @@ import {
   retryImageAttempt,
   takeUploadFailure,
   takeUploadResult,
+  takeUploadStall,
   type ImageAttemptState,
 } from "../../lib/imageAttempt";
 import { ImageUploadCancelled } from "../../lib/imageAttempt";
 import { ImagePreparationError } from "../../lib/imageOptimizer";
 import { beginPortfolioImageUpload, type ImageUploadStatus, type PortfolioImageFolder, type PortfolioImageUpload } from "../../lib/storage";
+import { ImageTransferError, ImageUploadStalled } from "../../lib/imageTransfer";
+import { nowMs, traceImageUpload } from "../../lib/imageUploadTrace";
 
 export type PortfolioImageField = {
   localUrl: string | null;
@@ -32,6 +35,7 @@ export type PortfolioImageField = {
 
 function statusFromAttempt(state: ImageAttemptState): ImageUploadStatus | null {
   if (state.phase === "idle" || state.phase === "error") return null;
+  if (state.phase === "stalled") return { phase: "stalled", percent: null, stall: state.stall ?? "mid-transfer" };
   return { phase: state.phase, percent: state.percent };
 }
 
@@ -84,10 +88,15 @@ export function usePortfolioImageField({
       },
       (error: unknown) => {
         if (generationRef.current !== generation || error instanceof ImageUploadCancelled) return;
+        if (error instanceof ImageUploadStalled) {
+          const stalled = takeUploadStall(attemptRef.current, generation, error.stall);
+          if (stalled.applied) commit(stalled.state);
+          return;
+        }
         const message =
-          error instanceof ImagePreparationError
+          error instanceof ImagePreparationError || error instanceof ImageTransferError
             ? error.message
-            : readableSaveError(error, "Couldn't upload this image. Try again.");
+            : readableSaveError(error, "Upload failed. Try again.");
         const failed = takeUploadFailure(attemptRef.current, generation, message);
         if (failed.applied) commit(failed.state);
       },
@@ -109,7 +118,9 @@ export function usePortfolioImageField({
     const remoteUrl = attempt.remoteUrl;
     if (!remoteUrl) return;
     const probe = new Image();
+    const started = nowMs();
     const finish = () => {
+      traceImageUpload("remote-image", { durationMs: Math.round(nowMs() - started), loaded: true });
       if (generationRef.current !== generation) return;
       const ready = remotePreviewReady(attemptRef.current, generation);
       if (!ready.changed) return;
@@ -118,6 +129,7 @@ export function usePortfolioImageField({
     };
     probe.onload = finish;
     probe.onerror = () => {
+      traceImageUpload("remote-image", { durationMs: Math.round(nowMs() - started), loaded: false });
       // The local preview stays. A failed remote load must not replace it.
     };
     probe.src = remoteUrl;
@@ -143,7 +155,7 @@ export function usePortfolioImageField({
     error: attempt.error,
     busy: imageAttemptIsBusy(attempt),
     canRetry: attempt.canRetry,
-    canCancel: imageAttemptIsBusy(attempt) || (attempt.phase === "error" && Boolean(attempt.localUrl)),
+    canCancel: imageAttemptIsBusy(attempt) || attempt.phase === "stalled" || (attempt.phase === "error" && Boolean(attempt.localUrl)),
     choose(file) {
       sessionRef.current?.cancel();
       const localUrl = URL.createObjectURL(file);
