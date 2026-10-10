@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import fs from 'node:fs';
 import path from 'path';
 import {defineConfig, type Plugin} from 'vite';
+import { imageKitDevPlugin } from './src/server/imageKitDevPlugin';
 import { portfolioSeoPlugin } from './src/server/seoPlugin';
 
 const IMAGE_WORKER_FILE = 'browser-image-compression.js';
@@ -47,7 +48,7 @@ function imageCompressionWorkerPlugin(root: string): Plugin {
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss(), portfolioSeoPlugin(__dirname), imageCompressionWorkerPlugin(__dirname)],
+    plugins: [imageKitDevPlugin(), react(), tailwindcss(), portfolioSeoPlugin(__dirname), imageCompressionWorkerPlugin(__dirname)],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
