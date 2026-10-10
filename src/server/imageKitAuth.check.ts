@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { createHmac, createSign, generateKeyPairSync } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { imageKitDevServerEnv } from "./imageKitDevPlugin";
 import { ImageUploadCancelled } from "../lib/imageAttempt";
 import {
   IMAGEKIT_UPLOAD_FAILED,
@@ -129,7 +132,43 @@ assert.equal(read("src/App.tsx").includes("imageKit"), false);
 assert.equal(read("src/lib/storage.ts").toLowerCase().includes("imagekit"), false);
 assert.match(read("src/lib/storage.ts"), /uploadBytesResumable/);
 assert.match(read("vercel.json"), /api\/imagekit-auth\.ts/);
-assert.match(read("src/server/imageKitDevPlugin.ts"), /apply: "serve"/);
+const pluginSource = read("src/server/imageKitDevPlugin.ts");
+assert.match(pluginSource, /apply: "serve"/);
+assert.match(pluginSource, /loadEnv\(mode, envDir, ""\)/);
+assert.match(pluginSource, /env: imageKitDevServerEnv/);
+assert.equal(pluginSource.includes("console."), false);
+assert.equal(read("api/imagekit-auth.ts").includes("loadEnv"), false);
+
+const savedImageKitEnv = {
+  IMAGEKIT_PRIVATE_KEY: process.env.IMAGEKIT_PRIVATE_KEY,
+  IMAGEKIT_PUBLIC_KEY: process.env.IMAGEKIT_PUBLIC_KEY,
+  IMAGEKIT_URL_ENDPOINT: process.env.IMAGEKIT_URL_ENDPOINT,
+};
+delete process.env.IMAGEKIT_PRIVATE_KEY;
+delete process.env.IMAGEKIT_PUBLIC_KEY;
+delete process.env.IMAGEKIT_URL_ENDPOINT;
+const envDir = mkdtempSync(join(tmpdir(), "imagekit-env-"));
+try {
+  writeFileSync(join(envDir, ".env.local"), [
+    "IMAGEKIT_PRIVATE_KEY=private-from-file",
+    "IMAGEKIT_PUBLIC_KEY=public-from-file",
+    "IMAGEKIT_URL_ENDPOINT=https://ik.imagekit.io/example/",
+  ].join("\n"));
+  const fromFile = imageKitDevServerEnv("development", envDir);
+  assert.equal(fromFile.IMAGEKIT_PRIVATE_KEY, "private-from-file");
+  assert.equal(fromFile.IMAGEKIT_PUBLIC_KEY, "public-from-file");
+  assert.equal(fromFile.IMAGEKIT_URL_ENDPOINT, "https://ik.imagekit.io/example/");
+  process.env.IMAGEKIT_URL_ENDPOINT = "https://ik.imagekit.io/from-process";
+  const fromProcess = imageKitDevServerEnv("development", envDir);
+  assert.equal(fromProcess.IMAGEKIT_URL_ENDPOINT, "https://ik.imagekit.io/from-process");
+  assert.equal(fromProcess.IMAGEKIT_PRIVATE_KEY, "private-from-file");
+} finally {
+  rmSync(envDir, { recursive: true, force: true });
+  for (const [key, value] of Object.entries(savedImageKitEnv)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+}
 assert.equal(activeImageStorageProvider(), "firebase");
 assert.equal(configuredImageStorageProvider(), "firebase");
 

@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { Plugin } from "vite";
+import { loadEnv, type Plugin } from "vite";
 
 const PROOF_PATH = "/dev/imagekit-proof";
 
@@ -54,6 +54,23 @@ function readBody(req: IncomingMessage): Promise<string | Uint8Array> {
   });
 }
 
+/**
+ * Reads ImageKit settings for the Vite dev server.
+ * Vite only copies VITE_ names into import.meta.env. An empty prefix also
+ * reads server-only names from .env.local and from the process environment,
+ * which is where Cursor Cloud secrets are injected. Values already set on
+ * the process win over the file. Nothing is written back to the process
+ * environment and nothing is logged.
+ */
+export function imageKitDevServerEnv(mode: string, envDir: string): NodeJS.ProcessEnv {
+  const loaded = loadEnv(mode, envDir, "");
+  return {
+    IMAGEKIT_PRIVATE_KEY: loaded.IMAGEKIT_PRIVATE_KEY,
+    IMAGEKIT_PUBLIC_KEY: loaded.IMAGEKIT_PUBLIC_KEY,
+    IMAGEKIT_URL_ENDPOINT: loaded.IMAGEKIT_URL_ENDPOINT,
+  };
+}
+
 function nodeResponse(res: ServerResponse) {
   return {
     status(code: number) {
@@ -94,6 +111,7 @@ export function imageKitDevPlugin(): Plugin {
         await auth.handleImageKitAuth(
           { method: req.method, headers: req.headers, body },
           nodeResponse(res),
+          { env: imageKitDevServerEnv(server.config.mode, server.config.envDir || server.config.root) },
         );
       });
     },
