@@ -10,7 +10,7 @@ import {
   ImageKitTransferError,
   uploadOptimizedFileToImageKit,
 } from "../lib/imageKitStorage";
-import { activeImageStorageProvider, configuredImageStorageProvider } from "../lib/imageStorageProvider";
+import { accountPhotoImageStorageProvider, activeImageStorageProvider, configuredImageStorageProvider } from "../lib/imageStorageProvider";
 import { proveImageKitUpload } from "../dev/imageKitUploadProof";
 import { verifyFirebaseIdToken } from "./firebaseIdToken";
 import { imageKitFolderForUser } from "./imageKitUploadAuth";
@@ -93,6 +93,7 @@ function sha256(bytes: Buffer): string {
 class MemoryQuotaStore implements ImageKitQuotaStore {
   readonly uploads = new Map<string, ImageKitTrackedUpload>();
   readonly quotas = new Map<string, { usedBytes: number; reservedBytes: number; limitBytes: number }>();
+  accountReference: unknown = null;
   savedReferences: unknown[] = [];
   publishedReferences: unknown[] = [];
   failComplete = false;
@@ -250,6 +251,9 @@ class MemoryQuotaStore implements ImageKitQuotaStore {
     if (!existing.url || !existing.fileId || !existing.filePath) {
       return { deleted: false, uploadId: input.uploadId, reason: "missing-imagekit-file" as const };
     }
+    if (this.accountReference && containsExactImageReference(this.accountReference, existing)) {
+      return { deleted: false, uploadId: input.uploadId, reason: "referenced-by-account" as const };
+    }
     if (this.savedReferences.some((value) => containsExactImageReference(value, existing))) {
       return { deleted: false, uploadId: input.uploadId, reason: "referenced-by-saved-portfolio" as const };
     }
@@ -396,8 +400,23 @@ assert.ok(optimizeAt > 0 && optimizeAt < uploadAt);
 
 assert.equal(read("src/App.tsx").includes("imagekit-proof"), false);
 assert.equal(read("src/App.tsx").includes("imageKit"), false);
-assert.equal(read("src/lib/storage.ts").toLowerCase().includes("imagekit"), false);
-assert.match(read("src/lib/storage.ts"), /uploadBytesResumable/);
+const storageSource = read("src/lib/storage.ts");
+assert.match(storageSource, /uploadBytesResumable/);
+const projectUploadSource = storageSource.slice(
+  storageSource.indexOf("export function beginProjectImageUpload"),
+  storageSource.indexOf("/**\n * Adaptively optimize and upload a project image"),
+);
+assert.equal(projectUploadSource.toLowerCase().includes("imagekit"), false);
+const portfolioUploadSource = storageSource.slice(
+  storageSource.indexOf("export function beginPortfolioImageUpload"),
+  storageSource.indexOf("/**\n * Upload the portfolio portrait"),
+);
+assert.equal(portfolioUploadSource.toLowerCase().includes("imagekit"), false);
+const accountUploadSource = storageSource.slice(
+  storageSource.indexOf("export function beginAccountProfileImageUpload"),
+  storageSource.indexOf("export async function uploadAccountProfileImage"),
+);
+assert.match(accountUploadSource, /accountPhotoImageStorageProvider\(\) === "imagekit"/);
 assert.match(read("vercel.json"), /api\/imagekit-upload\.ts/);
 assert.equal(read("vercel.json").includes("imagekit-auth"), false);
 const retired = read("api/imagekit-auth.ts");
@@ -452,6 +471,7 @@ try {
 }
 assert.equal(activeImageStorageProvider(), "firebase");
 assert.equal(configuredImageStorageProvider(), "firebase");
+assert.equal(accountPhotoImageStorageProvider(), "firebase");
 
 const jpegForm = multipart([{ name: "file", filename: "client-chosen.jpg", type: "image/jpeg", data: JPEG }]);
 const missingAuth = await call({ token: null, body: jpegForm.body, contentType: jpegForm.contentType, developmentProof: true });
@@ -935,6 +955,16 @@ const cleanupUpload = await call({
   uploadFile: acceptingUpload("image/jpeg"),
 });
 assert.equal(cleanupUpload.status, 200);
+cleanupStore.accountReference = { professionalProfile: { photoURL: cleanupUpload.json.url } };
+const accountProtected = await cleanupStore.safeDeleteUpload({
+  uid: "user123",
+  uploadId: "user123:cleanup",
+  deleteFile: async () => {
+    throw new Error("account references must not be deleted");
+  },
+});
+assert.deepEqual(accountProtected, { deleted: false, uploadId: "user123:cleanup", reason: "referenced-by-account" });
+cleanupStore.accountReference = null;
 cleanupStore.savedReferences = [{ profile: { heroImage: cleanupUpload.json.url } }];
 const savedProtected = await cleanupStore.safeDeleteUpload({
   uid: "user123",

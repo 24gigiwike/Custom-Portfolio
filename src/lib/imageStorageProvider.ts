@@ -7,10 +7,17 @@ function configuredValue(): string {
 
 /**
  * Build-time preference. `firebase` is the default.
- * Existing portfolio, project, and account uploads do not read this yet.
+ * Existing portfolio and project uploads do not read this yet.
  */
 export function configuredImageStorageProvider(): ImageStorageProviderName {
   return configuredValue() === "imagekit" ? "imagekit" : "firebase";
+}
+
+/**
+ * Narrow opt-in for the account photo proof only.
+ */
+export function accountPhotoImageStorageProvider(): ImageStorageProviderName {
+  return configuredImageStorageProvider();
 }
 
 /**

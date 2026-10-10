@@ -55,6 +55,7 @@ export type ImageKitCleanupResult =
         | "wrong-owner"
         | "not-cleanable"
         | "missing-imagekit-file"
+        | "referenced-by-account"
         | "referenced-by-saved-portfolio"
         | "referenced-by-published-portfolio"
         | "reference-check-failed"
@@ -241,6 +242,10 @@ export function createFirestoreImageKitQuotaStore(
       return { deleted: false, uploadId: upload.uploadId, reason: "missing-imagekit-file" };
     }
     try {
+      const account = await db.collection("users").doc(uid).get();
+      if (account.exists && containsExactImageReference(account.data(), upload)) {
+        return { deleted: false, uploadId: upload.uploadId, reason: "referenced-by-account" };
+      }
       const saved = await db.collection("portfolios").where("ownerId", "==", uid).get();
       if (await snapshotHasReference(saved, upload)) {
         return { deleted: false, uploadId: upload.uploadId, reason: "referenced-by-saved-portfolio" };
