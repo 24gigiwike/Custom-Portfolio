@@ -16,7 +16,7 @@
     "api/site.ts": {
       "includeFiles": "dist/index.html"
     },
-    "api/imagekit-auth.ts": {
+    "api/imagekit-upload.ts": {
       "maxDuration": 10
     }
   }

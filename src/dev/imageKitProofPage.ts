@@ -27,7 +27,7 @@ await Promise.race([
       currentUser = user;
       if (session) {
         session.textContent = user
-          ? "Signed in. Choose a JPEG to run the ImageKit proof."
+          ? "Signed in. Choose a JPEG to upload through the server."
           : "Sign in on this site first, then reload this page.";
       }
       if (!settled) {

@@ -1,4 +1,4 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { ServerResponse } from "node:http";
 import { loadEnv, type Plugin } from "vite";
 
 const PROOF_PATH = "/dev/imagekit-proof";
@@ -39,20 +39,7 @@ const proofHtml = `<!doctype html>
 </body>
 </html>`;
 
-function readBody(req: IncomingMessage): Promise<string | Uint8Array> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    let size = 0;
-    let oversized = false;
-    req.on("data", (chunk: Buffer) => {
-      size += chunk.length;
-      if (size > 4096) oversized = true;
-      else chunks.push(Buffer.from(chunk));
-    });
-    req.on("end", () => resolve(oversized ? new Uint8Array(size) : Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
-  });
-}
+const RETIRED_ROUTE = JSON.stringify({ error: "This upload route is no longer available." });
 
 /**
  * Reads ImageKit settings for the Vite dev server.
@@ -86,7 +73,7 @@ function nodeResponse(res: ServerResponse) {
   };
 }
 
-/** Serves the upload proof and its auth route during `vite` dev only. Production builds do not emit this page. */
+/** Serves the upload proof and the server upload route during `vite` dev only. Production builds do not emit this page. */
 export function imageKitDevPlugin(): Plugin {
   return {
     name: "imagekit-dev-proof",
@@ -102,16 +89,32 @@ export function imageKitDevPlugin(): Plugin {
           res.end(proofHtml);
           return;
         }
-        if (pathname !== "/api/imagekit-auth") {
+        if (pathname === "/api/imagekit-auth") {
+          res.statusCode = 410;
+          res.setHeader("content-type", "application/json; charset=utf-8");
+          res.setHeader("cache-control", "no-store");
+          res.setHeader("x-robots-tag", "noindex");
+          res.end(RETIRED_ROUTE);
+          return;
+        }
+        if (pathname !== "/api/imagekit-upload") {
           next();
           return;
         }
-        const auth = await server.ssrLoadModule("/src/server/imageKitUploadAuth.ts") as typeof import("./imageKitUploadAuth");
-        const body = await readBody(req);
-        await auth.handleImageKitAuth(
-          { method: req.method, headers: req.headers, body },
+        const upload = await server.ssrLoadModule("/src/server/imageKitServerUpload.ts") as typeof import("./imageKitServerUpload");
+        const body = await upload.readBoundedRequestBody(req, upload.IMAGEKIT_MAX_BODY_BYTES);
+        await upload.handleImageKitServerUpload(
+          {
+            method: req.method,
+            headers: req.headers,
+            body: body === "too-large" ? undefined : body,
+            bodyTooLarge: body === "too-large",
+          },
           nodeResponse(res),
-          { env: imageKitDevServerEnv(server.config.mode, server.config.envDir || server.config.root) },
+          {
+            env: imageKitDevServerEnv(server.config.mode, server.config.envDir || server.config.root),
+            developmentProof: true,
+          },
         );
       });
     },

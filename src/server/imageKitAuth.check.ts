@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHmac, createSign, generateKeyPairSync } from "node:crypto";
+import { createSign, generateKeyPairSync } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,20 +8,20 @@ import { ImageUploadCancelled } from "../lib/imageAttempt";
 import {
   IMAGEKIT_UPLOAD_FAILED,
   ImageKitTransferError,
-  requestImageKitUploadAuthorization,
   uploadOptimizedFileToImageKit,
-  type ImageKitUploadAuthorization,
 } from "../lib/imageKitStorage";
 import { activeImageStorageProvider, configuredImageStorageProvider } from "../lib/imageStorageProvider";
 import { proveImageKitUpload } from "../dev/imageKitUploadProof";
 import { verifyFirebaseIdToken } from "./firebaseIdToken";
+import { imageKitFolderForUser } from "./imageKitUploadAuth";
 import {
-  handleImageKitAuth,
-  IMAGEKIT_SIGNATURE_TTL_SECONDS,
-  imageKitFolderForUser,
-  resetImageKitAuthLimits,
-  type ImageKitAuthResponse,
-} from "./imageKitUploadAuth";
+  handleImageKitServerUpload,
+  IMAGEKIT_MAX_UPLOAD_BYTES,
+  imageTypeFromMagic,
+  type ImageKitStoredUpload,
+  type ImageKitUploadResponse,
+} from "./imageKitServerUpload";
+import retiredAuth from "../../api/imagekit-auth";
 
 const root = new URL("../../", import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), "utf8");
@@ -67,11 +67,49 @@ async function verify(token: string): Promise<{ uid: string }> {
   });
 }
 
-function call(input: { method?: string; token?: string | null; body?: unknown; contentType?: string }) {
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+const WEBP = Buffer.alloc(12);
+WEBP.write("RIFF", 0);
+WEBP.writeUInt32LE(4, 4);
+WEBP.write("WEBP", 8);
+
+function multipart(parts: Array<{ name: string; filename?: string; type?: string; data: Buffer }>, boundary = "----CustomBoundary7"): { body: Buffer; contentType: string } {
+  const chunks: Buffer[] = [];
+  for (const part of parts) {
+    const disposition = part.filename
+      ? `Content-Disposition: form-data; name="${part.name}"; filename="${part.filename}"`
+      : `Content-Disposition: form-data; name="${part.name}"`;
+    const type = part.type ? `Content-Type: ${part.type}\r\n` : "";
+    chunks.push(Buffer.from(`--${boundary}\r\n${disposition}\r\n${type}\r\n`));
+    chunks.push(part.data);
+    chunks.push(Buffer.from("\r\n"));
+  }
+  chunks.push(Buffer.from(`--${boundary}--\r\n`));
+  return { body: Buffer.concat(chunks), contentType: `multipart/form-data; boundary=${boundary}` };
+}
+
+function call(input: {
+  method?: string;
+  token?: string | null;
+  body?: Buffer | string;
+  contentType?: string;
+  bodyTooLarge?: boolean;
+  developmentProof?: boolean;
+  allowUids?: string;
+  headers?: Record<string, string>;
+  uploadFile?: (input: {
+    bytes: Uint8Array;
+    fileName: string;
+    contentType: string;
+    folder: string;
+    privateKey: string;
+  }) => Promise<ImageKitStoredUpload>;
+}) {
   let status = 0;
   let body = "";
   const headers: Record<string, string> = {};
-  const res: ImageKitAuthResponse = {
+  const res: ImageKitUploadResponse = {
     status(code: number) {
       status = code;
       return res;
@@ -83,70 +121,112 @@ function call(input: { method?: string; token?: string | null; body?: unknown; c
       body = value;
     },
   };
-  const requestHeaders: Record<string, string> = {};
-  if (input.contentType !== "") requestHeaders["content-type"] = input.contentType ?? "application/json";
+  const requestHeaders: Record<string, string> = { ...(input.headers ?? {}) };
+  if (input.contentType !== "") requestHeaders["content-type"] = input.contentType ?? "multipart/form-data; boundary=none";
   if (input.token) requestHeaders.authorization = `Bearer ${input.token}`;
-  return handleImageKitAuth(
-    { method: input.method ?? "POST", headers: requestHeaders, body: input.body ?? { purpose: "poc" } },
+  return handleImageKitServerUpload(
+    {
+      method: input.method ?? "POST",
+      headers: requestHeaders,
+      body: input.body,
+      bodyTooLarge: input.bodyTooLarge,
+    },
     res,
     {
-      now: () => nowMs,
-      token: "upload-token-1",
+      developmentProof: input.developmentProof,
       verify,
+      uploadFile: input.uploadFile,
       env: {
         IMAGEKIT_PRIVATE_KEY: privateApiKey,
         IMAGEKIT_PUBLIC_KEY: "public_test_key",
-        IMAGEKIT_URL_ENDPOINT: "https://ik.imagekit.io/example/",
+        IMAGEKIT_URL_ENDPOINT: "https://ik.imagekit.io/example",
+        IMAGEKIT_UPLOAD_ALLOW_UIDS: input.allowUids,
       },
     },
   ).then(() => ({ status, body, headers, json: body ? JSON.parse(body) as Record<string, unknown> : {} }));
 }
 
+function acceptingUpload(expectedType: string) {
+  return async (upload: {
+    bytes: Uint8Array;
+    fileName: string;
+    contentType: string;
+    folder: string;
+    privateKey: string;
+  }) => {
+    assert.equal(upload.folder, imageKitFolderForUser("user123"));
+    assert.equal(upload.contentType, expectedType);
+    assert.match(upload.fileName, new RegExp(`^[0-9a-f-]{36}\\.${expectedType === "image/jpeg" ? "jpg" : expectedType.split("/")[1]}$`));
+    assert.equal(upload.privateKey, privateApiKey);
+    assert.equal(imageTypeFromMagic(upload.bytes), expectedType);
+    return {
+      url: `https://ik.imagekit.io/example${upload.folder}/${upload.fileName}`,
+      fileId: "file_123",
+      filePath: `${upload.folder}/${upload.fileName}`,
+    };
+  };
+}
+
 const authSource = read("src/server/imageKitUploadAuth.ts");
-assert.match(authSource, /file bytes or MIME type/);
-assert.match(authSource, /fileName/);
-assert.match(authSource, /folder/);
-assert.match(authSource, /checks/);
-assert.match(authSource, /getAuthenticationParameters\(uploadToken, expire\)/);
+assert.equal(authSource.includes("getAuthenticationParameters"), false);
 assert.equal(authSource.includes("VITE_"), false);
+const uploadSource = read("src/server/imageKitServerUpload.ts");
+assert.match(uploadSource, /imageTypeFromMagic/);
+assert.match(uploadSource, /useUniqueFileName: true/);
+assert.match(uploadSource, /overwriteFile: false/);
+assert.equal(uploadSource.includes("transformation"), false);
+assert.equal(uploadSource.includes("webhookUrl"), false);
 
 const clientSource = read("src/lib/imageKitStorage.ts");
 assert.equal(clientSource.includes("IMAGEKIT_PRIVATE_KEY"), false);
+assert.equal(clientSource.includes("@imagekit/javascript"), false);
+assert.equal(clientSource.includes("/api/imagekit-auth"), false);
+assert.match(clientSource, /\/api\/imagekit-upload/);
 assert.equal(clientSource.includes("imageOptimizer"), false);
-assert.equal(clientSource.includes("browser-image-compression"), false);
-assert.match(clientSource, /onProgress/);
-assert.match(clientSource, /abortSignal/);
-assert.match(clientSource, /fileId/);
 
 const proofSource = read("src/dev/imageKitUploadProof.ts");
 assert.match(proofSource, /optimizeImageForUpload/);
-assert.match(proofSource, /requestImageKitUploadAuthorization/);
 assert.match(proofSource, /uploadOptimizedFileToImageKit/);
-assert.match(proofSource, /new Image\(\)/);
+assert.equal(proofSource.includes("requestImageKitUploadAuthorization"), false);
+assert.equal(proofSource.includes("signature"), false);
 const optimizeAt = proofSource.indexOf("optimizeImageForUpload");
-const authorizeAt = proofSource.indexOf("requestImageKitUploadAuthorization");
-assert.ok(optimizeAt > 0 && optimizeAt < authorizeAt);
+const uploadAt = proofSource.indexOf("uploadOptimizedFileToImageKit");
+assert.ok(optimizeAt > 0 && optimizeAt < uploadAt);
 
 assert.equal(read("src/App.tsx").includes("imagekit-proof"), false);
 assert.equal(read("src/App.tsx").includes("imageKit"), false);
 assert.equal(read("src/lib/storage.ts").toLowerCase().includes("imagekit"), false);
 assert.match(read("src/lib/storage.ts"), /uploadBytesResumable/);
-assert.match(read("vercel.json"), /api\/imagekit-auth\.ts/);
+assert.match(read("vercel.json"), /api\/imagekit-upload\.ts/);
+assert.equal(read("vercel.json").includes("imagekit-auth"), false);
+const retired = read("api/imagekit-auth.ts");
+assert.equal(retired.includes("getAuthenticationParameters"), false);
+assert.equal(retired.includes("ImageKit"), false);
+assert.equal(retired.includes("IMAGEKIT_PRIVATE_KEY"), false);
+assert.match(retired, /410/);
+const productionUpload = read("api/imagekit-upload.ts");
+assert.equal(productionUpload.includes("developmentProof"), false);
+assert.equal(productionUpload.includes("getAuthenticationParameters"), false);
 const pluginSource = read("src/server/imageKitDevPlugin.ts");
 assert.match(pluginSource, /apply: "serve"/);
 assert.match(pluginSource, /loadEnv\(mode, envDir, ""\)/);
-assert.match(pluginSource, /env: imageKitDevServerEnv/);
+assert.match(pluginSource, /developmentProof: true/);
+assert.match(pluginSource, /\/api\/imagekit-upload/);
+assert.equal(pluginSource.includes("handleImageKitAuth"), false);
+assert.equal(pluginSource.includes("getAuthenticationParameters"), false);
 assert.equal(pluginSource.includes("console."), false);
-assert.equal(read("api/imagekit-auth.ts").includes("loadEnv"), false);
+assert.equal(read("api/imagekit-upload.ts").includes("loadEnv"), false);
 
 const savedImageKitEnv = {
   IMAGEKIT_PRIVATE_KEY: process.env.IMAGEKIT_PRIVATE_KEY,
   IMAGEKIT_PUBLIC_KEY: process.env.IMAGEKIT_PUBLIC_KEY,
   IMAGEKIT_URL_ENDPOINT: process.env.IMAGEKIT_URL_ENDPOINT,
+  IMAGEKIT_UPLOAD_ALLOW_UIDS: process.env.IMAGEKIT_UPLOAD_ALLOW_UIDS,
 };
 delete process.env.IMAGEKIT_PRIVATE_KEY;
 delete process.env.IMAGEKIT_PUBLIC_KEY;
 delete process.env.IMAGEKIT_URL_ENDPOINT;
+delete process.env.IMAGEKIT_UPLOAD_ALLOW_UIDS;
 const envDir = mkdtempSync(join(tmpdir(), "imagekit-env-"));
 try {
   writeFileSync(join(envDir, ".env.local"), [
@@ -172,109 +252,236 @@ try {
 assert.equal(activeImageStorageProvider(), "firebase");
 assert.equal(configuredImageStorageProvider(), "firebase");
 
-resetImageKitAuthLimits();
-const missing = await call({ token: null });
-assert.equal(missing.status, 401);
-assert.equal(missing.json.error, "Sign in to upload an image.");
-assert.equal(JSON.stringify(missing.json).includes(privateApiKey), false);
+const jpegForm = multipart([{ name: "file", filename: "client-chosen.jpg", type: "image/jpeg", data: JPEG }]);
+const missingAuth = await call({ token: null, body: jpegForm.body, contentType: jpegForm.contentType, developmentProof: true });
+assert.equal(missingAuth.status, 401);
+assert.equal(missingAuth.json.error, "Sign in to upload an image.");
+assert.equal(JSON.stringify(missingAuth.json).includes(privateApiKey), false);
 
-resetImageKitAuthLimits();
-const wrongMethod = await call({ method: "GET", token: signToken(validPayload()) });
-assert.equal(wrongMethod.status, 405);
+const invalidToken = await call({
+  token: "not-a-firebase-token",
+  body: jpegForm.body,
+  contentType: jpegForm.contentType,
+  developmentProof: true,
+});
+assert.equal(invalidToken.status, 401);
 
-resetImageKitAuthLimits();
-const wrongPurpose = await call({ token: signToken(validPayload()), body: { purpose: "portrait" } });
-assert.equal(wrongPurpose.status, 400);
-
-resetImageKitAuthLimits();
 const expired = await call({
   token: signToken({ ...validPayload(), exp: Math.floor(nowMs / 1000) - 120 }),
+  body: jpegForm.body,
+  contentType: jpegForm.contentType,
+  developmentProof: true,
 });
 assert.equal(expired.status, 401);
 assert.match(String(expired.json.error), /session expired/i);
 
-resetImageKitAuthLimits();
-const wrongAudience = await call({ token: signToken({ ...validPayload(), aud: "other-project" }) });
+const wrongAudience = await call({
+  token: signToken({ ...validPayload(), aud: "other-project" }),
+  body: jpegForm.body,
+  contentType: jpegForm.contentType,
+  developmentProof: true,
+});
 assert.equal(wrongAudience.status, 401);
 
-resetImageKitAuthLimits();
 const noneAlg = await call({
   token: signToken(validPayload(), { alg: "none", kid: "test-key" }),
+  body: jpegForm.body,
+  contentType: jpegForm.contentType,
+  developmentProof: true,
 });
 assert.equal(noneAlg.status, 401);
 
-resetImageKitAuthLimits();
-const issued = await call({ token: signToken(validPayload()) });
-assert.equal(issued.status, 200);
-assert.equal(issued.headers["cache-control"], "no-store");
-assert.equal(issued.json.token, "upload-token-1");
-assert.equal(issued.json.expire, Math.floor(nowMs / 1000) + IMAGEKIT_SIGNATURE_TTL_SECONDS);
-assert.equal(issued.json.publicKey, "public_test_key");
-assert.equal(issued.json.urlEndpoint, "https://ik.imagekit.io/example");
-assert.equal(issued.json.folder, imageKitFolderForUser("user123"));
-assert.equal(issued.json.purpose, "poc");
-assert.equal(issued.json.signature, createHmac("sha1", privateApiKey).update(`${issued.json.token}${issued.json.expire}`).digest("hex"));
-assert.equal("privateKey" in issued.json, false);
-assert.equal(JSON.stringify(issued.json).includes(privateApiKey), false);
-assert.equal(JSON.stringify(issued.json).includes("IMAGEKIT_PRIVATE_KEY"), false);
+const closed = await call({
+  token: signToken(validPayload()),
+  body: jpegForm.body,
+  contentType: jpegForm.contentType,
+  uploadFile: async () => {
+    throw new Error("closed gate must not upload");
+  },
+});
+assert.equal(closed.status, 403);
+assert.equal(closed.json.error, "Image upload is not available.");
 
-resetImageKitAuthLimits();
-const unconfigured = await handleUnconfigured();
-assert.equal(unconfigured.status, 503);
-assert.equal(JSON.stringify(unconfigured.json).includes(privateApiKey), false);
+const headerBypass = await call({
+  token: signToken(validPayload()),
+  body: jpegForm.body,
+  contentType: jpegForm.contentType,
+  headers: { "x-development-proof": "true" },
+  uploadFile: async () => {
+    throw new Error("request header must not open the gate");
+  },
+});
+assert.equal(headerBypass.status, 403);
 
-resetImageKitAuthLimits();
-for (let attempt = 0; attempt < 12; attempt += 1) {
-  const allowed = await call({ token: signToken(validPayload("rateuser")) });
-  assert.equal(allowed.status, 200);
-}
-const limited = await call({ token: signToken(validPayload("rateuser")) });
-assert.equal(limited.status, 429);
+const emptyFile = multipart([{ name: "file", filename: "empty.jpg", type: "image/jpeg", data: Buffer.alloc(0) }]);
+const missingFile = await call({
+  token: signToken(validPayload()),
+  body: emptyFile.body,
+  contentType: emptyFile.contentType,
+  developmentProof: true,
+  uploadFile: async () => {
+    throw new Error("missing file must not upload");
+  },
+});
+assert.equal(missingFile.status, 400);
 
-resetImageKitAuthLimits();
-for (let attempt = 0; attempt < 20; attempt += 1) {
-  const denied = await call({ token: null });
-  assert.equal(denied.status, 401);
-}
-const flooded = await call({ token: null });
-assert.equal(flooded.status, 429);
+const spoofed = multipart([{ name: "file", filename: "photo.jpg", type: "image/jpeg", data: Buffer.from("%PDF-1.7 spoofed") }]);
+const spoofedResult = await call({
+  token: signToken(validPayload()),
+  body: spoofed.body,
+  contentType: spoofed.contentType,
+  developmentProof: true,
+  uploadFile: async () => {
+    throw new Error("spoofed mime must not upload");
+  },
+});
+assert.equal(spoofedResult.status, 415);
 
-const authorization: ImageKitUploadAuthorization = {
-  token: "upload-token-1",
-  expire: Math.floor(nowMs / 1000) + IMAGEKIT_SIGNATURE_TTL_SECONDS,
-  signature: "signed",
-  publicKey: "public_test_key",
-  urlEndpoint: "https://ik.imagekit.io/example",
-  folder: "/custom-portfolio/user123/poc",
-  purpose: "poc",
-};
+const tooBig = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(IMAGEKIT_MAX_UPLOAD_BYTES)]);
+const oversized = multipart([{ name: "file", filename: "big.jpg", type: "image/jpeg", data: tooBig }]);
+const oversizedResult = await call({
+  token: signToken(validPayload()),
+  body: oversized.body,
+  contentType: oversized.contentType,
+  developmentProof: true,
+  uploadFile: async () => {
+    throw new Error("oversized file must not upload");
+  },
+});
+assert.equal(oversizedResult.status, 413);
+
+const capped = await call({
+  token: signToken(validPayload()),
+  bodyTooLarge: true,
+  developmentProof: true,
+  uploadFile: async () => {
+    throw new Error("capped body must not upload");
+  },
+});
+assert.equal(capped.status, 413);
+
+const folderOverride = multipart([
+  { name: "file", filename: "photo.jpg", type: "image/jpeg", data: JPEG },
+  { name: "folder", data: Buffer.from("/another-user/private") },
+]);
+const folderResult = await call({
+  token: signToken(validPayload()),
+  body: folderOverride.body,
+  contentType: folderOverride.contentType,
+  developmentProof: true,
+  uploadFile: async () => {
+    throw new Error("client folder must not upload");
+  },
+});
+assert.equal(folderResult.status, 400);
+assert.equal(folderResult.json.error, "This upload field is not available.");
+
+const overwrite = multipart([
+  { name: "file", filename: "photo.jpg", type: "image/jpeg", data: JPEG },
+  { name: "overwriteFile", data: Buffer.from("true") },
+]);
+const overwriteResult = await call({
+  token: signToken(validPayload()),
+  body: overwrite.body,
+  contentType: overwrite.contentType,
+  developmentProof: true,
+  uploadFile: async () => {
+    throw new Error("client overwrite must not upload");
+  },
+});
+assert.equal(overwriteResult.status, 400);
+
+const jpeg = await call({
+  token: signToken(validPayload()),
+  body: jpegForm.body,
+  contentType: jpegForm.contentType,
+  developmentProof: true,
+  uploadFile: acceptingUpload("image/jpeg"),
+});
+assert.equal(jpeg.status, 200);
+assert.equal(jpeg.headers["cache-control"], "no-store");
+assert.equal(jpeg.json.fileId, "file_123");
+assert.equal(jpeg.json.contentType, "image/jpeg");
+assert.equal(typeof jpeg.json.url, "string");
+assert.equal(String(jpeg.json.url).startsWith("https://ik.imagekit.io/example/custom-portfolio/user123/proof/"), true);
+assert.equal(String(jpeg.json.filePath).startsWith("/custom-portfolio/user123/proof/"), true);
+assert.equal("privateKey" in jpeg.json, false);
+assert.equal("signature" in jpeg.json, false);
+assert.equal("token" in jpeg.json, false);
+assert.equal("publicKey" in jpeg.json, false);
+assert.equal(JSON.stringify(jpeg.json).includes(privateApiKey), false);
+
+const pngForm = multipart([{ name: "file", filename: "named.png", type: "image/jpeg", data: PNG }]);
+const png = await call({
+  token: signToken(validPayload()),
+  body: pngForm.body,
+  contentType: pngForm.contentType,
+  allowUids: "user123,other",
+  uploadFile: acceptingUpload("image/png"),
+});
+assert.equal(png.status, 200);
+assert.equal(png.json.contentType, "image/png");
+
+const webpForm = multipart([{ name: "file", filename: "shot.webp", type: "image/webp", data: WEBP }]);
+const webp = await call({
+  token: signToken(validPayload()),
+  body: webpForm.body,
+  contentType: webpForm.contentType,
+  developmentProof: true,
+  uploadFile: acceptingUpload("image/webp"),
+});
+assert.equal(webp.status, 200);
+assert.equal(webp.json.contentType, "image/webp");
+
+const wrongMethod = await call({ method: "GET", token: signToken(validPayload()), developmentProof: true });
+assert.equal(wrongMethod.status, 405);
+
+let retiredStatus = 0;
+let retiredBody = "";
+await retiredAuth({}, {
+  status(code: number) {
+    retiredStatus = code;
+    return this;
+  },
+  setHeader() {},
+  end(value: string) {
+    retiredBody = value;
+  },
+});
+assert.equal(retiredStatus, 410);
+assert.equal(retiredBody.includes("signature"), false);
+assert.equal(retiredBody.includes(privateApiKey), false);
 
 const seen: number[] = [];
 const uploaded = await uploadOptimizedFileToImageKit({
-  file: new File([new Uint8Array(8)], "small.jpg", { type: "image/jpeg" }),
-  authorization,
+  file: new File([JPEG], "small.jpg", { type: "image/jpeg" }),
+  idToken: "id-token",
   onProgress: (percent) => seen.push(percent),
-  upload: async (options) => {
-    assert.equal(options.folder, authorization.folder);
-    assert.equal(options.publicKey, authorization.publicKey);
-    assert.equal("privateKey" in options, false);
-    options.onProgress?.({ loaded: 2, total: 8 });
-    options.onProgress?.({ loaded: 8, total: 8 });
-    return { url: "https://ik.imagekit.io/example/small.jpg", fileId: "file_123", filePath: authorization.folder + "/small.jpg" };
+  post: async (_file, init) => {
+    assert.equal(init.idToken, "id-token");
+    init.onProgress?.(40);
+    init.onProgress?.(100);
+    return {
+      status: 200,
+      json: {
+        url: "https://ik.imagekit.io/example/custom-portfolio/user123/proof/small.jpg",
+        fileId: "file_123",
+        filePath: "/custom-portfolio/user123/proof/small.jpg",
+      },
+    };
   },
 });
-assert.deepEqual(seen, [25, 100]);
-assert.equal(uploaded.url, "https://ik.imagekit.io/example/small.jpg");
+assert.deepEqual(seen, [40, 100]);
 assert.equal(uploaded.fileId, "file_123");
 
 const controller = new AbortController();
 controller.abort();
 await assert.rejects(
   () => uploadOptimizedFileToImageKit({
-    file: new File([new Uint8Array(4)], "small.jpg", { type: "image/jpeg" }),
-    authorization,
+    file: new File([JPEG], "small.jpg", { type: "image/jpeg" }),
+    idToken: "id-token",
     signal: controller.signal,
-    upload: async () => {
+    post: async () => {
       throw new Error("should not upload");
     },
   }),
@@ -283,84 +490,44 @@ await assert.rejects(
 
 await assert.rejects(
   () => uploadOptimizedFileToImageKit({
-    file: new File([new Uint8Array(4)], "small.jpg", { type: "image/jpeg" }),
-    authorization,
-    upload: async () => {
-      const error = new Error("aborted");
-      error.name = "ImageKitAbortError";
-      throw error;
-    },
-  }),
-  ImageUploadCancelled,
-);
-
-await assert.rejects(
-  () => uploadOptimizedFileToImageKit({
-    file: new File([new Uint8Array(4)], "small.jpg", { type: "image/jpeg" }),
-    authorization,
-    upload: async () => ({ url: "" }),
+    file: new File([JPEG], "small.jpg", { type: "image/jpeg" }),
+    idToken: "id-token",
+    post: async () => ({ status: 200, json: { url: "", fileId: "file_123" } }),
   }),
   (error: unknown) => error instanceof ImageKitTransferError && error.message === IMAGEKIT_UPLOAD_FAILED,
 );
 
-const fetched = await requestImageKitUploadAuthorization("id-token", {
-  fetch: async (_url, init) => {
-    const headers = new Headers(init?.headers);
-    assert.equal(headers.get("authorization"), "Bearer id-token");
-    assert.equal(headers.get("content-type"), "application/json");
-    assert.equal(init?.body, JSON.stringify({ purpose: "poc" }));
-    return new Response(JSON.stringify(authorization), { status: 200 });
-  },
-});
-assert.equal(fetched.folder, authorization.folder);
+await assert.rejects(
+  () => uploadOptimizedFileToImageKit({
+    file: new File([JPEG], "small.jpg", { type: "image/jpeg" }),
+    idToken: "id-token",
+    post: async () => ({
+      status: 200,
+      json: { url: "https://ik.imagekit.io/example/a.jpg", fileId: "file_123", privateKey: "nope" },
+    }),
+  }),
+  (error: unknown) => error instanceof ImageKitTransferError && error.message === IMAGEKIT_UPLOAD_FAILED,
+);
 
+const gif = Buffer.from("GIF89a");
 const proof = await proveImageKitUpload({
-  file: new File([new Uint8Array(32)], "anim.gif", { type: "image/gif" }),
+  file: new File([gif], "anim.gif", { type: "image/gif" }),
   idToken: "id-token",
-  authorize: async () => authorization,
   loadUploadedImage: async (url) => {
-    assert.equal(url, "https://ik.imagekit.io/example/anim.gif");
+    assert.equal(url, "https://ik.imagekit.io/example/custom-portfolio/user123/proof/anim.gif");
   },
-  upload: async (options) => {
-    options.onProgress?.({ loaded: 4, total: 10 });
-    return { url: "https://ik.imagekit.io/example/anim.gif", fileId: "gif_1", filePath: "/custom-portfolio/user123/poc/anim.gif" };
+  post: async () => {
+    return {
+      status: 200,
+      json: {
+        url: "https://ik.imagekit.io/example/custom-portfolio/user123/proof/anim.gif",
+        fileId: "gif_1",
+        filePath: "/custom-portfolio/user123/proof/anim.gif",
+      },
+    };
   },
 });
-assert.equal(proof.optimizedBytes, 32);
-assert.deepEqual(proof.progress, [40]);
+assert.equal(proof.optimizedBytes, gif.length);
 assert.equal(proof.fileId, "gif_1");
-
-if (!process.env.IMAGEKIT_PRIVATE_KEY || !process.env.IMAGEKIT_PUBLIC_KEY || !process.env.IMAGEKIT_URL_ENDPOINT) {
-  console.log("live ImageKit upload skipped: server credentials are not configured");
-} else if (!process.env.FIREBASE_PROOF_ID_TOKEN) {
-  console.log("live ImageKit upload skipped: FIREBASE_PROOF_ID_TOKEN is not configured");
-} else {
-  console.log("live ImageKit upload credentials are present; run the development proof page while signed in");
-}
-
-async function handleUnconfigured() {
-  let status = 0;
-  let body = "";
-  const res: ImageKitAuthResponse = {
-    status(code: number) {
-      status = code;
-      return res;
-    },
-    setHeader() {},
-    end(value: string) {
-      body = value;
-    },
-  };
-  await handleImageKitAuth(
-    {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${signToken(validPayload("noconfig"))}` },
-      body: { purpose: "poc" },
-    },
-    res,
-    { now: () => nowMs, verify, env: {} },
-  );
-  return { status, json: JSON.parse(body) as Record<string, unknown> };
-}
 
 console.log("imagekit auth checks passed");

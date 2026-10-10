@@ -1,9 +1,7 @@
 import { optimizeImageForUpload, type ImageUse } from "../lib/imageOptimizer";
 import {
-  requestImageKitUploadAuthorization,
   uploadOptimizedFileToImageKit,
-  type ImageKitBrowserUpload,
-  type ImageKitUploadAuthorization,
+  type ImageKitServerPost,
 } from "../lib/imageKitStorage";
 
 export type ImageKitProofResult = {
@@ -15,7 +13,7 @@ export type ImageKitProofResult = {
 };
 
 /**
- * Development-only path: shared optimizer, signed ImageKit authorization, browser upload, then image load.
+ * Development-only path: shared optimizer, then the authenticated server upload, then image load.
  * Portfolio fields do not call this.
  */
 export async function proveImageKitUpload(input: {
@@ -25,8 +23,7 @@ export async function proveImageKitUpload(input: {
   signal?: AbortSignal;
   onPhase?: (phase: "preparing" | "optimizing") => void;
   onProgress?: (percent: number) => void;
-  authorize?: (idToken: string) => Promise<ImageKitUploadAuthorization>;
-  upload?: ImageKitBrowserUpload;
+  post?: ImageKitServerPost;
   loadUploadedImage?: (url: string) => Promise<void>;
 }): Promise<ImageKitProofResult> {
   if (import.meta.env?.DEV === false) {
@@ -38,13 +35,12 @@ export async function proveImageKitUpload(input: {
     input.profile ?? "project",
     { signal: input.signal },
   );
-  const authorization = await (input.authorize ?? requestImageKitUploadAuthorization)(input.idToken);
   const progress: number[] = [];
   const uploaded = await uploadOptimizedFileToImageKit({
     file: optimized.file,
-    authorization,
+    idToken: input.idToken,
     signal: input.signal,
-    upload: input.upload,
+    post: input.post,
     onProgress: (percent) => {
       progress.push(percent);
       input.onProgress?.(percent);
