@@ -173,6 +173,8 @@ assert.match(seo, /aria-live="polite">Saved/);
 assert.doesNotMatch(seo, /deleteStoredImage/);
 
 const storage = read("./storage.ts");
+assert.match(storage, /accountPhotoImageStorageProvider/);
+assert.match(storage, /uploadOptimizedFileToImageKit/);
 const transfer = storage.slice(
   storage.indexOf("export function beginImageTransfer"),
   storage.indexOf("function forwardProgress"),
@@ -186,6 +188,15 @@ assert.match(transfer, /signal: abort\.signal/);
 assert.doesNotMatch(transfer, /cacheControl|deleteStoredImage|deleteObject/);
 assert.match(storage, /profile: "project"/);
 assert.match(storage, /profile: "account"/);
+const accountUpload = storage.slice(
+  storage.indexOf("export function beginAccountProfileImageUpload"),
+  storage.indexOf("export async function uploadAccountProfileImage"),
+);
+assert.match(accountUpload, /accountPhotoImageStorageProvider\(\) === "imagekit"/);
+assert.match(accountUpload, /beginImageTransfer/);
+assert.match(accountUpload, /beginImageKitAccountProfileImageUpload/);
+assert.match(accountUpload, /getIdToken\(false\)/);
+assert.match(accountUpload, /uploadOptimizedFileToImageKit/);
 assert.match(storage, /maxUploadRetryTime = UPLOAD_RETRY_LIMIT_MS/);
 assert.doesNotMatch(storage, /cacheControl/);
 assert.doesNotMatch(storage, /getIdToken\(true\)/);
@@ -193,6 +204,9 @@ const about = read("../components/onboarding/AboutYouStep.tsx");
 assert.match(about, /beginAccountProfileImageUpload/);
 assert.doesNotMatch(about, /deleteStoredImage/);
 assert.match(about, /localPreview \|\| draft\.photoURL/);
+assert.match(about, /onChange\(\{ photoURL: uploaded\.downloadUrl, photoPath: uploaded\.storagePath \}\)/);
+const aboutFailure = about.slice(about.indexOf("error: unknown"), about.indexOf("</StepFrame>"));
+assert.doesNotMatch(aboutFailure, /onChange\(\{ photoURL/);
 const projects = read("../components/portfolio/projects/ProjectMedia.tsx");
 assert.match(projects, /finishGalleryRun/);
 assert.match(projects, /previewUrl/);

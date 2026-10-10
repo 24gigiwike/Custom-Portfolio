@@ -15,6 +15,9 @@
   "functions": {
     "api/site.ts": {
       "includeFiles": "dist/index.html"
+    },
+    "api/imagekit-upload.ts": {
+      "maxDuration": 10
     }
   }
 }

@@ -14,6 +14,11 @@ interface ImportMetaEnv {
   readonly VITE_IMAGE_COMPRESSION_BACKEND?: string;
   /** `1` prints image upload timings. Unset or `0` keeps production quiet. */
   readonly VITE_IMAGE_UPLOAD_DEBUG?: string;
+  /**
+   * `firebase` (default) or `imagekit`. Read at build time.
+   * Portfolio uploads stay on Firebase until a later step turns ImageKit on.
+   */
+  readonly VITE_IMAGE_STORAGE_PROVIDER?: string;
 }
 
 interface ImportMeta {

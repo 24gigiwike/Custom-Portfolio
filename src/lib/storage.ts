@@ -10,6 +10,8 @@ import {
 } from "firebase/storage";
 import app, { auth } from "./firebase";
 import { ImageUploadCancelled } from "./imageAttempt";
+import { uploadOptimizedFileToImageKit } from "./imageKitStorage";
+import { accountPhotoImageStorageProvider } from "./imageStorageProvider";
 import { optimizeImageForUpload, ImagePreparationError, throwIfUploadAborted, type ImageUse, type OptimizedImageResult } from "./imageOptimizer";
 import type { ImageUploadStatus } from "./imageAttempt";
 import {
@@ -374,6 +376,9 @@ export function beginAccountProfileImageUpload(
   file: File,
   onStatus?: (status: ImageUploadStatus) => void,
 ): PortfolioImageUpload {
+  if (accountPhotoImageStorageProvider() === "imagekit") {
+    return beginImageKitAccountProfileImageUpload(file, onStatus);
+  }
   return beginImageTransfer({
     file,
     profile: "account",
@@ -386,6 +391,67 @@ export function beginAccountProfileImageUpload(
       originalName: file.name,
     }),
   });
+}
+
+function beginImageKitAccountProfileImageUpload(
+  file: File,
+  onStatus?: (status: ImageUploadStatus) => void,
+): PortfolioImageUpload {
+  let cancelled = false;
+  const abort = new AbortController();
+
+  const done = (async () => {
+    const validation = validateImageFile(file);
+    if (!validation.valid) throw new Error(validation.error || "Please choose a valid image.");
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error("You must be signed in to upload a profile picture.");
+    let idToken = "";
+    try {
+      idToken = await currentUser.getIdToken(false);
+    } catch (error) {
+      const code = storageCodeOf(error) || "unauthenticated";
+      throw new ImageTransferError("auth", code, messageForStorageFailure(code, "auth"));
+    }
+    throwIfUploadAborted(abort.signal);
+    if (cancelled) throw new ImageUploadCancelled();
+
+    onStatus?.({ phase: "preparing", percent: null });
+    const optimizationResult = await optimizeImageForUpload(
+      file,
+      (phase) => onStatus?.({ phase, percent: null }),
+      "account",
+      { signal: abort.signal },
+    );
+    if (cancelled || abort.signal.aborted) throw new ImageUploadCancelled();
+
+    onStatus?.({ phase: "uploading", percent: null });
+    const uploaded = await uploadOptimizedFileToImageKit({
+      file: optimizationResult.file,
+      idToken,
+      signal: abort.signal,
+      onProgress: (percent) => onStatus?.({ phase: "uploading", percent }),
+    });
+    if (cancelled || abort.signal.aborted) throw new ImageUploadCancelled();
+    if (!uploaded.filePath) throw new ImageTransferError("upload", null, "Upload failed. Try again.");
+
+    onStatus?.({ phase: "ready", percent: null });
+    return { downloadUrl: uploaded.url, storagePath: uploaded.filePath };
+  })().catch((error: unknown) => {
+    if (error instanceof ImagePreparationError || error instanceof ImageTransferError || error instanceof ImageUploadCancelled) {
+      throw error;
+    }
+    if (cancelled || abort.signal.aborted) throw new ImageUploadCancelled();
+    throw error;
+  });
+
+  return {
+    cancel() {
+      cancelled = true;
+      abort.abort();
+    },
+    done,
+  };
 }
 
 export async function uploadAccountProfileImage(
