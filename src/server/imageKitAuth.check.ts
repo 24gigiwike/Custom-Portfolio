@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createSign, generateKeyPairSync } from "node:crypto";
+import { createHash, createSign, generateKeyPairSync } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -29,6 +29,7 @@ import {
   type ImageKitCleanupResult,
   type ImageKitQuotaReservation,
   type ImageKitQuotaStore,
+  type ImageKitReservationReconciliation,
   type ImageKitTrackedUpload,
 } from "./imageKitQuota";
 import retiredAuth from "../../api/imagekit-auth";
@@ -85,6 +86,10 @@ WEBP.write("RIFF", 0);
 WEBP.writeUInt32LE(4, 4);
 WEBP.write("WEBP", 8);
 
+function sha256(bytes: Buffer): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
 class MemoryQuotaStore implements ImageKitQuotaStore {
   readonly uploads = new Map<string, ImageKitTrackedUpload>();
   readonly quotas = new Map<string, { usedBytes: number; reservedBytes: number; limitBytes: number }>();
@@ -116,13 +121,14 @@ class MemoryQuotaStore implements ImageKitQuotaStore {
       assert.equal(existing.contentType, input.contentType);
       assert.equal(existing.folder, input.folder);
       if (existing.status === "uploaded") return { kind: "already-uploaded", upload: existing };
-      if (existing.status === "recoverable") return { kind: "recoverable", uploadId };
+      if (existing.status === "recoverable") return { kind: "recoverable", uploadId, upload: existing.url && existing.fileId && existing.filePath ? existing : undefined };
       return { kind: "in-progress", uploadId };
     }
     const quota = this.quota(input.uid);
     if (input.sizeBytes > quota.limitBytes - quota.usedBytes - quota.reservedBytes) {
       throw new ImageKitQuotaError("quota-exceeded");
     }
+    const startedAt = input.nowMs ?? nowMs;
     quota.reservedBytes += input.sizeBytes;
     this.uploads.set(uploadId, {
       uploadId,
@@ -133,8 +139,9 @@ class MemoryQuotaStore implements ImageKitQuotaStore {
       contentType: input.contentType,
       folder: input.folder,
       fileName: input.fileName,
-      createdAtMs: nowMs,
-      updatedAtMs: nowMs,
+      leaseExpiresAtMs: startedAt + 15 * 60 * 1000,
+      createdAtMs: startedAt,
+      updatedAtMs: startedAt,
     });
     return { kind: "reserved", uploadId };
   }
@@ -144,7 +151,7 @@ class MemoryQuotaStore implements ImageKitQuotaStore {
     const existing = this.uploads.get(input.uploadId);
     assert(existing, "upload must be reserved");
     if (existing.status === "uploaded") return existing;
-    assert.equal(existing.status, "reserved");
+    assert.ok(["reserved", "uploading", "recoverable"].includes(existing.status));
     const quota = this.quota(input.uid);
     quota.reservedBytes = Math.max(0, quota.reservedBytes - input.sizeBytes);
     quota.usedBytes += input.sizeBytes;
@@ -160,24 +167,86 @@ class MemoryQuotaStore implements ImageKitQuotaStore {
     return completed;
   }
 
+  async markUploadAttemptStarted(input: Parameters<ImageKitQuotaStore["markUploadAttemptStarted"]>[0]): Promise<void> {
+    const existing = this.uploads.get(input.uploadId);
+    assert(existing, "upload must be reserved");
+    if (existing.status === "uploaded" || existing.status === "deleted") return;
+    assert.ok(["reserved", "uploading"].includes(existing.status));
+    this.uploads.set(input.uploadId, {
+      ...existing,
+      status: "uploading",
+      imageKitAttemptedAtMs: existing.imageKitAttemptedAtMs ?? nowMs,
+      leaseExpiresAtMs: (input.nowMs ?? nowMs) + 15 * 60 * 1000,
+      updatedAtMs: input.nowMs ?? nowMs,
+    });
+  }
+
   async markUploadRecoverable(input: Parameters<ImageKitQuotaStore["markUploadRecoverable"]>[0]): Promise<void> {
     const existing = this.uploads.get(input.uploadId);
     if (!existing || existing.status === "uploaded" || existing.status === "deleted") return;
-    const quota = this.quota(input.uid);
-    quota.reservedBytes = Math.max(0, quota.reservedBytes - input.sizeBytes);
     this.uploads.set(input.uploadId, {
       ...existing,
       ...(input.uploaded ?? {}),
       status: "recoverable",
-      updatedAtMs: nowMs,
+      leaseExpiresAtMs: (input.nowMs ?? nowMs) + 15 * 60 * 1000,
+      updatedAtMs: input.nowMs ?? nowMs,
     });
+  }
+
+  async reconcileStaleReservations(input: Parameters<ImageKitQuotaStore["reconcileStaleReservations"]>[0]): Promise<ImageKitReservationReconciliation[]> {
+    const now = input.nowMs ?? nowMs;
+    const results: ImageKitReservationReconciliation[] = [];
+    for (const upload of this.uploads.values()) {
+      if (upload.uid !== input.uid || upload.quotaReleasedAtMs) continue;
+      if (!["reserved", "uploading"].includes(upload.status)) continue;
+      if (!upload.leaseExpiresAtMs || upload.leaseExpiresAtMs > now) continue;
+      const quota = this.quota(input.uid);
+      if (upload.status === "reserved" && !upload.imageKitAttemptedAtMs) {
+        quota.reservedBytes = Math.max(0, quota.reservedBytes - upload.sizeBytes);
+        this.uploads.set(upload.uploadId, {
+          ...upload,
+          status: "expired",
+          quotaReleasedAtMs: now,
+          updatedAtMs: now,
+        });
+        results.push({ uploadId: upload.uploadId, action: "released-unattempted" });
+      } else {
+        this.uploads.set(upload.uploadId, {
+          ...upload,
+          status: "recoverable",
+          leaseExpiresAtMs: now + 15 * 60 * 1000,
+          updatedAtMs: now,
+        });
+        results.push({ uploadId: upload.uploadId, action: "held-for-manual-recovery" });
+      }
+      if (results.length >= (input.limit ?? 25)) break;
+    }
+    return results;
+  }
+
+  async releaseVerifiedUnstoredUpload(input: Parameters<ImageKitQuotaStore["releaseVerifiedUnstoredUpload"]>[0]): Promise<boolean> {
+    const existing = this.uploads.get(input.uploadId);
+    if (!existing || existing.uid !== input.uid) return false;
+    if (existing.quotaReleasedAtMs) return true;
+    if (existing.url || existing.fileId || existing.filePath) return false;
+    if (!["recoverable", "expired"].includes(existing.status)) return false;
+    const quota = this.quota(input.uid);
+    quota.reservedBytes = Math.max(0, quota.reservedBytes - existing.sizeBytes);
+    this.uploads.set(input.uploadId, {
+      ...existing,
+      status: "expired",
+      quotaReleasedAtMs: input.nowMs ?? nowMs,
+      updatedAtMs: input.nowMs ?? nowMs,
+    });
+    return true;
   }
 
   async safeDeleteUpload(input: Parameters<ImageKitQuotaStore["safeDeleteUpload"]>[0]): Promise<ImageKitCleanupResult> {
     const existing = this.uploads.get(input.uploadId);
     if (!existing) return { deleted: false, uploadId: input.uploadId, reason: "not-found" as const };
     if (existing.uid !== input.uid) return { deleted: false, uploadId: input.uploadId, reason: "wrong-owner" as const };
-    if (existing.status !== "uploaded") return { deleted: false, uploadId: input.uploadId, reason: "not-uploaded" as const };
+    if (existing.status === "deleted") return { deleted: true, uploadId: input.uploadId };
+    if (!["uploaded", "recoverable"].includes(existing.status)) return { deleted: false, uploadId: input.uploadId, reason: "not-cleanable" as const };
     if (!existing.url || !existing.fileId || !existing.filePath) {
       return { deleted: false, uploadId: input.uploadId, reason: "missing-imagekit-file" as const };
     }
@@ -195,8 +264,9 @@ class MemoryQuotaStore implements ImageKitQuotaStore {
       return { deleted: false, uploadId: input.uploadId, reason: "delete-failed" as const };
     }
     const quota = this.quota(input.uid);
-    quota.usedBytes = Math.max(0, quota.usedBytes - existing.sizeBytes);
-    this.uploads.set(input.uploadId, { ...existing, status: "deleted", updatedAtMs: nowMs });
+    if (existing.status === "uploaded") quota.usedBytes = Math.max(0, quota.usedBytes - existing.sizeBytes);
+    else quota.reservedBytes = Math.max(0, quota.reservedBytes - existing.sizeBytes);
+    this.uploads.set(input.uploadId, { ...existing, status: "deleted", quotaReleasedAtMs: nowMs, updatedAtMs: nowMs });
     return { deleted: true, uploadId: input.uploadId };
   }
 }
@@ -664,10 +734,10 @@ const failed = await call({
   },
 });
 assert.equal(failed.status, 502);
-assert.equal(failedStore.quota("user123").reservedBytes, 0);
+assert.equal(failedStore.quota("user123").reservedBytes, JPEG.length);
 assert.equal(failedStore.uploads.get("user123:ambiguous-failure")?.status, "recoverable");
 
-const commitFailedStore = new MemoryQuotaStore();
+const commitFailedStore = new MemoryQuotaStore(JPEG.length);
 commitFailedStore.failComplete = true;
 const commitFailed = await call({
   token: signToken(validPayload()),
@@ -679,9 +749,180 @@ const commitFailed = await call({
   uploadFile: acceptingUpload("image/jpeg"),
 });
 assert.equal(commitFailed.status, 502);
-assert.equal(commitFailedStore.quota("user123").reservedBytes, 0);
+assert.equal(commitFailedStore.quota("user123").reservedBytes, JPEG.length);
 assert.equal(commitFailedStore.uploads.get("user123:commit-failure")?.status, "recoverable");
 assert.equal(commitFailedStore.uploads.get("user123:commit-failure")?.fileId, "file_123");
+const blockedByRecoverable = await call({
+  token: signToken(validPayload()),
+  body: jpegForm.body,
+  contentType: jpegForm.contentType,
+  developmentProof: true,
+  headers: { "x-imagekit-upload-id": "new-key-while-recoverable" },
+  quotaStore: commitFailedStore,
+  uploadFile: async () => {
+    throw new Error("recoverable quota must block new uploads");
+  },
+});
+assert.equal(blockedByRecoverable.status, 409);
+commitFailedStore.failComplete = false;
+const recoveredSameKey = await call({
+  token: signToken(validPayload()),
+  body: jpegForm.body,
+  contentType: jpegForm.contentType,
+  developmentProof: true,
+  headers: { "x-imagekit-upload-id": "commit-failure" },
+  quotaStore: commitFailedStore,
+  uploadFile: async () => {
+    throw new Error("same-key recoverable retry must not upload twice");
+  },
+});
+assert.equal(recoveredSameKey.status, 200);
+assert.equal(commitFailedStore.quota("user123").usedBytes, JPEG.length);
+assert.equal(commitFailedStore.quota("user123").reservedBytes, 0);
+
+const mismatchStore = new MemoryQuotaStore();
+const mismatchFirst = await call({
+  token: signToken(validPayload()),
+  body: jpegForm.body,
+  contentType: jpegForm.contentType,
+  developmentProof: true,
+  headers: { "x-imagekit-upload-id": "mismatch" },
+  quotaStore: mismatchStore,
+  uploadFile: acceptingUpload("image/jpeg"),
+});
+assert.equal(mismatchFirst.status, 200);
+const mismatchPngForm = multipart([{ name: "file", filename: "named.png", type: "image/jpeg", data: PNG }]);
+const mismatchPng = await call({
+  token: signToken(validPayload()),
+  body: mismatchPngForm.body,
+  contentType: mismatchPngForm.contentType,
+  developmentProof: true,
+  headers: { "x-imagekit-upload-id": "mismatch" },
+  quotaStore: mismatchStore,
+  uploadFile: async () => {
+    throw new Error("mismatched duplicate key must not upload");
+  },
+});
+assert.notEqual(mismatchPng.status, 200);
+
+const crossUserStore = new MemoryQuotaStore(JPEG.length);
+const sameKeyUserOne = await call({
+  token: signToken(validPayload("user123")),
+  body: jpegForm.body,
+  contentType: jpegForm.contentType,
+  developmentProof: true,
+  headers: { "x-imagekit-upload-id": "shared-key" },
+  quotaStore: crossUserStore,
+  uploadFile: acceptingUpload("image/jpeg"),
+});
+const sameKeyUserTwo = await call({
+  token: signToken(validPayload("other-user")),
+  body: jpegForm.body,
+  contentType: jpegForm.contentType,
+  developmentProof: true,
+  headers: { "x-imagekit-upload-id": "shared-key" },
+  quotaStore: crossUserStore,
+  uploadFile: async (upload) => ({
+    url: `https://ik.imagekit.io/example${upload.folder}/${upload.fileName}`,
+    fileId: "file_456",
+    filePath: `${upload.folder}/${upload.fileName}`,
+  }),
+});
+assert.equal(sameKeyUserOne.status, 200);
+assert.equal(sameKeyUserTwo.status, 200);
+assert.equal(crossUserStore.quota("user123").usedBytes, JPEG.length);
+assert.equal(crossUserStore.quota("other-user").usedBytes, JPEG.length);
+
+const unavailableStore: ImageKitQuotaStore = {
+  reserveUpload: async () => { throw new Error("firestore unavailable"); },
+  completeUpload: async () => { throw new Error("firestore unavailable"); },
+  markUploadAttemptStarted: async () => { throw new Error("firestore unavailable"); },
+  markUploadRecoverable: async () => { throw new Error("firestore unavailable"); },
+  reconcileStaleReservations: async () => { throw new Error("firestore unavailable"); },
+  releaseVerifiedUnstoredUpload: async () => false,
+  safeDeleteUpload: async () => ({ deleted: false, uploadId: "x", reason: "reference-check-failed" }),
+};
+const unavailable = await call({
+  token: signToken(validPayload()),
+  body: jpegForm.body,
+  contentType: jpegForm.contentType,
+  developmentProof: true,
+  quotaStore: unavailableStore,
+  uploadFile: async () => {
+    throw new Error("Firestore unavailable must fail before ImageKit upload");
+  },
+});
+assert.equal(unavailable.status, 503);
+
+const interruptedStore = new MemoryQuotaStore(JPEG.length);
+await interruptedStore.reserveUpload({
+  uid: "user123",
+  uploadKey: "interrupted-before-attempt",
+  sizeBytes: JPEG.length,
+  contentSha256: sha256(JPEG),
+  contentType: "image/jpeg",
+  folder: imageKitFolderForUser("user123"),
+  fileName: "interrupted.jpg",
+  nowMs: nowMs - 60 * 60 * 1000,
+});
+assert.equal(interruptedStore.quota("user123").reservedBytes, JPEG.length);
+const releasedUnattempted = await interruptedStore.reconcileStaleReservations({ uid: "user123", nowMs });
+assert.deepEqual(releasedUnattempted, [{ uploadId: "user123:interrupted-before-attempt", action: "released-unattempted" }]);
+assert.equal(interruptedStore.quota("user123").reservedBytes, 0);
+assert.equal(interruptedStore.uploads.get("user123:interrupted-before-attempt")?.status, "expired");
+assert.deepEqual(await interruptedStore.reconcileStaleReservations({ uid: "user123", nowMs }), []);
+
+const attemptedStore = new MemoryQuotaStore(JPEG.length);
+const attempted = await attemptedStore.reserveUpload({
+  uid: "user123",
+  uploadKey: "interrupted-after-attempt",
+  sizeBytes: JPEG.length,
+  contentSha256: sha256(JPEG),
+  contentType: "image/jpeg",
+  folder: imageKitFolderForUser("user123"),
+  fileName: "attempted.jpg",
+  nowMs: nowMs - 60 * 60 * 1000,
+});
+assert.equal(attempted.kind, "reserved");
+await attemptedStore.markUploadAttemptStarted({
+  uid: "user123",
+  uploadId: "user123:interrupted-after-attempt",
+  sizeBytes: JPEG.length,
+  nowMs: nowMs - 60 * 60 * 1000,
+});
+const heldUnknown = await attemptedStore.reconcileStaleReservations({ uid: "user123", nowMs });
+assert.deepEqual(heldUnknown, [{ uploadId: "user123:interrupted-after-attempt", action: "held-for-manual-recovery" }]);
+assert.equal(attemptedStore.quota("user123").reservedBytes, JPEG.length);
+assert.equal(attemptedStore.uploads.get("user123:interrupted-after-attempt")?.status, "recoverable");
+assert.equal(await attemptedStore.releaseVerifiedUnstoredUpload({
+  uid: "user123",
+  uploadId: "user123:interrupted-after-attempt",
+  nowMs,
+}), true);
+assert.equal(attemptedStore.quota("user123").reservedBytes, 0);
+assert.equal(await attemptedStore.releaseVerifiedUnstoredUpload({
+  uid: "user123",
+  uploadId: "user123:interrupted-after-attempt",
+  nowMs,
+}), true);
+
+const activeStore = new MemoryQuotaStore(JPEG.length);
+await activeStore.reserveUpload({
+  uid: "user123",
+  uploadKey: "active-upload",
+  sizeBytes: JPEG.length,
+  contentSha256: sha256(JPEG),
+  contentType: "image/jpeg",
+  folder: imageKitFolderForUser("user123"),
+  fileName: "active.jpg",
+});
+await activeStore.markUploadAttemptStarted({
+  uid: "user123",
+  uploadId: "user123:active-upload",
+  sizeBytes: JPEG.length,
+});
+assert.deepEqual(await activeStore.reconcileStaleReservations({ uid: "user123", nowMs }), []);
+assert.equal(activeStore.quota("user123").reservedBytes, JPEG.length);
 
 const cleanupStore = new MemoryQuotaStore();
 const cleanupUpload = await call({
@@ -734,6 +975,49 @@ assert.deepEqual(deleted, { deleted: true, uploadId: "user123:cleanup" });
 assert.equal(deletedFileId, "file_123");
 assert.equal(cleanupStore.uploads.get("user123:cleanup")?.status, "deleted");
 assert.equal(cleanupStore.quota("user123").usedBytes, 0);
+assert.deepEqual(await cleanupStore.safeDeleteUpload({
+  uid: "user123",
+  uploadId: "user123:cleanup",
+  deleteFile: async () => {
+    throw new Error("deleted cleanup retry must be idempotent");
+  },
+}), { deleted: true, uploadId: "user123:cleanup" });
+
+const recoverableCleanupStore = new MemoryQuotaStore(JPEG.length);
+await recoverableCleanupStore.reserveUpload({
+  uid: "user123",
+  uploadKey: "recoverable-cleanup",
+  sizeBytes: JPEG.length,
+  contentSha256: sha256(JPEG),
+  contentType: "image/jpeg",
+  folder: imageKitFolderForUser("user123"),
+  fileName: "recoverable.jpg",
+});
+await recoverableCleanupStore.markUploadAttemptStarted({
+  uid: "user123",
+  uploadId: "user123:recoverable-cleanup",
+  sizeBytes: JPEG.length,
+});
+await recoverableCleanupStore.markUploadRecoverable({
+  uid: "user123",
+  uploadId: "user123:recoverable-cleanup",
+  sizeBytes: JPEG.length,
+  uploaded: {
+    url: "https://ik.imagekit.io/example/custom-portfolio/user123/proof/recoverable.jpg",
+    fileId: "file_recoverable",
+    filePath: "/custom-portfolio/user123/proof/recoverable.jpg",
+  },
+  reason: "firestore-completion-failed",
+});
+assert.equal(recoverableCleanupStore.quota("user123").reservedBytes, JPEG.length);
+assert.deepEqual(await recoverableCleanupStore.safeDeleteUpload({
+  uid: "user123",
+  uploadId: "user123:recoverable-cleanup",
+  deleteFile: async (fileId) => {
+    assert.equal(fileId, "file_recoverable");
+  },
+}), { deleted: true, uploadId: "user123:recoverable-cleanup" });
+assert.equal(recoverableCleanupStore.quota("user123").reservedBytes, 0);
 
 const pngForm = multipart([{ name: "file", filename: "named.png", type: "image/jpeg", data: PNG }]);
 const png = await call({

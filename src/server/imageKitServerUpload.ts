@@ -369,6 +369,7 @@ export async function handleImageKitServerUpload(
     send(res, 503, { error: "Image upload storage is not configured." });
     return;
   }
+  await quotaStore.reconcileStaleReservations({ uid, limit: 5 }).catch(() => {});
 
   let uploadId = "";
   try {
@@ -392,6 +393,26 @@ export async function handleImageKitServerUpload(
       });
       return;
     }
+    if (reservation.kind === "recoverable" && reservation.upload?.url && reservation.upload.fileId && reservation.upload.filePath) {
+      const completed = await quotaStore.completeUpload({
+        uid,
+        uploadId: reservation.uploadId,
+        sizeBytes: reservation.upload.sizeBytes,
+        uploaded: {
+          url: reservation.upload.url,
+          fileId: reservation.upload.fileId,
+          filePath: reservation.upload.filePath,
+        },
+      });
+      send(res, 200, {
+        url: completed.url,
+        fileId: completed.fileId,
+        filePath: completed.filePath,
+        contentType: completed.contentType,
+        bytes: completed.sizeBytes,
+      });
+      return;
+    }
     if (reservation.kind === "in-progress" || reservation.kind === "recoverable") {
       send(res, 409, { error: "This upload is already being processed. Try again." });
       return;
@@ -406,6 +427,17 @@ export async function handleImageKitServerUpload(
       send(res, 400, { error: "This upload request is not valid." });
       return;
     }
+    send(res, 503, { error: "Image upload storage is not configured." });
+    return;
+  }
+
+  try {
+    await quotaStore.markUploadAttemptStarted({
+      uid,
+      uploadId,
+      sizeBytes: parsed.file.data.length,
+    });
+  } catch {
     send(res, 503, { error: "Image upload storage is not configured." });
     return;
   }

@@ -6,13 +6,14 @@ export const IMAGEKIT_QUOTA_COLLECTION = "imageKitQuotas";
 export const IMAGEKIT_UPLOAD_COLLECTION = "imageKitUploads";
 export const IMAGEKIT_DEFAULT_ACCOUNT_QUOTA_BYTES = 25 * 1024 * 1024;
 export const IMAGEKIT_DEFAULT_ACCOUNT_QUOTA_ENV = "IMAGEKIT_DEFAULT_ACCOUNT_QUOTA_BYTES";
+export const IMAGEKIT_UPLOAD_RESERVATION_LEASE_MS = 15 * 60 * 1000;
 
 const UID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,160}$/;
 const FILE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const MAX_CONFIGURED_QUOTA_BYTES = 1024 * 1024 * 1024;
 
-export type ImageKitUploadStatus = "reserved" | "uploaded" | "recoverable" | "delete-pending" | "deleted";
+export type ImageKitUploadStatus = "reserved" | "uploading" | "uploaded" | "recoverable" | "delete-pending" | "deleted" | "expired";
 
 export type ImageKitTrackedUpload = {
   uploadId: string;
@@ -26,6 +27,9 @@ export type ImageKitTrackedUpload = {
   url?: string;
   fileId?: string;
   filePath?: string;
+  imageKitAttemptedAtMs?: number;
+  leaseExpiresAtMs?: number;
+  quotaReleasedAtMs?: number;
   createdAtMs: number;
   updatedAtMs: number;
 };
@@ -34,7 +38,12 @@ export type ImageKitQuotaReservation =
   | { kind: "reserved"; uploadId: string }
   | { kind: "already-uploaded"; upload: ImageKitTrackedUpload }
   | { kind: "in-progress"; uploadId: string }
-  | { kind: "recoverable"; uploadId: string };
+  | { kind: "recoverable"; uploadId: string; upload?: ImageKitTrackedUpload };
+
+export type ImageKitReservationReconciliation = {
+  uploadId: string;
+  action: "released-unattempted" | "held-for-manual-recovery";
+};
 
 export type ImageKitCleanupResult =
   | { deleted: true; uploadId: string }
@@ -44,7 +53,7 @@ export type ImageKitCleanupResult =
       reason:
         | "not-found"
         | "wrong-owner"
-        | "not-uploaded"
+        | "not-cleanable"
         | "missing-imagekit-file"
         | "referenced-by-saved-portfolio"
         | "referenced-by-published-portfolio"
@@ -71,6 +80,12 @@ export type ImageKitQuotaStore = {
     uploaded: Required<Pick<ImageKitTrackedUpload, "url" | "fileId" | "filePath">>;
     nowMs?: number;
   }) => Promise<ImageKitTrackedUpload>;
+  markUploadAttemptStarted: (input: {
+    uid: string;
+    uploadId: string;
+    sizeBytes: number;
+    nowMs?: number;
+  }) => Promise<void>;
   markUploadRecoverable: (input: {
     uid: string;
     uploadId: string;
@@ -79,6 +94,16 @@ export type ImageKitQuotaStore = {
     reason: string;
     nowMs?: number;
   }) => Promise<void>;
+  reconcileStaleReservations: (input: {
+    uid: string;
+    nowMs?: number;
+    limit?: number;
+  }) => Promise<ImageKitReservationReconciliation[]>;
+  releaseVerifiedUnstoredUpload: (input: {
+    uid: string;
+    uploadId: string;
+    nowMs?: number;
+  }) => Promise<boolean>;
   safeDeleteUpload: (input: {
     uid: string;
     uploadId: string;
@@ -138,7 +163,7 @@ function uploadFromSnapshot(snapshot: DocumentSnapshot): ImageKitTrackedUpload |
   if (!snapshot.exists) return null;
   const data = snapshot.data() ?? {};
   if (typeof data.uid !== "string" || !UID_PATTERN.test(data.uid)) return null;
-  if (!["reserved", "uploaded", "recoverable", "delete-pending", "deleted"].includes(String(data.status))) return null;
+  if (!["reserved", "uploading", "uploaded", "recoverable", "delete-pending", "deleted", "expired"].includes(String(data.status))) return null;
   if (typeof data.contentType !== "string") return null;
   if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(data.contentType)) return null;
   if (typeof data.contentSha256 !== "string" || !/^[a-f0-9]{64}$/.test(data.contentSha256)) return null;
@@ -155,6 +180,9 @@ function uploadFromSnapshot(snapshot: DocumentSnapshot): ImageKitTrackedUpload |
     url: typeof data.url === "string" ? data.url : undefined,
     fileId: typeof data.fileId === "string" ? data.fileId : undefined,
     filePath: typeof data.filePath === "string" ? data.filePath : undefined,
+    imageKitAttemptedAtMs: numberField(data.imageKitAttemptedAtMs) || undefined,
+    leaseExpiresAtMs: numberField(data.leaseExpiresAtMs) || undefined,
+    quotaReleasedAtMs: numberField(data.quotaReleasedAtMs) || undefined,
     createdAtMs: numberField(data.createdAtMs),
     updatedAtMs: numberField(data.updatedAtMs),
   };
@@ -183,6 +211,14 @@ function assertSameUpload(existing: ImageKitTrackedUpload, input: { uid: string;
 
 function decrement(value: number, by: number): number {
   return Math.max(0, value - by);
+}
+
+function nextLeaseExpiresAt(nowMs: number): number {
+  return nowMs + IMAGEKIT_UPLOAD_RESERVATION_LEASE_MS;
+}
+
+function hasStoredImageKitFile(upload: ImageKitTrackedUpload): upload is ImageKitTrackedUpload & Required<Pick<ImageKitTrackedUpload, "url" | "fileId" | "filePath">> {
+  return Boolean(upload.url && upload.fileId && upload.filePath);
 }
 
 async function snapshotHasReference(snapshot: QuerySnapshot, upload: Pick<ImageKitTrackedUpload, "url" | "filePath">): Promise<boolean> {
@@ -228,7 +264,7 @@ export function createFirestoreImageKitQuotaStore(
         if (existing) {
           assertSameUpload(existing, input);
           if (existing.status === "uploaded") return { kind: "already-uploaded", upload: existing };
-          if (existing.status === "recoverable") return { kind: "recoverable", uploadId };
+          if (existing.status === "recoverable") return { kind: "recoverable", uploadId, upload: hasStoredImageKitFile(existing) ? existing : undefined };
           return { kind: "in-progress", uploadId };
         }
 
@@ -254,6 +290,7 @@ export function createFirestoreImageKitQuotaStore(
           contentType: input.contentType,
           folder: input.folder,
           fileName: input.fileName,
+          leaseExpiresAtMs: nextLeaseExpiresAt(nowMs),
           createdAtMs: nowMs,
           updatedAtMs: nowMs,
         });
@@ -267,7 +304,9 @@ export function createFirestoreImageKitQuotaStore(
         const existing = uploadFromSnapshot(uploadSnapshot);
         if (!existing || existing.uid !== input.uid) throw new ImageKitQuotaError("upload-not-reserved");
         if (existing.status === "uploaded") return existing;
-        if (existing.status !== "reserved") throw new ImageKitQuotaError("upload-not-reserved");
+        if (!["reserved", "uploading", "recoverable"].includes(existing.status)) {
+          throw new ImageKitQuotaError("upload-not-reserved");
+        }
 
         const quotaSnapshot = await transaction.get(quotaRef(input.uid));
         if (!quotaSnapshot.exists) throw new ImageKitQuotaError("quota-record-missing");
@@ -297,24 +336,111 @@ export function createFirestoreImageKitQuotaStore(
       });
     },
 
+    async markUploadAttemptStarted(input) {
+      await db.runTransaction(async (transaction: Transaction) => {
+        const uploadSnapshot = await transaction.get(uploadRef(input.uploadId));
+        const existing = uploadFromSnapshot(uploadSnapshot);
+        if (!existing || existing.uid !== input.uid) throw new ImageKitQuotaError("upload-not-reserved");
+        if (existing.status === "uploaded" || existing.status === "deleted") return;
+        if (existing.status !== "reserved" && existing.status !== "uploading") {
+          throw new ImageKitQuotaError("upload-not-reserved");
+        }
+        const nowMs = input.nowMs ?? Date.now();
+        transaction.update(uploadRef(input.uploadId), {
+          status: "uploading",
+          imageKitAttemptedAtMs: existing.imageKitAttemptedAtMs ?? nowMs,
+          leaseExpiresAtMs: nextLeaseExpiresAt(nowMs),
+          updatedAtMs: nowMs,
+        });
+      });
+    },
+
     async markUploadRecoverable(input) {
       await db.runTransaction(async (transaction: Transaction) => {
         const uploadSnapshot = await transaction.get(uploadRef(input.uploadId));
         const existing = uploadFromSnapshot(uploadSnapshot);
         if (!existing || existing.uid !== input.uid || existing.status === "uploaded" || existing.status === "deleted") return;
-        const quotaSnapshot = await transaction.get(quotaRef(input.uid));
-        const quota = quotaFields(quotaSnapshot.data(), defaultLimitBytes);
         const nowMs = input.nowMs ?? Date.now();
-        transaction.update(quotaRef(input.uid), {
-          reservedBytes: decrement(quota.reservedBytes, input.sizeBytes),
-          updatedAtMs: nowMs,
-        });
         transaction.update(uploadRef(input.uploadId), {
           status: "recoverable",
           recoveryReason: input.reason,
           ...(input.uploaded ?? {}),
+          leaseExpiresAtMs: nextLeaseExpiresAt(nowMs),
           updatedAtMs: nowMs,
         });
+      });
+    },
+
+    async reconcileStaleReservations(input) {
+      const nowMs = input.nowMs ?? Date.now();
+      const limit = Math.max(1, Math.min(input.limit ?? 25, 100));
+      const snapshots = await Promise.all(
+        ["reserved", "uploading"].map((status) =>
+          db.collection(IMAGEKIT_UPLOAD_COLLECTION)
+            .where("uid", "==", input.uid)
+            .where("status", "==", status)
+            .where("leaseExpiresAtMs", "<=", nowMs)
+            .limit(limit)
+            .get(),
+        ),
+      );
+      const uploadIds = [...new Set(snapshots.flatMap((snapshot) => snapshot.docs.map((doc) => doc.id)))].slice(0, limit);
+      const reconciled = await Promise.all(uploadIds.map((uploadId) =>
+        db.runTransaction(async (transaction: Transaction): Promise<ImageKitReservationReconciliation | null> => {
+          const snapshot = await transaction.get(uploadRef(uploadId));
+          const upload = uploadFromSnapshot(snapshot);
+          if (!upload || upload.uid !== input.uid || upload.quotaReleasedAtMs) return null;
+          if (!["reserved", "uploading"].includes(upload.status)) return null;
+          if (!upload.leaseExpiresAtMs || upload.leaseExpiresAtMs > nowMs) return null;
+          const quotaSnapshot = await transaction.get(quotaRef(input.uid));
+          const quota = quotaFields(quotaSnapshot.data(), defaultLimitBytes);
+          if (upload.status === "reserved" && !upload.imageKitAttemptedAtMs) {
+            transaction.update(quotaRef(input.uid), {
+              reservedBytes: decrement(quota.reservedBytes, upload.sizeBytes),
+              updatedAtMs: nowMs,
+            });
+            transaction.update(uploadRef(uploadId), {
+              status: "expired",
+              recoveryReason: "reservation-expired-before-imagekit-attempt",
+              quotaReleasedAtMs: nowMs,
+              updatedAtMs: nowMs,
+            });
+            return { uploadId, action: "released-unattempted" };
+          }
+          transaction.update(uploadRef(uploadId), {
+            status: "recoverable",
+            recoveryReason: "reservation-lease-expired-after-imagekit-attempt",
+            leaseExpiresAtMs: nextLeaseExpiresAt(nowMs),
+            updatedAtMs: nowMs,
+          });
+          return { uploadId, action: "held-for-manual-recovery" };
+        }),
+      ));
+      return reconciled.filter((item): item is ImageKitReservationReconciliation => item !== null);
+    },
+
+    async releaseVerifiedUnstoredUpload(input) {
+      return db.runTransaction(async (transaction: Transaction) => {
+        const snapshot = await transaction.get(uploadRef(input.uploadId));
+        const upload = uploadFromSnapshot(snapshot);
+        if (!upload || upload.uid !== input.uid) return false;
+        if (upload.quotaReleasedAtMs) return true;
+        if (hasStoredImageKitFile(upload)) return false;
+        if (!["recoverable", "expired"].includes(upload.status)) return false;
+        const quotaSnapshot = await transaction.get(quotaRef(input.uid));
+        const quota = quotaFields(quotaSnapshot.data(), defaultLimitBytes);
+        const nowMs = input.nowMs ?? Date.now();
+        transaction.update(quotaRef(input.uid), {
+          reservedBytes: decrement(quota.reservedBytes, upload.sizeBytes),
+          updatedAtMs: nowMs,
+        });
+        transaction.update(uploadRef(input.uploadId), {
+          status: "expired",
+          recoveryReason: "operator-verified-no-imagekit-file",
+          quotaReleasedAtMs: nowMs,
+          updatedAtMs: nowMs,
+        });
+        return true;
       });
     },
 
@@ -324,8 +450,9 @@ export function createFirestoreImageKitQuotaStore(
         const upload = uploadFromSnapshot(snapshot);
         if (!upload) return { result: { deleted: false, uploadId: input.uploadId, reason: "not-found" } as ImageKitCleanupResult };
         if (upload.uid !== input.uid) return { result: { deleted: false, uploadId: input.uploadId, reason: "wrong-owner" } as ImageKitCleanupResult };
+        if (upload.status === "deleted") return { result: { deleted: true, uploadId: input.uploadId } as ImageKitCleanupResult };
         if (upload.status === "delete-pending") return { result: { deleted: false, uploadId: input.uploadId, reason: "delete-in-progress" } as ImageKitCleanupResult };
-        if (upload.status !== "uploaded") return { result: { deleted: false, uploadId: input.uploadId, reason: "not-uploaded" } as ImageKitCleanupResult };
+        if (!["uploaded", "recoverable"].includes(upload.status)) return { result: { deleted: false, uploadId: input.uploadId, reason: "not-cleanable" } as ImageKitCleanupResult };
         return { upload };
       });
       if ("result" in loaded) return loaded.result;
@@ -338,8 +465,8 @@ export function createFirestoreImageKitQuotaStore(
         const snapshot = await transaction.get(uploadRef(input.uploadId));
         const upload = uploadFromSnapshot(snapshot);
         if (!upload || upload.uid !== input.uid) return false;
-        if (upload.status !== "uploaded" || !upload.fileId || !FILE_ID_PATTERN.test(upload.fileId)) return false;
-        transaction.update(uploadRef(input.uploadId), { status: "delete-pending", updatedAtMs: nowMs });
+        if (!["uploaded", "recoverable"].includes(upload.status) || !upload.fileId || !FILE_ID_PATTERN.test(upload.fileId)) return false;
+        transaction.update(uploadRef(input.uploadId), { status: "delete-pending", deletePreviousStatus: upload.status, updatedAtMs: nowMs });
         return true;
       });
       if (!pending) return { deleted: false, uploadId: input.uploadId, reason: "delete-in-progress" };
@@ -351,7 +478,8 @@ export function createFirestoreImageKitQuotaStore(
           const snapshot = await transaction.get(uploadRef(input.uploadId));
           const upload = uploadFromSnapshot(snapshot);
           if (upload?.uid === input.uid && upload.status === "delete-pending") {
-            transaction.update(uploadRef(input.uploadId), { status: "uploaded", deleteErrorAtMs: Date.now(), updatedAtMs: Date.now() });
+            const previousStatus = snapshot.data()?.deletePreviousStatus === "uploaded" ? "uploaded" : "recoverable";
+            transaction.update(uploadRef(input.uploadId), { status: previousStatus, deleteErrorAtMs: Date.now(), updatedAtMs: Date.now() });
           }
         }).catch(() => {});
         return { deleted: false, uploadId: input.uploadId, reason: "delete-failed" };
@@ -363,11 +491,17 @@ export function createFirestoreImageKitQuotaStore(
         if (!upload || upload.uid !== input.uid || upload.status !== "delete-pending") return;
         const quotaSnapshot = await transaction.get(quotaRef(input.uid));
         const quota = quotaFields(quotaSnapshot.data(), defaultLimitBytes);
-        transaction.update(quotaRef(input.uid), {
-          usedBytes: decrement(quota.usedBytes, upload.sizeBytes),
-          updatedAtMs: nowMs,
-        });
-        transaction.update(uploadRef(input.uploadId), { status: "deleted", deletedAtMs: nowMs, updatedAtMs: nowMs });
+        const previousStatus = snapshot.data()?.deletePreviousStatus === "uploaded" ? "uploaded" : "recoverable";
+        transaction.update(quotaRef(input.uid), previousStatus === "uploaded"
+          ? {
+              usedBytes: decrement(quota.usedBytes, upload.sizeBytes),
+              updatedAtMs: nowMs,
+            }
+          : {
+              reservedBytes: decrement(quota.reservedBytes, upload.sizeBytes),
+              updatedAtMs: nowMs,
+            });
+        transaction.update(uploadRef(input.uploadId), { status: "deleted", deletedAtMs: nowMs, quotaReleasedAtMs: nowMs, updatedAtMs: nowMs });
       });
 
       return { deleted: true, uploadId: input.uploadId };
