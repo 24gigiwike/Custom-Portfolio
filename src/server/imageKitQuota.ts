@@ -131,7 +131,7 @@ export function containsExactImageReference(value: unknown, upload: Pick<ImageKi
 }
 
 function numberField(value: unknown): number {
-  return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
 }
 
 function uploadFromSnapshot(snapshot: DocumentSnapshot): ImageKitTrackedUpload | null {
@@ -379,6 +379,6 @@ export function imageKitDeleteFile(privateKey: string): (fileId: string) => Prom
   return async (fileId: string) => {
     if (!FILE_ID_PATTERN.test(fileId)) throw new Error("Invalid ImageKit file id.");
     const client = new ImageKit({ privateKey });
-    await client.files.deleteFile(fileId);
+    await client.files.delete(fileId);
   };
 }

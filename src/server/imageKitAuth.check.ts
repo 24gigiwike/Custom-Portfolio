@@ -26,6 +26,7 @@ import {
   IMAGEKIT_DEFAULT_ACCOUNT_QUOTA_BYTES,
   ImageKitQuotaError,
   containsExactImageReference,
+  type ImageKitCleanupResult,
   type ImageKitQuotaReservation,
   type ImageKitQuotaStore,
   type ImageKitTrackedUpload,
@@ -172,7 +173,7 @@ class MemoryQuotaStore implements ImageKitQuotaStore {
     });
   }
 
-  async safeDeleteUpload(input: Parameters<ImageKitQuotaStore["safeDeleteUpload"]>[0]) {
+  async safeDeleteUpload(input: Parameters<ImageKitQuotaStore["safeDeleteUpload"]>[0]): Promise<ImageKitCleanupResult> {
     const existing = this.uploads.get(input.uploadId);
     if (!existing) return { deleted: false, uploadId: input.uploadId, reason: "not-found" as const };
     if (existing.uid !== input.uid) return { deleted: false, uploadId: input.uploadId, reason: "wrong-owner" as const };
