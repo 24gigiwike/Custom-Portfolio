@@ -5,6 +5,8 @@ export const IMAGEKIT_AUTH_REQUIRED = "Sign in to upload an image.";
 export const IMAGEKIT_AUTH_EXPIRED = "Your session expired. Sign in again, then retry the upload.";
 export const IMAGEKIT_NOT_AVAILABLE = "Image upload is not available.";
 export const IMAGEKIT_NOT_CONFIGURED = "Image upload storage is not configured.";
+export const IMAGEKIT_QUOTA_EXCEEDED = "You have reached your image storage limit.";
+export const IMAGEKIT_UPLOAD_IN_PROGRESS = "This upload is already being processed. Try again.";
 
 export class ImageKitTransferError extends Error {
   readonly name = "ImageKitTransferError";
@@ -24,6 +26,7 @@ export type ImageKitServerPost = (
   file: Blob,
   init: {
     idToken: string;
+    uploadKey: string;
     signal?: AbortSignal;
     onProgress?: (percent: number) => void;
   },
@@ -41,6 +44,8 @@ const SAFE_SERVER_ERRORS = new Set([
   "This upload field is not available.",
   "Send the image as multipart form data.",
   "Image upload failed. Try again.",
+  IMAGEKIT_QUOTA_EXCEEDED,
+  IMAGEKIT_UPLOAD_IN_PROGRESS,
   "This upload route is no longer available.",
 ]);
 
@@ -77,13 +82,13 @@ function readResult(json: unknown): UploadedImageKitFile {
 
 function postWithFetch(
   file: Blob,
-  init: { idToken: string; signal?: AbortSignal; onProgress?: (percent: number) => void },
+  init: { idToken: string; uploadKey: string; signal?: AbortSignal; onProgress?: (percent: number) => void },
 ): Promise<{ status: number; json: unknown }> {
   const form = new FormData();
   form.append("file", file, "image");
   return fetch("/api/imagekit-upload", {
     method: "POST",
-    headers: { authorization: `Bearer ${init.idToken}` },
+    headers: { authorization: `Bearer ${init.idToken}`, "x-imagekit-upload-id": init.uploadKey },
     body: form,
     signal: init.signal,
   }).then(async (response) => ({ status: response.status, json: await response.json().catch(() => ({})) }));
@@ -91,13 +96,14 @@ function postWithFetch(
 
 function postWithProgress(
   file: Blob,
-  init: { idToken: string; signal?: AbortSignal; onProgress?: (percent: number) => void },
+  init: { idToken: string; uploadKey: string; signal?: AbortSignal; onProgress?: (percent: number) => void },
 ): Promise<{ status: number; json: unknown }> {
   if (typeof XMLHttpRequest === "undefined") return postWithFetch(file, init);
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/imagekit-upload");
     xhr.setRequestHeader("authorization", `Bearer ${init.idToken}`);
+    xhr.setRequestHeader("x-imagekit-upload-id", init.uploadKey);
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable || event.total <= 0) return;
       const percent = Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100)));
@@ -141,10 +147,14 @@ export async function uploadOptimizedFileToImageKit(input: {
   if (!input.idToken) throw new ImageKitTransferError(IMAGEKIT_AUTH_REQUIRED);
   if (input.signal?.aborted) throw new ImageUploadCancelled();
   const post = input.post ?? postWithProgress;
+  const uploadKey = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   let response: { status: number; json: unknown };
   try {
     response = await post(input.file, {
       idToken: input.idToken,
+      uploadKey,
       signal: input.signal,
       onProgress: input.onProgress,
     });

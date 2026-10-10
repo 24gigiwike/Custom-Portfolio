@@ -1,6 +1,13 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import ImageKit from "@imagekit/nodejs";
 import { FirebaseIdTokenError, firebaseProjectId, verifyFirebaseIdToken } from "./firebaseIdToken.js";
+import { firebaseAdminFirestore } from "./firebaseAdmin.js";
+import {
+  createFirestoreImageKitQuotaStore,
+  imageKitDefaultQuotaBytes,
+  ImageKitQuotaError,
+  type ImageKitQuotaStore,
+} from "./imageKitQuota.js";
 import { imageKitFolderForUser, readImageKitServerConfig } from "./imageKitUploadAuth.js";
 
 /**
@@ -10,20 +17,13 @@ import { imageKitFolderForUser, readImageKitServerConfig } from "./imageKitUploa
  * checks the Firebase ID token, the file bytes, and the size, then chooses the
  * folder and file name itself.
  *
- * Durable quotas are not implemented. Production therefore stays closed unless
- * IMAGEKIT_UPLOAD_ALLOW_UIDS lists the Firebase uid. That variable is server-only.
+ * Durable quotas are enforced with server-only Firestore records. Production still
+ * stays closed unless IMAGEKIT_UPLOAD_ALLOW_UIDS lists the Firebase uid.
+ * That variable is server-only.
  * The Vite dev server passes developmentProof in code. A request header or body
  * cannot turn it on.
  *
- * Proposed Firestore quota, for a later step, not created here:
- * - Admin-only document imageKitQuotas/{uid}. Client rules deny every read and write.
- * - A transaction reserves storedBytes before the ImageKit call and commits the
- *   fileId only after ImageKit accepts the file.
- * - A second admin-only record stores fileId, uid, url, and whether a saved or
- *   published document still references that url.
- * - Cleanup may delete an unreferenced ImageKit file. It must not delete a URL
- *   that is still stored, and it must not delete Firebase Storage objects.
- * - In-memory function counters are not a quota. They reset on every cold start.
+ * In-memory function counters are not a quota. They reset on every cold start.
  */
 
 /** Largest file the current optimizer can emit: GIF passthrough and safeOriginalMaxBytes. */
@@ -60,6 +60,8 @@ export type ImageKitServerUploadOptions = {
   /** Set only by the Vite dev plugin. Production api/imagekit-upload.ts must not set this. */
   developmentProof?: boolean;
   verify?: (token: string, projectId: string) => Promise<{ uid: string }>;
+  quotaStore?: ImageKitQuotaStore | null;
+  uploadKey?: () => string;
   uploadFile?: (input: {
     bytes: Uint8Array;
     fileName: string;
@@ -162,6 +164,10 @@ function bearerToken(headers: Record<string, HeaderValue>): string | null {
   return match?.[1] ?? null;
 }
 
+function idempotencyKey(headers: Record<string, HeaderValue>, createKey: () => string): string {
+  return headerValue(headers, "x-imagekit-upload-id").trim() || createKey();
+}
+
 function send(res: ImageKitUploadResponse, status: number, payload: Record<string, unknown>): void {
   res.status(status);
   res.setHeader("content-type", "application/json; charset=utf-8");
@@ -242,6 +248,12 @@ function safeResult(
   const path = decodeURIComponent(delivery.pathname);
   if (!path.startsWith(expected.pathname) || !path.includes(`${folder}/`)) return null;
   return { url: `${delivery.origin}${delivery.pathname}`, fileId, filePath };
+}
+
+function quotaStoreForEnv(env: NodeJS.ProcessEnv): ImageKitQuotaStore | null {
+  const db = firebaseAdminFirestore(env);
+  if (!db) return null;
+  return createFirestoreImageKitQuotaStore(db, { defaultLimitBytes: imageKitDefaultQuotaBytes(env) });
 }
 
 async function uploadWithSdk(input: {
@@ -350,6 +362,54 @@ export async function handleImageKitServerUpload(
   }
 
   const fileName = `${randomUUID()}.${extensionFor(detected)}`;
+  const contentSha256 = createHash("sha256").update(parsed.file.data).digest("hex");
+  const uploadKey = idempotencyKey(req.headers, options.uploadKey ?? randomUUID);
+  const quotaStore = options.quotaStore === undefined ? quotaStoreForEnv(env) : options.quotaStore;
+  if (!quotaStore) {
+    send(res, 503, { error: "Image upload storage is not configured." });
+    return;
+  }
+
+  let uploadId = "";
+  try {
+    const reservation = await quotaStore.reserveUpload({
+      uid,
+      uploadKey,
+      sizeBytes: parsed.file.data.length,
+      contentSha256,
+      contentType: detected,
+      folder,
+      fileName,
+    });
+    if (reservation.kind === "already-uploaded") {
+      const stored = reservation.upload;
+      send(res, 200, {
+        url: stored.url,
+        fileId: stored.fileId,
+        filePath: stored.filePath,
+        contentType: stored.contentType,
+        bytes: stored.sizeBytes,
+      });
+      return;
+    }
+    if (reservation.kind === "in-progress" || reservation.kind === "recoverable") {
+      send(res, 409, { error: "This upload is already being processed. Try again." });
+      return;
+    }
+    uploadId = reservation.uploadId;
+  } catch (error) {
+    if (error instanceof ImageKitQuotaError && error.reason === "quota-exceeded") {
+      send(res, 409, { error: "You have reached your image storage limit." });
+      return;
+    }
+    if (error instanceof ImageKitQuotaError && error.reason === "invalid-upload-key") {
+      send(res, 400, { error: "This upload request is not valid." });
+      return;
+    }
+    send(res, 503, { error: "Image upload storage is not configured." });
+    return;
+  }
+
   let uploaded: ImageKitStoredUpload;
   try {
     uploaded = await (options.uploadFile ?? uploadWithSdk)({
@@ -360,12 +420,43 @@ export async function handleImageKitServerUpload(
       privateKey: config.privateKey,
     });
   } catch {
+    await quotaStore.markUploadRecoverable({
+      uid,
+      uploadId,
+      sizeBytes: parsed.file.data.length,
+      reason: "imagekit-upload-failed",
+    }).catch(() => {});
     send(res, 502, { error: "Image upload failed. Try again." });
     return;
   }
 
   const safe = safeResult(config.urlEndpoint, folder, uploaded);
   if (!safe) {
+    await quotaStore.markUploadRecoverable({
+      uid,
+      uploadId,
+      sizeBytes: parsed.file.data.length,
+      reason: "imagekit-unsafe-result",
+    }).catch(() => {});
+    send(res, 502, { error: "Image upload failed. Try again." });
+    return;
+  }
+
+  try {
+    await quotaStore.completeUpload({
+      uid,
+      uploadId,
+      sizeBytes: parsed.file.data.length,
+      uploaded: safe,
+    });
+  } catch {
+    await quotaStore.markUploadRecoverable({
+      uid,
+      uploadId,
+      sizeBytes: parsed.file.data.length,
+      uploaded: safe,
+      reason: "firestore-completion-failed",
+    }).catch(() => {});
     send(res, 502, { error: "Image upload failed. Try again." });
     return;
   }
