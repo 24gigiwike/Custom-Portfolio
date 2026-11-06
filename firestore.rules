@@ -11,6 +11,50 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // Automatic grandfather grants use this same positive test.
+    // A publishing map with status "published" counts.
+    // A document with no publishing field and published == true counts.
+    // An explicit draft does not. Any other publishing shape is not published here;
+    // the planner sends those records to manual review instead of granting.
+    function portfolioIsPublished(data) {
+      return data.keys().hasAny(["publishing"])
+        ? data.publishing is map && data.publishing.get("status", "") == "published"
+        : data.keys().hasAny(["published"]) && data.published == true;
+    }
+
+    // Server-only switch at publishingControls/gate.
+    // A missing document, or any value other than enabled == true, leaves the gate off
+    // so a deploy of these rules does not lock publishing.
+    // An operator enables it later with the Admin SDK after the grandfather migration.
+    // Clients cannot write this document. Rules cannot read environment variables.
+    function publishingGateEnabled() {
+      return exists(/databases/$(database)/documents/publishingControls/gate)
+        && get(/databases/$(database)/documents/publishingControls/gate).data.enabled == true;
+    }
+
+    // publishingEntitlements/{uid} is written only by the Admin SDK.
+    // status must be active and the document id must be the same account.
+    function hasActivePublishingEntitlement(uid) {
+      return exists(/databases/$(database)/documents/publishingEntitlements/$(uid))
+        ? get(/databases/$(database)/documents/publishingEntitlements/$(uid)).data.get("uid", "") == uid
+          && get(/databases/$(database)/documents/publishingEntitlements/$(uid)).data.get("status", "") == "active"
+        : false;
+    }
+
+    // Becoming published is free while the gate is off.
+    // While the gate is on, an already published portfolio can still be saved,
+    // and a draft can become published only with an active entitlement.
+    // Ternaries avoid reading resource or a missing entitlement document.
+    function mayBecomePublished() {
+      return !publishingGateEnabled()
+        ? true
+        : resource == null
+          ? hasActivePublishingEntitlement(request.auth.uid)
+          : portfolioIsPublished(resource.data)
+            ? true
+            : hasActivePublishingEntitlement(request.auth.uid);
+    }
+
     function isReservedSlug(slug) {
       return slug in [
         "about", "account", "accounts", "admin", "administrator", "api", "app", "assets",
@@ -40,8 +84,13 @@ service cloud.firestore {
     // Portfolio document rules. Anonymous reads stay denied, including after publication.
     match /portfolios/{portfolioId} {
       allow read: if isSignedIn() && resource.data.ownerId == request.auth.uid;
-      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && (!portfolioIsPublished(request.resource.data) || mayBecomePublished());
+      allow update: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == request.auth.uid
+        && (!portfolioIsPublished(request.resource.data) || mayBecomePublished());
       allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
 
       // Projects subcollection rules.
@@ -290,6 +339,28 @@ service cloud.firestore {
         );
 
       allow delete: if false;
+    }
+
+    // Permanent publishing right for one account. The Admin SDK grants it.
+    // The owner may read their own record. Clients cannot create, change, or delete it.
+    // Unpublishing a portfolio does not match this document, so the right remains.
+    match /publishingEntitlements/{uid} {
+      allow get: if isOwner(uid);
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    // Payment facts for a future verified charge. No checkout writes these.
+    // The owner may read one of their own records. Clients cannot write them.
+    match /payments/{paymentId} {
+      allow get: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    // Publishing gate. Absent or not exactly enabled means publishing stays free.
+    match /publishingControls/{document} {
+      allow read, write: if false;
     }
 
     // Default deny all other collections
