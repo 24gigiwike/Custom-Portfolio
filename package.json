@@ -10,7 +10,9 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test:imagekit": "tsx src/server/imageKitAuth.check.ts",
-    "test": "bun run test:imagekit"
+    "test:publishing": "tsx src/server/publishingEntitlement.check.ts",
+    "test:publishing-rules": "tsx src/lib/publishingEntitlement.rules.check.ts",
+    "test": "bun run test:imagekit && bun run test:publishing"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
