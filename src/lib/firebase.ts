@@ -1,15 +1,27 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
-import firebaseConfigData from "../../firebase-applet-config.json";
-import { resolveFirebaseWebConfig } from "./firebaseConfig";
+import { resolveFirebaseWebConfig, type FirebaseWebConfig } from "./firebaseConfig";
+import { firebaseRuntime } from "./firebaseEnvironment";
 
 /**
- * Firebase Client & Firestore Initialization
- * Uses the provisioned Firebase configuration for Custom Portfolio.
- * Environment variables must be supplied as a complete set. A partial set
- * is rejected so it cannot be mixed with the committed project.
+ * Browser Firebase client.
+ * Local development and Vercel Preview require the staging web config.
+ * The committed production config is inlined only for a Vercel Production build.
  */
+
+declare const __VERCEL_ENV__: string;
+declare const __FIREBASE_COMMITTED_CONFIG__: FirebaseWebConfig | null;
+
+const committed = __FIREBASE_COMMITTED_CONFIG__;
+const fallback: FirebaseWebConfig = committed ?? {
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: "",
+};
 
 const firebaseConfig = resolveFirebaseWebConfig(
   {
@@ -20,14 +32,8 @@ const firebaseConfig = resolveFirebaseWebConfig(
     VITE_FIREBASE_MESSAGING_SENDER_ID: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
     VITE_FIREBASE_APP_ID: import.meta.env.VITE_FIREBASE_APP_ID,
   },
-  {
-    apiKey: firebaseConfigData.apiKey,
-    authDomain: firebaseConfigData.authDomain,
-    projectId: firebaseConfigData.projectId,
-    storageBucket: firebaseConfigData.storageBucket,
-    messagingSenderId: firebaseConfigData.messagingSenderId,
-    appId: firebaseConfigData.appId,
-  }
+  fallback,
+  { runtime: firebaseRuntime({ VERCEL_ENV: __VERCEL_ENV__ }) },
 );
 
 let app: FirebaseApp;
@@ -44,9 +50,7 @@ if (!getApps().length) {
 }
 
 export const auth: Auth = getAuth(app);
-export const db: Firestore = firebaseConfigData.firestoreDatabaseId && firebaseConfigData.firestoreDatabaseId !== "(default)"
-  ? getFirestore(app, firebaseConfigData.firestoreDatabaseId)
-  : getFirestore(app);
+export const db: Firestore = getFirestore(app);
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({

@@ -16,6 +16,15 @@ service cloud.firestore {
     // A document with no publishing field and published == true counts.
     // An explicit draft does not. Any other publishing shape is not published here;
     // the planner sends those records to manual review instead of granting.
+    // A non-empty selectedTemplate is the permanent choice.
+    // Later updates may edit content, but they may not replace that id.
+    // A missing or blank value can still be set once.
+    function templateSelectionLocked() {
+      return resource.data.keys().hasAny(["selectedTemplate"])
+        && resource.data.selectedTemplate is string
+        && resource.data.selectedTemplate.size() > 0;
+    }
+
     function portfolioIsPublished(data) {
       return data.keys().hasAny(["publishing"])
         ? data.publishing is map && data.publishing.get("status", "") == "published"
@@ -23,36 +32,44 @@ service cloud.firestore {
     }
 
     // Server-only switch at publishingControls/gate.
-    // A missing document, or any value other than enabled == true, leaves the gate off
-    // so a deploy of these rules does not lock publishing.
-    // An operator enables it later with the Admin SDK after the grandfather migration.
+    // A new publication requires this document to exist and enabled to be exactly true.
+    // A missing document, a rules read error, or any other value blocks that publication.
     // Clients cannot write this document. Rules cannot read environment variables.
     function publishingGateEnabled() {
       return exists(/databases/$(database)/documents/publishingControls/gate)
         && get(/databases/$(database)/documents/publishingControls/gate).data.enabled == true;
     }
 
-    // publishingEntitlements/{uid} is written only by the Admin SDK.
-    // status must be active and the document id must be the same account.
-    function hasActivePublishingEntitlement(uid) {
-      return exists(/databases/$(database)/documents/publishingEntitlements/$(uid))
-        ? get(/databases/$(database)/documents/publishingEntitlements/$(uid)).data.get("uid", "") == uid
-          && get(/databases/$(database)/documents/publishingEntitlements/$(uid)).data.get("status", "") == "active"
-        : false;
+    // Historical publishingEntitlements/{uid} stays readable by its owner.
+    // It does not authorize a new publication. A new publication reads
+    // portfolioPublishingEntitlements/{portfolioId} for this portfolio only.
+    // A missing expiresAt keeps a grandfathered record valid.
+    // A present expiresAt must be a timestamp strictly after request.time.
+    // Null, a string, or any other value does not authorize publication.
+    function portfolioEntitlementExpiryAllowsPublication(data) {
+      return !data.keys().hasAny(["expiresAt"])
+        || (data.expiresAt is timestamp && data.expiresAt > request.time);
     }
 
-    // Becoming published is free while the gate is off.
-    // While the gate is on, an already published portfolio can still be saved,
-    // and a draft can become published only with an active entitlement.
-    // Ternaries avoid reading resource or a missing entitlement document.
-    function mayBecomePublished() {
-      return !publishingGateEnabled()
+    function hasActivePortfolioPublishingEntitlement(portfolioId) {
+      return exists(/databases/$(database)/documents/portfolioPublishingEntitlements/$(portfolioId))
+        && get(/databases/$(database)/documents/portfolioPublishingEntitlements/$(portfolioId)).data.portfolioId == portfolioId
+        && get(/databases/$(database)/documents/portfolioPublishingEntitlements/$(portfolioId)).data.uid == request.auth.uid
+        && get(/databases/$(database)/documents/portfolioPublishingEntitlements/$(portfolioId)).data.status == "active"
+        && portfolioEntitlementExpiryAllowsPublication(
+          get(/databases/$(database)/documents/portfolioPublishingEntitlements/$(portfolioId)).data
+        );
+    }
+
+    // A draft becomes published only when the gate is enabled and this portfolio
+    // has an active entitlement. An already stored published document may still
+    // be saved. Create has no resource, so that branch must not read resource.data.
+    // && short-circuits: a missing gate or entitlement is not read, and a thrown
+    // get() denies the write.
+    function mayBecomePublished(portfolioId) {
+      return resource != null && portfolioIsPublished(resource.data)
         ? true
-        : resource == null
-          ? hasActivePublishingEntitlement(request.auth.uid)
-          : portfolioIsPublished(resource.data)
-            ? true
-            : hasActivePublishingEntitlement(request.auth.uid);
+        : publishingGateEnabled() && hasActivePortfolioPublishingEntitlement(portfolioId);
     }
 
     function isReservedSlug(slug) {
@@ -84,14 +101,17 @@ service cloud.firestore {
     // Portfolio document rules. Anonymous reads stay denied, including after publication.
     match /portfolios/{portfolioId} {
       allow read: if isSignedIn() && resource.data.ownerId == request.auth.uid;
-      allow create: if isSignedIn()
-        && request.resource.data.ownerId == request.auth.uid
-        && (!portfolioIsPublished(request.resource.data) || mayBecomePublished());
+      // Portfolio documents are created by the trusted server, which bypasses these rules.
+      // A signed-in client cannot create one, including a second portfolio for a new account.
+      allow create: if false;
       allow update: if isSignedIn()
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.ownerId == request.auth.uid
-        && (!portfolioIsPublished(request.resource.data) || mayBecomePublished());
-      allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        && (!portfolioIsPublished(request.resource.data) || mayBecomePublished(portfolioId))
+        && (!templateSelectionLocked() || request.resource.data.selectedTemplate == resource.data.selectedTemplate);
+      allow delete: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid
+        && !templateSelectionLocked();
 
       // Projects subcollection rules.
       // Writes require the signed-in user to own the parent portfolio.
@@ -157,6 +177,12 @@ service cloud.firestore {
         && request.resource.data.publicId == publicId
         && request.resource.data.keys().hasOnly(presentationKeys())
         && request.resource.data.selectedTemplate is string
+        && (
+          !privatePortfolioAfter().data.keys().hasAny(["selectedTemplate"])
+          || !(privatePortfolioAfter().data.selectedTemplate is string)
+          || privatePortfolioAfter().data.selectedTemplate.size() == 0
+          || request.resource.data.selectedTemplate == privatePortfolioAfter().data.selectedTemplate
+        )
         && request.resource.data.profile is map
         && request.resource.data.profile.keys().hasOnly([
           "brandName", "logo", "heroImage", "heroImageMobile", "headline",
@@ -341,11 +367,23 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Permanent publishing right for one account. The Admin SDK grants it.
+    // Historical account publishing right. The Admin SDK created it.
     // The owner may read their own record. Clients cannot create, change, or delete it.
-    // Unpublishing a portfolio does not match this document, so the right remains.
+    // It does not authorize publishing a portfolio.
     match /publishingEntitlements/{uid} {
       allow get: if isOwner(uid);
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    // Publishing right for one portfolio. The Admin SDK grants it after a verified payment
+    // or an approved association with the one portfolio already published under an older right.
+    // The owner may read it. Clients cannot create, change, or delete it.
+    // Unpublishing does not match this document, so the right remains.
+    match /portfolioPublishingEntitlements/{portfolioId} {
+      allow get: if isSignedIn()
+        && resource.data.uid == request.auth.uid
+        && resource.data.portfolioId == portfolioId;
       allow list: if false;
       allow create, update, delete: if false;
     }
@@ -358,9 +396,24 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    // Publishing gate. Absent or not exactly enabled means publishing stays free.
+    // Publishing gate. Clients cannot read or write it.
+    // A missing document, or any value other than enabled == true, blocks a new publication.
     match /publishingControls/{document} {
       allow read, write: if false;
+    }
+
+    // Historical account lock documents. Clients cannot read or write them.
+    // Creating a portfolio does not read or write this collection.
+    match /accountPortfolios/{uid} {
+      allow read, write: if false;
+    }
+
+    // Creation request ids. Only the trusted server writes them, inside the create transaction.
+    match /portfolioCreateRequests/{uid} {
+      allow read, write: if false;
+      match /items/{requestId} {
+        allow read, write: if false;
+      }
     }
 
     // Default deny all other collections

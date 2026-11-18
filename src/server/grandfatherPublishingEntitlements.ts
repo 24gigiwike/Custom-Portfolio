@@ -24,8 +24,10 @@ import {
  * still run. Re-running the plan is idempotent: accounts that already have a
  * document are skipped.
  *
- * Unpublished portfolios are not granted a right. Unpublishing later does not
- * delete the entitlement, so a grandfathered account can publish again.
+ * Unpublished portfolios are not granted a right. These account documents stay
+ * in place. They do not authorize every portfolio the account creates later.
+ * Associating one with the single portfolio already published under it is a
+ * separate review. This module does not write that association.
  */
 
 export interface GrandfatherSource {

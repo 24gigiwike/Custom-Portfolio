@@ -15,6 +15,8 @@ import { isPortfolioDesignPath } from "./components/portfolio-design/portfolioDe
 import { PortfolioDesign } from "./components/portfolio-design/PortfolioDesign";
 import { isPortfolioPublishPath } from "./components/portfolio-publish/portfolioPublishPath";
 import { PortfolioPublish } from "./components/portfolio-publish/PortfolioPublish";
+import { PublishingPaymentReturn } from "./components/portfolio-publish/PublishingPaymentReturn";
+import { isPublishingPaymentReturnPath, publishingPaymentReturnOutcome } from "./components/portfolio-publish/publishingReturnPath";
 import { isPortfolioSeoPath } from "./components/portfolio-seo/portfolioSeoPath";
 import { PortfolioSeo } from "./components/portfolio-seo/PortfolioSeo";
 import { platformRobots, platformTitle, siteEnvironmentFromHost } from "./lib/portfolioSeo";
@@ -56,7 +58,9 @@ function AppContent() {
   } = useAuth();
   const [isRetryingAccount, setIsRetryingAccount] = useState(false);
   const [hasCompletedSplash, setHasCompletedSplash] = useState(
-    () => isFramedPortfolioReview(window.location.search) || isPublicPortfolioPath(window.location.pathname)
+    () => isFramedPortfolioReview(window.location.search)
+      || isPublicPortfolioPath(window.location.pathname)
+      || isPublishingPaymentReturnPath(window.location.pathname)
   );
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
     const path = window.location.pathname;
@@ -246,6 +250,22 @@ function AppContent() {
       <Suspense fallback={<div className="min-h-screen bg-[#F8F5F0]" />}>
         <PublicPortfolioView publicId={publicPortfolioId} />
       </Suspense>
+    );
+  }
+
+  const paymentReturn = publishingPaymentReturnOutcome(currentRoute);
+  if (paymentReturn) {
+    const session = user
+      ? "signed-in"
+      : isAuthLoading || authPhase === "AUTH_LOADING"
+        ? "checking"
+        : "signed-out";
+    return (
+      <PublishingPaymentReturn
+        outcome={paymentReturn}
+        session={session}
+        onOpenPath={navigateTo}
+      />
     );
   }
 

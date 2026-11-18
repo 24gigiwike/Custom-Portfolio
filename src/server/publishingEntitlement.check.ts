@@ -9,6 +9,7 @@ import {
   isPublishingGateEnabled,
   isValidActiveEntitlement,
   planGrandfatherEntitlements,
+  planPortfolioEntitlementCompatibility,
   type PublishingEntitlement,
 } from "../lib/publishingEntitlement";
 import {
@@ -174,12 +175,55 @@ await assert.rejects(
   /permission denied/,
 );
 
+const grandfatherAccount = grandfatherEntitlementDocument("grandfather-user", grantedAt);
+const onePublished = planPortfolioEntitlementCompatibility({
+  uid: "grandfather-user",
+  accountEntitlement: grandfatherAccount,
+  portfolios: [
+    { portfolioId: "published-one", ownerId: "grandfather-user", data: published },
+    { portfolioId: "draft-one", ownerId: "grandfather-user", data: { publishing: { status: "draft" }, published: false } },
+  ],
+  grantedAt,
+});
+assert.equal(onePublished.action, "associate");
+if (onePublished.action === "associate") {
+  assert.equal(onePublished.portfolioEntitlement.portfolioId, "published-one");
+  assert.equal(onePublished.portfolioEntitlement.uid, "grandfather-user");
+  assert.equal(onePublished.portfolioEntitlement.source, "grandfathered");
+  assert.equal(onePublished.portfolioEntitlement.paymentId, null);
+}
+assert.deepEqual(grandfatherAccount, grandfatherEntitlementDocument("grandfather-user", grantedAt));
+const severalPublished = planPortfolioEntitlementCompatibility({
+  uid: "grandfather-user",
+  accountEntitlement: grandfatherAccount,
+  portfolios: [
+    { portfolioId: "published-one", ownerId: "grandfather-user", data: published },
+    { portfolioId: "published-two", ownerId: "grandfather-user", data: published },
+  ],
+  grantedAt,
+});
+assert.deepEqual(severalPublished, { action: "leave-untouched", reason: "multiple-published-portfolios" });
+const nonePublished = planPortfolioEntitlementCompatibility({
+  uid: "grandfather-user",
+  accountEntitlement: grandfatherAccount,
+  portfolios: [
+    { portfolioId: "draft-one", ownerId: "grandfather-user", data: { publishing: { status: "draft" }, published: false } },
+  ],
+  grantedAt,
+});
+assert.deepEqual(nonePublished, { action: "leave-untouched", reason: "no-published-portfolio" });
+
 const rules = readFileSync(new URL("../../firestore.rules", import.meta.url), "utf8");
 assert.match(rules, /publishingControls\/gate/);
 assert.match(rules, /enabled == true/);
 assert.match(rules, /match \/publishingEntitlements\/\{uid\}/);
+assert.match(rules, /match \/portfolioPublishingEntitlements\/\{portfolioId\}/);
 assert.match(rules, /match \/payments\/\{paymentId\}/);
 assert.match(rules, /allow create, update, delete: if false;/);
+assert.match(rules, /publishingGateEnabled\(\) && hasActivePortfolioPublishingEntitlement\(portfolioId\)/);
+assert.doesNotMatch(rules, /hasActivePublishingEntitlement\(request\.auth\.uid\)/);
+assert.doesNotMatch(rules, /accountLocksPortfolio/);
+assert.doesNotMatch(rules, /!publishingGateEnabled\(\)/);
 assert.equal(isValidActiveEntitlement(paymentEntitlement, "paid-user"), true);
 assert.equal(isValidActiveEntitlement(paymentEntitlement, "other-user"), false);
 

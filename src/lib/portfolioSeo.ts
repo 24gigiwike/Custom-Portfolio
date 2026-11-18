@@ -408,6 +408,8 @@ export function platformTitle(path: string): string {
   if (pathname === "/portfolio/design") return `Portfolio Design — ${PRODUCT_NAME}`;
   if (pathname === "/portfolio/review") return `Review Portfolio — ${PRODUCT_NAME}`;
   if (pathname === "/portfolio/publish") return `Publish Portfolio — ${PRODUCT_NAME}`;
+  if (pathname === "/portfolio/publish/return") return `Payment verification — ${PRODUCT_NAME}`;
+  if (pathname === "/portfolio/publish/cancelled") return `Checkout cancelled — ${PRODUCT_NAME}`;
   if (pathname === "/portfolio/seo") return `Portfolio SEO — ${PRODUCT_NAME}`;
   return PRODUCT_NAME;
 }

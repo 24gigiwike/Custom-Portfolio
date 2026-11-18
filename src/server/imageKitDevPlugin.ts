@@ -48,6 +48,8 @@ const RETIRED_ROUTE = JSON.stringify({ error: "This upload route is no longer av
  * which is where Cursor Cloud secrets are injected. Values already set on
  * the process win over the file. Nothing is written back to the process
  * environment and nothing is logged.
+ * VERCEL_ENV is forced empty so this dev server stays on the local project
+ * rules and cannot select the production Firebase project.
  */
 export function imageKitDevServerEnv(mode: string, envDir: string): NodeJS.ProcessEnv {
   const loaded = loadEnv(mode, envDir, "");
@@ -55,6 +57,17 @@ export function imageKitDevServerEnv(mode: string, envDir: string): NodeJS.Proce
     IMAGEKIT_PRIVATE_KEY: loaded.IMAGEKIT_PRIVATE_KEY,
     IMAGEKIT_PUBLIC_KEY: loaded.IMAGEKIT_PUBLIC_KEY,
     IMAGEKIT_URL_ENDPOINT: loaded.IMAGEKIT_URL_ENDPOINT,
+    FIREBASE_PROJECT_ID: loaded.FIREBASE_PROJECT_ID,
+    VITE_FIREBASE_PROJECT_ID: loaded.VITE_FIREBASE_PROJECT_ID,
+    FIREBASE_ADMIN_PROJECT_ID: loaded.FIREBASE_ADMIN_PROJECT_ID,
+    FIREBASE_ADMIN_CLIENT_EMAIL: loaded.FIREBASE_ADMIN_CLIENT_EMAIL,
+    FIREBASE_ADMIN_PRIVATE_KEY: loaded.FIREBASE_ADMIN_PRIVATE_KEY,
+    BACHS_API_KEY: loaded.BACHS_API_KEY,
+    BACHS_WEBHOOK_SECRET: loaded.BACHS_WEBHOOK_SECRET,
+    BACHS_PUBLISHING_PRODUCT_ID: loaded.BACHS_PUBLISHING_PRODUCT_ID,
+    BACHS_PUBLISHING_SUCCESS_URL: loaded.BACHS_PUBLISHING_SUCCESS_URL,
+    BACHS_PUBLISHING_CANCEL_URL: loaded.BACHS_PUBLISHING_CANCEL_URL,
+    VERCEL_ENV: "",
   };
 }
 
@@ -95,6 +108,24 @@ export function imageKitDevPlugin(): Plugin {
           res.setHeader("cache-control", "no-store");
           res.setHeader("x-robots-tag", "noindex");
           res.end(RETIRED_ROUTE);
+          return;
+        }
+        if (pathname === "/api/publishing-checkout") {
+          const upload = await server.ssrLoadModule("/src/server/imageKitServerUpload.ts") as typeof import("./imageKitServerUpload");
+          const checkout = await server.ssrLoadModule("/src/server/publishingCheckoutHandler.ts") as typeof import("./publishingCheckoutHandler");
+          const body = await upload.readBoundedRequestBody(req, 16_384);
+          if (body === "too-large") {
+            res.statusCode = 413;
+            res.setHeader("content-type", "application/json; charset=utf-8");
+            res.setHeader("cache-control", "no-store");
+            res.end(JSON.stringify({ error: "The publishing request is not valid.", code: "invalid-request" }));
+            return;
+          }
+          await checkout.handlePublishingCheckout(
+            { method: req.method, headers: req.headers, body },
+            nodeResponse(res),
+            { env: imageKitDevServerEnv(server.config.mode, server.config.envDir || server.config.root) },
+          );
           return;
         }
         if (pathname !== "/api/imagekit-upload") {

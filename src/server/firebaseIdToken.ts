@@ -1,9 +1,16 @@
 import { createVerify } from "node:crypto";
+import {
+  expectedFirebaseProjectId,
+  FirebaseProjectIsolationError,
+  firebaseRuntime,
+  firebaseRuntimeLabel,
+  PRODUCTION_FIREBASE_PROJECT_ID,
+} from "../lib/firebaseEnvironment";
 
 const FIREBASE_CERTS_URL =
   "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com";
 
-export const DEFAULT_FIREBASE_PROJECT_ID = "custom-portfolio-2026";
+export const DEFAULT_FIREBASE_PROJECT_ID = PRODUCTION_FIREBASE_PROJECT_ID;
 
 const TOKEN_MAX_CHARS = 8192;
 const CLOCK_SKEW_SECONDS = 60;
@@ -24,9 +31,24 @@ type CertMap = Record<string, string>;
 
 let certCache: { expiresAt: number; certs: CertMap } | null = null;
 
-export function firebaseProjectId(): string {
-  const fromEnv = process.env.FIREBASE_PROJECT_ID?.trim() || process.env.VITE_FIREBASE_PROJECT_ID?.trim();
-  return fromEnv || DEFAULT_FIREBASE_PROJECT_ID;
+export function firebaseProjectId(env: NodeJS.ProcessEnv = process.env): string {
+  const runtime = firebaseRuntime(env);
+  const expected = expectedFirebaseProjectId(runtime);
+  const server = env.FIREBASE_PROJECT_ID?.trim() ?? "";
+  const client = env.VITE_FIREBASE_PROJECT_ID?.trim() ?? "";
+  if (server && client && server !== client) {
+    throw new FirebaseProjectIsolationError("Firebase client and server project IDs do not match.");
+  }
+  const selected = server || client;
+  const label = firebaseRuntimeLabel(runtime);
+  if (!selected) {
+    if (runtime === "production") return expected;
+    throw new FirebaseProjectIsolationError(`${label} requires FIREBASE_PROJECT_ID=${expected}.`);
+  }
+  if (selected !== expected) {
+    throw new FirebaseProjectIsolationError(`${label} must use Firebase project ${expected}.`);
+  }
+  return selected;
 }
 
 function decodeBase64UrlJson(segment: string): unknown {

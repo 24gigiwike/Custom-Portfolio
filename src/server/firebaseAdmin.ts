@@ -1,5 +1,10 @@
 import { cert, getApp, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import {
+  expectedFirebaseProjectId,
+  FirebaseProjectIsolationError,
+  firebaseRuntime,
+} from "../lib/firebaseEnvironment";
 
 export const FIREBASE_ADMIN_ENV_KEYS = [
   "FIREBASE_ADMIN_PROJECT_ID",
@@ -26,7 +31,30 @@ export function readFirebaseAdminCredentials(env: NodeJS.ProcessEnv = process.en
   return { projectId, clientEmail, privateKey };
 }
 
+export function assertFirebaseAdminForRuntime(env: NodeJS.ProcessEnv = process.env): void {
+  const present = FIREBASE_ADMIN_ENV_KEYS.filter((key) => (env[key]?.trim() ?? "") !== "");
+  if (present.length === 0) return;
+  if (present.length !== FIREBASE_ADMIN_ENV_KEYS.length) {
+    throw new FirebaseProjectIsolationError(
+      "Set FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL, and FIREBASE_ADMIN_PRIVATE_KEY together.",
+    );
+  }
+  const credentials = readFirebaseAdminCredentials(env);
+  if (!credentials) {
+    throw new FirebaseProjectIsolationError("Firebase Admin credentials are not valid for this environment.");
+  }
+  const expected = expectedFirebaseProjectId(firebaseRuntime(env));
+  const selected = env.FIREBASE_PROJECT_ID?.trim() || env.VITE_FIREBASE_PROJECT_ID?.trim() || "";
+  if (credentials.projectId !== expected || (selected && selected !== credentials.projectId)) {
+    throw new FirebaseProjectIsolationError(`Firebase Admin credentials do not belong to ${expected}.`);
+  }
+  if (!credentials.clientEmail.endsWith(`@${credentials.projectId}.iam.gserviceaccount.com`)) {
+    throw new FirebaseProjectIsolationError(`Firebase Admin credentials do not belong to ${expected}.`);
+  }
+}
+
 export function firebaseAdminApp(env: NodeJS.ProcessEnv = process.env): App | null {
+  assertFirebaseAdminForRuntime(env);
   const credentials = readFirebaseAdminCredentials(env);
   if (!credentials) return null;
   const appName = `custom-portfolio-admin-${credentials.projectId}`;

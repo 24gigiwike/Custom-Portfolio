@@ -1,3 +1,10 @@
+import {
+  expectedFirebaseProjectId,
+  FirebaseProjectIsolationError,
+  firebaseRuntimeLabel,
+  type FirebaseRuntime,
+} from "./firebaseEnvironment";
+
 export interface FirebaseWebConfig {
   apiKey: string;
   authDomain: string;
@@ -29,27 +36,73 @@ function isProvided(value: string | undefined): value is string {
   return typeof value === "string" && value.trim() !== "";
 }
 
+function bucketMatchesProject(bucket: string, projectId: string): boolean {
+  if (bucket.endsWith(".firebasestorage.app") || bucket.endsWith(".appspot.com")) {
+    return bucket === `${projectId}.firebasestorage.app` || bucket === `${projectId}.appspot.com`;
+  }
+  return true;
+}
+
+function assertSelectedProject(config: FirebaseWebConfig, runtime: FirebaseRuntime): void {
+  const expected = expectedFirebaseProjectId(runtime);
+  const label = firebaseRuntimeLabel(runtime);
+  if (config.projectId !== expected) {
+    throw new FirebaseProjectIsolationError(`${label} must use Firebase project ${expected}.`);
+  }
+  if (config.authDomain.endsWith(".firebaseapp.com") && config.authDomain !== `${expected}.firebaseapp.com`) {
+    throw new FirebaseProjectIsolationError("Firebase auth domain does not match the selected project.");
+  }
+  if (!bucketMatchesProject(config.storageBucket, expected)) {
+    throw new FirebaseProjectIsolationError("Firebase storage bucket does not match the selected project.");
+  }
+}
+
 /**
- * Use either a complete VITE_FIREBASE_* set or the committed configuration.
- * A partial set must not be mixed with the fallback project.
+ * Local development and Vercel Preview require the complete staging web config.
+ * Vercel Production may use that same complete set for custom-portfolio-2026,
+ * or the committed production config when every VITE_FIREBASE_* value is empty.
+ * A partial set is never mixed with the other project.
  */
 export function resolveFirebaseWebConfig(
   env: Partial<Record<(typeof FIREBASE_ENV_KEYS)[number], string | undefined>>,
-  fallback: FirebaseWebConfig
+  fallback: FirebaseWebConfig,
+  options: { runtime: FirebaseRuntime },
 ): FirebaseWebConfig {
+  const runtime = options.runtime;
+  const expected = expectedFirebaseProjectId(runtime);
   const provided = ENV_TO_FIELD.filter(([key]) => isProvided(env[key]));
+  const missing = ENV_TO_FIELD.filter(([key]) => !isProvided(env[key])).map(([key]) => key);
+
+  if (runtime !== "production") {
+    if (provided.length !== ENV_TO_FIELD.length) {
+      throw new FirebaseProjectIsolationError(
+        `${firebaseRuntimeLabel(runtime)} requires a complete Firebase web configuration for ${expected}. Missing: ${missing.join(", ")}.`,
+      );
+    }
+    const selected = webConfigFromEnv(env);
+    assertSelectedProject(selected, runtime);
+    return selected;
+  }
 
   if (provided.length === 0) {
+    assertSelectedProject(fallback, runtime);
     return fallback;
   }
 
   if (provided.length !== ENV_TO_FIELD.length) {
-    const missing = ENV_TO_FIELD.filter(([key]) => !isProvided(env[key])).map(([key]) => key);
-    throw new Error(
-      `Incomplete Firebase configuration. Set all of ${FIREBASE_ENV_KEYS.join(", ")} together, or set none of them to use the committed custom-portfolio-2026 configuration. Missing: ${missing.join(", ")}.`
+    throw new FirebaseProjectIsolationError(
+      `Incomplete Firebase configuration. Set all of ${FIREBASE_ENV_KEYS.join(", ")} together. Missing: ${missing.join(", ")}.`,
     );
   }
 
+  const selected = webConfigFromEnv(env);
+  assertSelectedProject(selected, runtime);
+  return selected;
+}
+
+function webConfigFromEnv(
+  env: Partial<Record<(typeof FIREBASE_ENV_KEYS)[number], string | undefined>>,
+): FirebaseWebConfig {
   return {
     apiKey: env.VITE_FIREBASE_API_KEY!.trim(),
     authDomain: env.VITE_FIREBASE_AUTH_DOMAIN!.trim(),

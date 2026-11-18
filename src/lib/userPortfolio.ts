@@ -25,6 +25,8 @@ import {
   publishPlanMessage,
   unpublishDocumentFields,
 } from "./portfolioPublishing";
+import { PORTFOLIO_PUBLISHING_ENTITLEMENT_COLLECTION } from "./publishingEntitlement";
+import { classifyPortfolioPublishingAccess, publishingAccessMessage } from "./publishingTerm";
 import {
   publicDeliveryForSavedContent,
   publicDeliveryForUnpublish,
@@ -240,6 +242,7 @@ export async function publishPortfolio(portfolioId: string): Promise<UserPortfol
     await runTransaction(db, async (transaction) => {
       const snap = await transaction.get(portfolioRef);
       const identitySnap = await transaction.get(identityRef(portfolioId));
+      const entitlementSnap = await transaction.get(doc(db, PORTFOLIO_PUBLISHING_ENTITLEMENT_COLLECTION, portfolioId));
       const plan = planPublish({
         actorId,
         owned: snap.exists() ? { id: snap.id, data: snap.data() } : null,
@@ -258,6 +261,13 @@ export async function publishPortfolio(portfolioId: string): Promise<UserPortfol
       }
 
       if (plan.action !== "publish" || plan.portfolioId !== portfolioId) return;
+      const access = classifyPortfolioPublishingAccess({
+        uid: actorId,
+        portfolioId,
+        record: entitlementSnap.exists() ? entitlementSnap.data() : null,
+        now: new Date(),
+      });
+      if (access !== "entitled") throw new Error(publishingAccessMessage(access));
       const publishedAt = plan.publishedAt ?? serverTimestamp();
       const fields = publicPortfolioFromUserPortfolio({
         ...current,

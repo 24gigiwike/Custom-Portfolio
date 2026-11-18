@@ -18,6 +18,9 @@
     },
     "api/imagekit-upload.ts": {
       "maxDuration": 10
+    },
+    "api/publishing-checkout.ts": {
+      "maxDuration": 10
     }
   }
 }

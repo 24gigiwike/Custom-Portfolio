@@ -1,18 +1,37 @@
 /**
- * Server-managed publishing right for the current one-portfolio account.
- * Clients cannot create, change, or delete these documents.
- * The publishing gate stays off until publishingControls/gate is set to
- * { enabled: true } by the Admin SDK. A missing control document does not lock publishing.
+ * Publishing rights belong to one portfolio.
+ * An older account document stays where it is and is not copied onto other portfolios.
+ * Clients cannot create, change, or delete entitlement documents.
+ * A new publication is allowed only when publishingControls/gate exists and
+ * enabled is exactly true, and that portfolio has an active entitlement.
+ * A missing, disabled, or unreadable gate blocks publishing. This module does
+ * not write the gate and does not grant an entitlement.
  */
 
 export const PUBLISHING_ENTITLEMENT_COLLECTION = "publishingEntitlements";
+export const PORTFOLIO_PUBLISHING_ENTITLEMENT_COLLECTION = "portfolioPublishingEntitlements";
 export const PAYMENT_COLLECTION = "payments";
 export const PUBLISHING_GATE_COLLECTION = "publishingControls";
 export const PUBLISHING_GATE_DOCUMENT_ID = "gate";
 
-/** One-time Custom Portfolio publishing price. Stored as whole naira, not kobo. */
+/**
+ * One-time price for 12 months of publishing on one portfolio.
+ * Stored as whole naira, not kobo. Bachs does not renew this charge.
+ * The application calculates the 12-month period after a verified payment.
+ */
 export const PUBLISHING_PRICE_AMOUNT = 10_000;
 export const PUBLISHING_PRICE_CURRENCY = "NGN" as const;
+export const PUBLISHING_TERM_MONTHS = 12;
+
+export const ANNUAL_PUBLISHING_PLAN = {
+  plan: "Annual Publishing",
+  priceLabel: "₦10,000",
+  duration: "12 months",
+  payment: "One-time payment",
+  renewal: "Manual renewal required",
+  automaticCharges: "None",
+  hostedCheckoutText: "Custom Portfolio Annual Publishing Plan – 12 months",
+} as const;
 
 export type PublishingEntitlementStatus = "active";
 export type PublishingEntitlementSource = "grandfathered" | "payment";
@@ -200,4 +219,121 @@ export function planGrandfatherEntitlements(input: {
   }
 
   return { grants, skipped };
+}
+
+/** One publishing right for one portfolio. A payment id is present only for a verified payment. */
+export interface PortfolioPublishingEntitlement {
+  uid: string;
+  portfolioId: string;
+  status: "active";
+  source: PublishingEntitlementSource;
+  paymentId: string | null;
+  providerReference: string | null;
+  grantedAt: string;
+  grantReason: "published-before-payment-gate" | "verified-payment";
+  schemaVersion: 1;
+}
+
+export function portfolioPublishingEntitlementPath(portfolioId: string): string {
+  return `${PORTFOLIO_PUBLISHING_ENTITLEMENT_COLLECTION}/${portfolioId}`;
+}
+
+export function isValidPortfolioPublishingEntitlement(
+  record: unknown,
+  uid: string,
+  portfolioId: string,
+): record is PortfolioPublishingEntitlement {
+  if (!record || typeof record !== "object") return false;
+  const data = record as Partial<PortfolioPublishingEntitlement>;
+  return data.uid === uid
+    && data.portfolioId === portfolioId
+    && data.status === "active"
+    && (data.source === "grandfathered" || data.source === "payment")
+    && (data.grantReason === "published-before-payment-gate" || data.grantReason === "verified-payment")
+    && typeof data.grantedAt === "string"
+    && data.grantedAt.trim() !== ""
+    && data.schemaVersion === 1
+    && (data.paymentId === null || typeof data.paymentId === "string")
+    && (data.providerReference === null || typeof data.providerReference === "string");
+}
+
+export type PortfolioEntitlementCompatibility =
+  | { action: "associate"; portfolioEntitlement: PortfolioPublishingEntitlement }
+  | {
+      action: "leave-untouched";
+      reason:
+        | "missing-account-entitlement"
+        | "invalid-account-entitlement"
+        | "no-published-portfolio"
+        | "multiple-published-portfolios"
+        | "already-associated"
+        | "existing-portfolio-record-needs-review";
+    };
+
+function readableAccountEntitlement(record: unknown, uid: string): PublishingEntitlement | null {
+  if (!isValidActiveEntitlement(record, uid) || !record || typeof record !== "object") return null;
+  const data = record as Partial<PublishingEntitlement>;
+  if (data.grantReason !== "published-before-payment-gate" && data.grantReason !== "verified-payment") return null;
+  if (typeof data.grantedAt !== "string" || data.grantedAt.trim() === "") return null;
+  if (data.paymentId != null && typeof data.paymentId !== "string") return null;
+  if (data.providerReference != null && typeof data.providerReference !== "string") return null;
+  if (data.source === "payment" && (typeof data.paymentId !== "string" || data.paymentId.trim() === "")) return null;
+  if (data.source === "grandfathered" && data.paymentId != null) return null;
+  return data as PublishingEntitlement;
+}
+
+/**
+ * Propose one portfolio right from an existing account right.
+ * The account document is not returned and is never replaced.
+ * Zero published portfolios, or more than one, stay untouched for manual review.
+ * This function does not write to Firestore.
+ */
+export function planPortfolioEntitlementCompatibility(input: {
+  uid: string;
+  accountEntitlement: unknown;
+  portfolios: readonly GrandfatherPortfolio[];
+  existingPortfolioEntitlements?: ReadonlyMap<string, unknown>;
+  grantedAt: string;
+}): PortfolioEntitlementCompatibility {
+  if (input.accountEntitlement == null) {
+    return { action: "leave-untouched", reason: "missing-account-entitlement" };
+  }
+  const account = readableAccountEntitlement(input.accountEntitlement, input.uid);
+  if (!account) {
+    return { action: "leave-untouched", reason: "invalid-account-entitlement" };
+  }
+  const published = input.portfolios.filter((portfolio) => {
+    const owner = classifyGrandfatherOwnerId(portfolio.ownerId);
+    return owner.ok === true && owner.uid === input.uid && isGrandfatherPublication(portfolio.data);
+  });
+  if (published.length === 0) {
+    return { action: "leave-untouched", reason: "no-published-portfolio" };
+  }
+  if (published.length > 1) {
+    return { action: "leave-untouched", reason: "multiple-published-portfolios" };
+  }
+  const portfolioId = published[0].portfolioId;
+  const existing = input.existingPortfolioEntitlements?.get(portfolioId);
+  if (existing != null) {
+    return {
+      action: "leave-untouched",
+      reason: isValidPortfolioPublishingEntitlement(existing, input.uid, portfolioId)
+        ? "already-associated"
+        : "existing-portfolio-record-needs-review",
+    };
+  }
+  return {
+    action: "associate",
+    portfolioEntitlement: {
+      uid: input.uid,
+      portfolioId,
+      status: "active",
+      source: account.source,
+      paymentId: account.paymentId,
+      providerReference: account.providerReference,
+      grantedAt: account.grantedAt,
+      grantReason: account.grantReason,
+      schemaVersion: 1,
+    },
+  };
 }

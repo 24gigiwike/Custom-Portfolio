@@ -2,7 +2,8 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import fs from 'node:fs';
 import path from 'path';
-import {defineConfig, type Plugin} from 'vite';
+import {defineConfig, loadEnv, type Plugin} from 'vite';
+import { committedFirebaseWebConfig, validateFirebaseEnvironment } from './src/server/firebaseIsolation';
 import { imageKitDevPlugin } from './src/server/imageKitDevPlugin';
 import { portfolioSeoPlugin } from './src/server/seoPlugin';
 
@@ -46,8 +47,16 @@ function imageCompressionWorkerPlugin(root: string): Plugin {
   };
 }
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+  const loaded = loadEnv(mode, __dirname, '');
+  const vercelEnv = process.env.VERCEL_ENV?.trim() ?? '';
+  const firebaseEnv: NodeJS.ProcessEnv = { ...loaded, VERCEL_ENV: vercelEnv };
+  const web = validateFirebaseEnvironment(firebaseEnv, committedFirebaseWebConfig(__dirname));
   return {
+    define: {
+      __VERCEL_ENV__: JSON.stringify(vercelEnv),
+      __FIREBASE_COMMITTED_CONFIG__: JSON.stringify(vercelEnv === 'production' ? web : null),
+    },
     plugins: [imageKitDevPlugin(), react(), tailwindcss(), portfolioSeoPlugin(__dirname), imageCompressionWorkerPlugin(__dirname)],
     resolve: {
       alias: {
