@@ -1,4 +1,5 @@
-import { Bachs, BachsApiError, type CreateCheckoutSessionRequest } from "@bachs/sdk";
+import { BachsApiError, type CreateCheckoutSessionRequest } from "@bachs/sdk";
+import { publishingBachsClient } from "./bachsRuntime";
 import { FirebaseIdTokenError, firebaseProjectId, verifyFirebaseIdToken } from "./firebaseIdToken";
 import { FirebaseProjectIsolationError } from "../lib/firebaseEnvironment";
 import { firebaseAdminFirestore } from "./firebaseAdmin";
@@ -66,8 +67,7 @@ function jsonBody(body: unknown): unknown {
 }
 
 function gateway(env: NodeJS.ProcessEnv) {
-  const apiKey = env.BACHS_API_KEY?.trim() ?? "";
-  const bachs = new Bachs({ apiKey, logLevel: "off", timeoutMs: 8_000 });
+  const bachs = publishingBachsClient(env);
   return {
     async getProduct(productId: string) {
       try {
@@ -180,9 +180,11 @@ export async function handlePublishingCheckout(
     const snap = await db.collection(PORTFOLIO_PUBLISHING_ENTITLEMENT_COLLECTION).doc(portfolioId).get();
     return snap.exists ? snap.data() : null;
   });
-  const remote = options.getProduct && options.createCheckout
-    ? null
-    : gateway(env);
+  let remote: ReturnType<typeof gateway> | null = null;
+  const remoteGateway = () => {
+    remote ??= gateway(env);
+    return remote;
+  };
   const result = await executePublishingCheckout({
     uid,
     body: parsed,
@@ -191,8 +193,8 @@ export async function handlePublishingCheckout(
     loadPortfolio,
     loadEntitlement,
     store,
-    getProduct: options.getProduct ?? ((productId) => remote!.getProduct(productId)),
-    createCheckout: options.createCheckout ?? ((request, key) => remote!.createCheckout(request, key)),
+    getProduct: options.getProduct ?? ((productId) => remoteGateway().getProduct(productId)),
+    createCheckout: options.createCheckout ?? ((request, key) => remoteGateway().createCheckout(request, key)),
   });
   send(res, result.status, result.body);
 }

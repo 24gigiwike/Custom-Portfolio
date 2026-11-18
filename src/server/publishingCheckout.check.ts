@@ -14,6 +14,7 @@ const now = new Date("2026-11-17T08:00:00.000Z");
 const attemptA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const attemptB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const urls = {
+  BACHS_API_KEY: "sk_sandbox_test",
   BACHS_PUBLISHING_PRODUCT_ID: productId,
   BACHS_PUBLISHING_SUCCESS_URL: "https://preview.example.com/publish/return",
   BACHS_PUBLISHING_CANCEL_URL: "https://preview.example.com/publish/cancel",
@@ -186,7 +187,8 @@ assert.equal(source.includes("portfolioPublishingEntitlements"), false);
 assert.equal(source.includes("collection(\"payments\")"), false);
 const publishSource = readFileSync(new URL("../lib/userPortfolio.ts", import.meta.url), "utf8");
 const publishFn = publishSource.slice(publishSource.indexOf("export async function publishPortfolio"), publishSource.indexOf("export async function unpublishPortfolio"));
-assert.match(publishFn, /classifyPortfolioPublishingAccess/);
+assert.match(publishFn, /publicationAttemptAccess/);
+assert.equal(publishFn.includes("new Date()"), false);
 assert.match(publishFn, /access !== "entitled"/);
 const rules = readFileSync(new URL("../../firestore.rules", import.meta.url), "utf8");
 assert.match(rules, /data\.expiresAt is timestamp && data\.expiresAt > request\.time/);

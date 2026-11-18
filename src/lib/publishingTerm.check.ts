@@ -3,6 +3,7 @@ import {
   addPublishingTerm,
   classifyPortfolioPublishingAccess,
   planPublishingRenewal,
+  publicationAttemptAccess,
   type PublishingPaymentHistoryEntry,
 } from "./publishingTerm";
 
@@ -68,10 +69,18 @@ if ("expiresAt" in replay) {
 }
 
 const active = { uid: "owner-1", portfolioId: "portfolio01", status: "active" };
-assert.equal(classifyPortfolioPublishingAccess({ uid: "owner-1", portfolioId: "portfolio01", record: null, now: new Date("2026-11-17T00:00:00.000Z") }), "payment-required");
-assert.equal(classifyPortfolioPublishingAccess({ uid: "owner-1", portfolioId: "portfolio01", record: { ...active, portfolioId: "portfolio02" }, now: new Date("2026-11-17T00:00:00.000Z") }), "payment-required");
-assert.equal(classifyPortfolioPublishingAccess({ uid: "owner-1", portfolioId: "portfolio01", record: active, now: new Date("2026-11-17T00:00:00.000Z") }), "entitled");
-assert.equal(classifyPortfolioPublishingAccess({ uid: "owner-1", portfolioId: "portfolio01", record: { ...active, expiresAt: "2027-01-01T00:00:00.000Z" }, now: new Date("2026-11-17T00:00:00.000Z") }), "entitled");
-assert.equal(classifyPortfolioPublishingAccess({ uid: "owner-1", portfolioId: "portfolio01", record: { ...active, expiresAt: "2026-01-01T00:00:00.000Z" }, now: new Date("2026-11-17T00:00:00.000Z") }), "renewal-required");
+const now = new Date("2026-11-17T00:00:00.000Z");
+const futureStamp = { seconds: Math.floor(Date.parse("2027-01-01T00:00:00.000Z") / 1000), nanoseconds: 0 };
+const pastStamp = { toMillis: () => Date.parse("2026-01-01T00:00:00.000Z") };
+assert.equal(classifyPortfolioPublishingAccess({ uid: "owner-1", portfolioId: "portfolio01", record: null, now }), "payment-required");
+assert.equal(classifyPortfolioPublishingAccess({ uid: "owner-1", portfolioId: "portfolio01", record: { ...active, portfolioId: "portfolio02" }, now }), "payment-required");
+assert.equal(classifyPortfolioPublishingAccess({ uid: "owner-1", portfolioId: "portfolio01", record: active, now }), "entitled");
+assert.equal(classifyPortfolioPublishingAccess({ uid: "owner-1", portfolioId: "portfolio01", record: { ...active, expiresAt: futureStamp }, now }), "entitled");
+assert.equal(classifyPortfolioPublishingAccess({ uid: "owner-1", portfolioId: "portfolio01", record: { ...active, expiresAt: pastStamp }, now }), "renewal-required");
+assert.equal(classifyPortfolioPublishingAccess({ uid: "owner-1", portfolioId: "portfolio01", record: { ...active, expiresAt: "2027-01-01T00:00:00.000Z" }, now }), "renewal-required");
+assert.equal(classifyPortfolioPublishingAccess({ uid: "owner-1", portfolioId: "portfolio01", record: { ...active, expiresAt: null }, now }), "renewal-required");
+assert.equal(publicationAttemptAccess({ uid: "owner-1", portfolioId: "portfolio01", record: active }), "entitled");
+assert.equal(publicationAttemptAccess({ uid: "owner-1", portfolioId: "portfolio01", record: { ...active, expiresAt: pastStamp } }), "entitled");
+assert.equal(publicationAttemptAccess({ uid: "owner-1", portfolioId: "portfolio01", record: { ...active, expiresAt: "2027-01-01T00:00:00.000Z" } }), "renewal-required");
 
 console.log("publishing term checks passed");

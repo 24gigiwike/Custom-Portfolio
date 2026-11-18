@@ -7,6 +7,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import type { CreateCheckoutSessionRequest } from "@bachs/sdk";
 import { serverPublishingPriceQuote } from "./publishingPaymentDecision";
 import { classifyPortfolioPublishingAccess, type PublishingAccess } from "../lib/publishingTerm";
+import { assertBachsApiKeyForRuntime, assertBachsProductForRuntime, BachsRuntimeError } from "./bachsRuntime";
 
 export const PUBLISHING_CHECKOUT_COLLECTION = "publishingCheckoutAttempts";
 export const PUBLISHING_SUCCESS_URL_ENV = "BACHS_PUBLISHING_SUCCESS_URL";
@@ -199,9 +200,15 @@ export async function executePublishingCheckout(input: {
   if (urls.ok === false) {
     return { status: 503, body: { error: "Publishing payment is not available right now.", code: "return-url", missing: urls.missing, invalid: urls.invalid } };
   }
-  const productId = input.env.BACHS_PUBLISHING_PRODUCT_ID?.trim() ?? "";
-  if (!/^prod_[A-Za-z0-9]+$/.test(productId)) {
-    return { status: 503, body: { error: "Publishing payment is not available right now.", code: "missing-product" } };
+  let productId = "";
+  try {
+    assertBachsApiKeyForRuntime(input.env);
+    productId = assertBachsProductForRuntime(input.env);
+  } catch (error) {
+    if (error instanceof BachsRuntimeError) {
+      return { status: 503, body: { error: "Publishing payment is not available right now.", code: "unavailable" } };
+    }
+    throw error;
   }
 
   let product: ProductRecord;

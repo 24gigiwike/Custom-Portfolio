@@ -56,11 +56,53 @@ export function addPublishingTerm(from: Date): Date {
   ));
 }
 
+/** Firestore Timestamp millis. Strings and other values are not a timestamp. */
+export function firestoreExpiryMillis(value: unknown): number | null {
+  if (!value || typeof value !== "object") return null;
+  const stamp = value as {
+    toMillis?: () => number;
+    toDate?: () => Date;
+    seconds?: unknown;
+    nanoseconds?: unknown;
+    _seconds?: unknown;
+    _nanoseconds?: unknown;
+  };
+  if (typeof stamp.toMillis === "function") {
+    const millis = stamp.toMillis();
+    if (typeof millis === "number" && Number.isFinite(millis)) return millis;
+  }
+  if (typeof stamp.toDate === "function") {
+    const date = stamp.toDate();
+    const millis = date instanceof Date ? date.getTime() : Number.NaN;
+    if (Number.isFinite(millis)) return millis;
+  }
+  const seconds = typeof stamp.seconds === "number"
+    ? stamp.seconds
+    : typeof stamp._seconds === "number"
+      ? stamp._seconds
+      : null;
+  if (seconds == null || !Number.isFinite(seconds)) return null;
+  const nanos = typeof stamp.nanoseconds === "number"
+    ? stamp.nanoseconds
+    : typeof stamp._nanoseconds === "number"
+      ? stamp._nanoseconds
+      : 0;
+  if (!Number.isFinite(nanos)) return null;
+  return Math.trunc(seconds * 1000 + nanos / 1e6);
+}
+
+function activePortfolioRecord(record: unknown, uid: string, portfolioId: string): Record<string, unknown> | null {
+  if (!record || typeof record !== "object") return null;
+  const data = record as Record<string, unknown>;
+  if (data.uid !== uid || data.portfolioId !== portfolioId || data.status !== "active") return null;
+  return data;
+}
+
 /**
- * An active portfolio entitlement with no expiry stays valid.
- * Those records are the historical grants and are not rewritten here.
- * A stored expiry in the past requires renewal. Another portfolio's record
- * does not grant this portfolio.
+ * An active portfolio entitlement with no expiresAt field stays valid.
+ * A Firestore Timestamp is compared with the supplied instant.
+ * Null, a string, or any other value does not authorize publication.
+ * Another portfolio's record does not grant this portfolio.
  */
 export function classifyPortfolioPublishingAccess(input: {
   uid: string;
@@ -68,16 +110,29 @@ export function classifyPortfolioPublishingAccess(input: {
   record: unknown;
   now: Date;
 }): PublishingAccess {
-  if (!input.record || typeof input.record !== "object") return "payment-required";
-  const data = input.record as Record<string, unknown>;
-  if (data.uid !== input.uid || data.portfolioId !== input.portfolioId || data.status !== "active") {
-    return "payment-required";
-  }
-  if (!Object.prototype.hasOwnProperty.call(data, "expiresAt") || data.expiresAt == null) return "entitled";
-  if (typeof data.expiresAt !== "string") return "renewal-required";
-  const expiry = instant(data.expiresAt);
-  if (!expiry) return "renewal-required";
-  return expiry.getTime() > input.now.getTime() ? "entitled" : "renewal-required";
+  const data = activePortfolioRecord(input.record, input.uid, input.portfolioId);
+  if (!data) return "payment-required";
+  if (!Object.prototype.hasOwnProperty.call(data, "expiresAt")) return "entitled";
+  const millis = firestoreExpiryMillis(data.expiresAt);
+  if (millis == null) return "renewal-required";
+  return millis > input.now.getTime() ? "entitled" : "renewal-required";
+}
+
+/**
+ * Whether the client may attempt a new publication.
+ * A Firestore Timestamp is left to security rules and request.time.
+ * This function does not read the browser clock.
+ */
+export function publicationAttemptAccess(input: {
+  uid: string;
+  portfolioId: string;
+  record: unknown;
+}): PublishingAccess {
+  const data = activePortfolioRecord(input.record, input.uid, input.portfolioId);
+  if (!data) return "payment-required";
+  if (!Object.prototype.hasOwnProperty.call(data, "expiresAt")) return "entitled";
+  if (firestoreExpiryMillis(data.expiresAt) == null) return "renewal-required";
+  return "entitled";
 }
 
 /**

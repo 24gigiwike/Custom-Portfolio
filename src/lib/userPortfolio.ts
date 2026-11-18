@@ -26,7 +26,7 @@ import {
   unpublishDocumentFields,
 } from "./portfolioPublishing";
 import { PORTFOLIO_PUBLISHING_ENTITLEMENT_COLLECTION } from "./publishingEntitlement";
-import { classifyPortfolioPublishingAccess, publishingAccessMessage } from "./publishingTerm";
+import { publicationAttemptAccess, publishingAccessMessage } from "./publishingTerm";
 import {
   publicDeliveryForSavedContent,
   publicDeliveryForUnpublish,
@@ -261,11 +261,10 @@ export async function publishPortfolio(portfolioId: string): Promise<UserPortfol
       }
 
       if (plan.action !== "publish" || plan.portfolioId !== portfolioId) return;
-      const access = classifyPortfolioPublishingAccess({
+      const access = publicationAttemptAccess({
         uid: actorId,
         portfolioId,
         record: entitlementSnap.exists() ? entitlementSnap.data() : null,
-        now: new Date(),
       });
       if (access !== "entitled") throw new Error(publishingAccessMessage(access));
       const publishedAt = plan.publishedAt ?? serverTimestamp();
