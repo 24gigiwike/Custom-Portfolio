@@ -144,6 +144,10 @@ export async function handlePortfolioCreate(
       send(res, error.status, { error: error.message, code: error.code });
       return;
     }
+    const code = typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+    console.error("portfolio-create failed", error instanceof Error ? error.name : "Error", code);
     send(res, 500, { error: "Your portfolio could not be created.", code: "create-failed" });
   }
 }
@@ -208,7 +212,7 @@ export async function handlePortfolioPolicy(
     if (options.readCreationTime) {
       creationTime = await options.readCreationTime(uid);
     } else {
-      const auth = firebaseAdminAuth(env);
+      const auth = await firebaseAdminAuth(env);
       if (!auth) {
         send(res, 503, { error: "Portfolio creation is unavailable right now.", code: "unavailable" });
         return;

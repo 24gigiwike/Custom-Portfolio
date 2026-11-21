@@ -13,7 +13,7 @@ export const brand = {
    * Dedicated logo URL for splash screens and page transitions
    * Provided by BroadBrand asset CDN
    */
-  splashLogoUrl: "https://res.cloudinary.com/dtkluxukm/image/upload/v1787401285/BD_BD_4_gttxlf.png",
+  splashLogoUrl: "https://media.broadbrand.com.ng/image/BD_BD_4_gttxlf.png",
   
   /**
    * Custom brand core color palette

@@ -17,7 +17,7 @@ export const PRODUCT_DESCRIPTION = "Your work deserves a place of its own.";
  */
 export const PRODUCTION_ORIGIN = "https://customportfolio.broadbrand.com.ng";
 export const PRODUCT_SHARE_IMAGE =
-  "https://res.cloudinary.com/dtkluxukm/image/upload/v1787401285/BD_BD_4_gttxlf.png";
+  "https://media.broadbrand.com.ng/image/BD_BD_4_gttxlf.png";
 
 const PUBLIC_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const HTTPS_URL = /^https:\/\/[^\s<>"]+$/i;

@@ -22,7 +22,7 @@ export type TemplatePreviewImage = {
 };
 
 const WDK_PREVIEW_IMAGE: TemplatePreviewImage = {
-  src: "https://res.cloudinary.com/dtkluxukm/image/upload/v1791304280/template_wqijzy.png",
+  src: "https://media.broadbrand.com.ng/image/template_wqijzy.png",
   width: 1352,
   height: 610,
   alt: "Preview of WDK Premium Portfolio 1, with a portrait, headline, and project work.",

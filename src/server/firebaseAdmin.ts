@@ -1,5 +1,5 @@
 import { cert, getApp, getApps, initializeApp, type App } from "firebase-admin/app";
-import { getAuth, type Auth } from "firebase-admin/auth";
+import type { Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import {
   expectedFirebaseProjectId,
@@ -87,7 +87,14 @@ export function firebaseAdminFirestore(env: NodeJS.ProcessEnv = process.env): Fi
   return app ? getFirestore(app) : null;
 }
 
-export function firebaseAdminAuth(env: NodeJS.ProcessEnv = process.env): Auth | null {
+/**
+ * Auth is loaded only when a caller needs the account record.
+ * Importing it with Firestore pulls in an ESM-only dependency that crashes
+ * Vercel functions before they can respond.
+ */
+export async function firebaseAdminAuth(env: NodeJS.ProcessEnv = process.env): Promise<Auth | null> {
   const app = firebaseAdminApp(env);
-  return app ? getAuth(app) : null;
+  if (!app) return null;
+  const { getAuth } = await import("firebase-admin/auth");
+  return getAuth(app);
 }

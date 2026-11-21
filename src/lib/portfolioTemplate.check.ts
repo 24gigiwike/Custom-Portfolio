@@ -30,7 +30,7 @@ assert.equal(wdk.availability, "available");
 assert.equal(wdk.previewPath, WDK_TEMPLATE_PREVIEW_PATH);
 assert.equal(
   wdk.previewImage.src,
-  "https://res.cloudinary.com/dtkluxukm/image/upload/v1791304280/template_wqijzy.png"
+  "https://media.broadbrand.com.ng/image/template_wqijzy.png"
 );
 assert.equal(wdk.previewImage.width, 1352);
 assert.equal(wdk.previewImage.height, 610);

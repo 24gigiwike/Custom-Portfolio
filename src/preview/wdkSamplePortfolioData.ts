@@ -61,9 +61,9 @@ export const wdkSamplePortfolioData = {
         canonicalUrl: "https://webdesignking.online",
         ogTitle: "Web Design King | Award-Winning Web Designer & Developer | Web studio - Agency",
         ogDescription: "High-performance websites, UI/UX design, and high-conversion digital tools. View my latest work.",
-        ogImage: "https://res.cloudinary.com/dtkluxukm/image/upload/v1783454017/CoverWDK-responsive_fmvp6b.jpg",
+        ogImage: "https://media.broadbrand.com.ng/image/CoverWDK-responsive_fmvp6b.jpg",
         twitterTitle: "Web Design King | Award-Winning Web Designer & Developer | Web studio - Agency",
         twitterDescription: "High-performance websites, UI/UX design, and high-conversion landing pages.",
-        twitterImage: "https://res.cloudinary.com/dtkluxukm/image/upload/v1783454017/CoverWDK-responsive_fmvp6b.jpg",
+        twitterImage: "https://media.broadbrand.com.ng/image/CoverWDK-responsive_fmvp6b.jpg",
     },
 } satisfies PortfolioData;
