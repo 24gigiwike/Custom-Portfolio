@@ -6,12 +6,22 @@
  */
 
 const UID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 export function imageKitFolderForUser(uid: string): string {
   if (!UID_PATTERN.test(uid)) {
     throw new Error("This account cannot use image upload yet.");
   }
   return `/custom-portfolio/${uid}/proof`;
+}
+
+/** Portfolio id embedded in a server-built file path. Null for account and legacy proof files. */
+export function portfolioIdFromImageKitPath(filePath: string, uid: string): string | null {
+  if (!UID_PATTERN.test(uid) || filePath.includes("..")) return null;
+  const prefix = `/custom-portfolio/${uid}/portfolios/`;
+  if (!filePath.startsWith(prefix)) return null;
+  const portfolioId = filePath.slice(prefix.length).split("/")[0] ?? "";
+  return ID_PATTERN.test(portfolioId) ? portfolioId : null;
 }
 
 export function readImageKitServerConfig(env: NodeJS.ProcessEnv = process.env): {

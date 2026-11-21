@@ -4,6 +4,7 @@ import { userFacingWriteError } from "../../lib/accountLoad";
 import { useAuth } from "../../lib/authContext";
 import { templateChoiceError } from "../../lib/templateAdoption";
 import { listCatalogTemplates, type CatalogTemplate } from "../../lib/templateCatalog";
+import { catalogSamplePreviewPath } from "../../preview/templatePreviewPath";
 import { getPortfolioByOwner, useCatalogTemplate, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
 import { PORTFOLIO_WORKSPACE_PATH } from "../portfolio-workspace/portfolioWorkspacePath";
 import { Button } from "../ui/Button";
@@ -41,7 +42,6 @@ type TemplateDiscoveryProps = {
 export function TemplateDiscovery({ onOpenPath }: TemplateDiscoveryProps) {
   const { user, userAccount, signOutUser } = useAuth();
   const templates = listCatalogTemplates();
-  const template = templates[0] ?? null;
   const [lookup, setLookup] = useState<OwnedPortfolioLookup | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isChoosing, setIsChoosing] = useState(false);
@@ -67,6 +67,10 @@ export function TemplateDiscovery({ onOpenPath }: TemplateDiscoveryProps) {
   }, []);
 
   const choose = (selected: CatalogTemplate) => {
+    if (lookup?.status === "ready") {
+      onOpenPath(PORTFOLIO_WORKSPACE_PATH);
+      return;
+    }
     setIsChoosing(true);
     setError(null);
     void useCatalogTemplate(userAccount, selected.id)
@@ -101,51 +105,53 @@ export function TemplateDiscovery({ onOpenPath }: TemplateDiscoveryProps) {
           {name ? `${name}, choose a starting point.` : "Choose a starting point."}
         </h1>
         <p className="mt-5 max-w-xl text-base font-medium leading-relaxed text-[#5C7372]">
-          One portfolio direction is available. Preview it, then use it when you want a draft. Nothing is created before that.
+          Preview a direction, then use it when you want a draft. Nothing is created before that.
         </p>
 
         {isLoading ? (
           <p className="mt-12 text-sm font-medium text-[#5C7372]">Loading templates…</p>
-        ) : template ? (
-          <article className="mt-12">
-            <TemplatePreviewImage template={template} />
-            <p className="mt-8 text-[11px] font-bold uppercase tracking-[0.16em] text-[#3E7574]">Available now</p>
-            <h2 className="mt-3 break-words text-3xl font-bold tracking-[-0.04em]">{template.name}</h2>
-            <p className="mt-4 max-w-xl text-base leading-relaxed text-[#5C7372]">{template.description}</p>
-            <p className="mt-4 max-w-xl text-base leading-relaxed">{template.fit}</p>
-            <p className="mt-6 text-sm font-medium text-[#5C7372]">Version {template.version}</p>
-
+        ) : templates.length > 0 ? (
+          <div className="mt-12 space-y-16">
             {alreadyHasPortfolio && (
-              <p className="mt-8 max-w-xl text-sm leading-relaxed text-[#5C7372]">
-                You already have a draft portfolio. Using this template again will not create another one.
+              <p className="max-w-xl text-sm leading-relaxed text-[#5C7372]">
+                You already have a draft portfolio. Opening another template will not create or replace it.
               </p>
             )}
             {hasUnknownTemplate && (
-              <p className="mt-8 max-w-xl text-sm leading-relaxed text-[#5C7372]">
+              <p className="max-w-xl text-sm leading-relaxed text-[#5C7372]">
                 This portfolio already uses a template that is not available. It was left unchanged.
               </p>
             )}
-            {error && <p className="mt-8 text-sm font-medium text-[#B93838]">{error}</p>}
-
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              <Button
-                id="template-preview"
-                variant="outline"
-                onClick={() => onOpenPath(template.previewPath)}
-              >
-                Preview
-              </Button>
-              {!hasUnknownTemplate && (
-                <Button
-                  id="template-use"
-                  isLoading={isChoosing}
-                  onClick={() => choose(template)}
-                >
-                  {alreadyHasPortfolio ? "Open your portfolio" : "Use this template"}
-                </Button>
-              )}
-            </div>
-          </article>
+            {error && <p className="text-sm font-medium text-[#B93838]">{error}</p>}
+            {templates.map((template) => (
+              <article key={template.id}>
+                <TemplatePreviewImage template={template} />
+                <p className="mt-8 text-[11px] font-bold uppercase tracking-[0.16em] text-[#3E7574]">Available now</p>
+                <h2 className="mt-3 break-words text-3xl font-bold tracking-[-0.04em]">{template.name}</h2>
+                <p className="mt-4 max-w-xl text-base leading-relaxed text-[#5C7372]">{template.description}</p>
+                <p className="mt-4 max-w-xl text-base leading-relaxed">{template.fit}</p>
+                <p className="mt-6 text-sm font-medium text-[#5C7372]">Version {template.version}</p>
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                  <Button
+                    id={`template-preview-${template.id}`}
+                    variant="outline"
+                    onClick={() => onOpenPath(catalogSamplePreviewPath(template.previewPath))}
+                  >
+                    Preview
+                  </Button>
+                  {!hasUnknownTemplate && (
+                    <Button
+                      id={`template-use-${template.id}`}
+                      isLoading={isChoosing}
+                      onClick={() => choose(template)}
+                    >
+                      {alreadyHasPortfolio ? "Open your portfolio" : "Use this template"}
+                    </Button>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
         ) : (
           <p className="mt-12 text-base leading-relaxed text-[#5C7372]">No templates are available yet.</p>
         )}

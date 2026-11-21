@@ -2,9 +2,11 @@ import {
   classifyGrandfatherOwnerId,
   grandfatherEntitlementDocument,
   planGrandfatherEntitlements,
+  planLegacyPortfolioBackfill,
   PUBLISHING_ENTITLEMENT_COLLECTION,
   type GrandfatherPlan,
   type GrandfatherPortfolio,
+  type PortfolioPublishingEntitlement,
   type PublishingEntitlement,
 } from "../lib/publishingEntitlement";
 
@@ -24,8 +26,10 @@ import {
  * still run. Re-running the plan is idempotent: accounts that already have a
  * document are skipped.
  *
- * Unpublished portfolios are not granted a right. Unpublishing later does not
- * delete the entitlement, so a grandfathered account can publish again.
+ * Unpublished portfolios are not granted a right. These account documents stay
+ * in place. They do not authorize every portfolio the account creates later.
+ * Associating one with the single portfolio already published under it is a
+ * separate review. This module does not write that association.
  */
 
 export interface GrandfatherSource {
@@ -81,6 +85,43 @@ export async function applyReviewedGrandfatherGrants(
   }
   return { created, leftInPlace };
 }
+
+export interface LegacyPortfolioWriter {
+  createPortfolioEntitlement(
+    portfolioId: string,
+    record: PortfolioPublishingEntitlement,
+  ): Promise<"created" | "already-present">;
+}
+
+/**
+ * Creates explicit legacy portfolio entitlements with create(), never set() or update().
+ * This module is not imported by the application and does not choose a Firebase project.
+ * An operator runs it against a reviewed snapshot before the public-read rule is deployed.
+ * A second run leaves existing documents in place.
+ */
+export async function applyLegacyPortfolioBackfill(
+  creates: readonly PortfolioPublishingEntitlement[],
+  writer: LegacyPortfolioWriter,
+): Promise<{ created: string[]; leftInPlace: string[] }> {
+  const created: string[] = [];
+  const leftInPlace: string[] = [];
+  for (const grant of creates) {
+    if (grant.source !== "grandfathered" || grant.paymentId !== null || grant.grantReason !== "published-before-payment-gate") {
+      throw new Error("Only an explicit legacy portfolio grant can be applied by this backfill.");
+    }
+    try {
+      const result = await writer.createPortfolioEntitlement(grant.portfolioId, grant);
+      if (result === "created") created.push(grant.portfolioId);
+      else leftInPlace.push(grant.portfolioId);
+    } catch (error) {
+      if (!isEntitlementAlreadyPresentError(error)) throw error;
+      leftInPlace.push(grant.portfolioId);
+    }
+  }
+  return { created, leftInPlace };
+}
+
+export { planLegacyPortfolioBackfill };
 
 export function grandfatherEntitlementPath(uid: string): string {
   return `${PUBLISHING_ENTITLEMENT_COLLECTION}/${uid}`;

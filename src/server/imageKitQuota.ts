@@ -105,6 +105,11 @@ export type ImageKitQuotaStore = {
     uploadId: string;
     nowMs?: number;
   }) => Promise<boolean>;
+  findOwnedUpload: (input: {
+    uid: string;
+    fileId?: string;
+    filePath?: string;
+  }) => Promise<ImageKitTrackedUpload | null>;
   safeDeleteUpload: (input: {
     uid: string;
     uploadId: string;
@@ -447,6 +452,27 @@ export function createFirestoreImageKitQuotaStore(
         });
         return true;
       });
+    },
+
+    async findOwnedUpload(input) {
+      const fileId = input.fileId?.trim() ?? "";
+      const filePath = input.filePath?.trim() ?? "";
+      if (!UID_PATTERN.test(input.uid)) return null;
+      if (fileId && filePath) return null;
+      if (fileId && !FILE_ID_PATTERN.test(fileId)) return null;
+      if (filePath && (filePath.includes("..") || !filePath.startsWith(`/custom-portfolio/${input.uid}/`))) return null;
+      if (!fileId && !filePath) return null;
+      const field = fileId ? "fileId" : "filePath";
+      const value = fileId || filePath;
+      const snap = await db.collection(IMAGEKIT_UPLOAD_COLLECTION).where(field, "==", value).limit(5).get();
+      const matches = snap.docs
+        .map((doc) => uploadFromSnapshot(doc))
+        .filter((upload): upload is ImageKitTrackedUpload => {
+          if (!upload || upload.uid !== input.uid) return false;
+          if (fileId) return upload.fileId === fileId;
+          return upload.filePath === filePath;
+        });
+      return matches.length === 1 ? matches[0] : null;
     },
 
     async safeDeleteUpload(input) {

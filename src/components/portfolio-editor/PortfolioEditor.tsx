@@ -27,6 +27,7 @@ import {
   type EditorSocialDraft,
 } from "./editorDraft";
 import { PORTFOLIO_REVIEW_PATH } from "../portfolio-review/portfolioReviewPath";
+import { templateConfig as creativeTemplateConfig } from "../../templates/the-creative/data/template-config";
 import { ImageField } from "./ImageField";
 
 type PortfolioEditorProps = {
@@ -303,6 +304,7 @@ export function PortfolioEditor({ onPreview, onWorkspace, onDiscover }: Portfoli
           {show("projects") && (
             <ProjectsSection
               portfolioId={portfolio.id}
+              selectedTemplate={portfolio.selectedTemplate}
               draft={draft}
               fieldErrors={fieldErrors}
               onChange={updateDraft}
@@ -536,15 +538,18 @@ function SocialSection({
 
 function ProjectsSection({
   portfolioId,
+  selectedTemplate,
   draft,
   fieldErrors,
   onChange,
 }: {
   portfolioId: string;
+  selectedTemplate: string;
   draft: EditorDraft;
   fieldErrors: EditorFieldErrors | null;
   onChange: (next: EditorDraft) => void;
 }) {
+  const editorial = selectedTemplate === creativeTemplateConfig.id;
   const updateProject = (id: string, patch: Partial<EditorProjectDraft>) => {
     onChange({
       ...draft,
@@ -571,7 +576,7 @@ function ProjectsSection({
               ...draft,
               projects: [
                 ...draft.projects,
-                { id: allocateProjectId(portfolioId), title: "", category: "", url: "", techText: "" },
+                { id: allocateProjectId(portfolioId), title: "", category: "", url: "", techText: "", image: "", summary: "", client: "", year: "" },
               ],
             })
           }
@@ -619,16 +624,61 @@ function ProjectsSection({
                     />
                   </label>
                   <label className="block min-w-0">
-                    <span className="mb-2 block text-sm font-semibold">Project URL</span>
+                    <span className="mb-2 block text-sm font-semibold">{editorial ? "External link" : "Project URL"}</span>
                     <input
                       id={`portfolio-project-url-${project.id}`}
                       className={fieldClass}
                       value={project.url}
                       inputMode="url"
+                      placeholder={editorial ? "Optional" : "https://"}
                       onChange={(event) => updateProject(project.id, { url: event.target.value })}
                     />
                     <FieldError message={projectErrors?.url} />
                   </label>
+                  {editorial ? (
+                    <>
+                      <label className="block">
+                        <span className="mb-2 block text-sm font-semibold">Client</span>
+                        <input
+                          id={`portfolio-project-client-${project.id}`}
+                          className={fieldClass}
+                          value={project.client ?? ""}
+                          onChange={(event) => updateProject(project.id, { client: event.target.value })}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-2 block text-sm font-semibold">Year</span>
+                        <input
+                          id={`portfolio-project-year-${project.id}`}
+                          className={fieldClass}
+                          value={project.year ?? ""}
+                          onChange={(event) => updateProject(project.id, { year: event.target.value })}
+                        />
+                      </label>
+                      <label className="block min-w-0">
+                        <span className="mb-2 block text-sm font-semibold">Project image</span>
+                        <input
+                          id={`portfolio-project-image-${project.id}`}
+                          className={fieldClass}
+                          value={project.image ?? ""}
+                          inputMode="url"
+                          placeholder="https://"
+                          onChange={(event) => updateProject(project.id, { image: event.target.value })}
+                        />
+                        <p className="mt-2 text-sm text-[#5C7372]">One landscape image is enough. Leave this empty to use the template photograph.</p>
+                        <FieldError message={projectErrors?.image} />
+                      </label>
+                      <label className="block">
+                        <span className="mb-2 block text-sm font-semibold">Description</span>
+                        <textarea
+                          id={`portfolio-project-summary-${project.id}`}
+                          className={`${fieldClass} min-h-28 resize-y`}
+                          value={project.summary ?? ""}
+                          onChange={(event) => updateProject(project.id, { summary: event.target.value })}
+                        />
+                      </label>
+                    </>
+                  ) : null}
                   <label className="block">
                     <span className="mb-2 block text-sm font-semibold">Technologies</span>
                     <textarea

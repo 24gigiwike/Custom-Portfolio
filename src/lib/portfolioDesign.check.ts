@@ -25,6 +25,8 @@ assert.deepEqual(
   [...PORTFOLIO_PALETTE_IDS]
 );
 
+assert.equal(templateDesignCapabilities("the-creative")?.controls.length, 0);
+assert.equal(templateSupportsDesignControl("the-creative", "palette"), false);
 assert.equal(templateDesignCapabilities("future-template"), null);
 assert.equal(templateDesignCapabilities("unknown-template"), null);
 assert.equal(templateDesignControl("unknown-template", "palette"), null);

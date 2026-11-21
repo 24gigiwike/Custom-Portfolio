@@ -1,16 +1,37 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
-import firebaseConfigData from "../../firebase-applet-config.json";
-import { resolveFirebaseWebConfig } from "./firebaseConfig";
+import { connectAuthEmulator, getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
+import { connectFirestoreEmulator, getFirestore, type Firestore } from "firebase/firestore";
+import { resolveFirebaseWebConfig, type FirebaseWebConfig } from "./firebaseConfig";
+import {
+  FirebaseProjectIsolationError,
+  firebaseRuntime,
+  SANDBOX_AUTH_EMULATOR_HOST,
+  SANDBOX_EMULATOR_PROJECT_ID,
+  SANDBOX_FIRESTORE_EMULATOR_HOST,
+} from "./firebaseEnvironment";
 
 /**
- * Firebase Client & Firestore Initialization
- * Uses the provisioned Firebase configuration for Custom Portfolio.
- * Environment variables must be supplied as a complete set. A partial set
- * is rejected so it cannot be mixed with the committed project.
+ * Browser Firebase client.
+ * Local sandbox uses the demo project and the emulators on 127.0.0.1.
+ * Vercel Preview keeps the staging web config.
+ * The committed production config is inlined only for a Vercel Production build.
  */
 
+declare const __VERCEL_ENV__: string;
+declare const __FIREBASE_COMMITTED_CONFIG__: FirebaseWebConfig | null;
+
+const committed = __FIREBASE_COMMITTED_CONFIG__;
+const fallback: FirebaseWebConfig = committed ?? {
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: "",
+};
+
+const firestoreEmulatorHost = import.meta.env.VITE_FIRESTORE_EMULATOR_HOST?.trim() ?? "";
+const authEmulatorHost = import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST?.trim() ?? "";
 const firebaseConfig = resolveFirebaseWebConfig(
   {
     VITE_FIREBASE_API_KEY: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -20,15 +41,13 @@ const firebaseConfig = resolveFirebaseWebConfig(
     VITE_FIREBASE_MESSAGING_SENDER_ID: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
     VITE_FIREBASE_APP_ID: import.meta.env.VITE_FIREBASE_APP_ID,
   },
-  {
-    apiKey: firebaseConfigData.apiKey,
-    authDomain: firebaseConfigData.authDomain,
-    projectId: firebaseConfigData.projectId,
-    storageBucket: firebaseConfigData.storageBucket,
-    messagingSenderId: firebaseConfigData.messagingSenderId,
-    appId: firebaseConfigData.appId,
-  }
+  fallback,
+  { runtime: firebaseRuntime({ VERCEL_ENV: __VERCEL_ENV__ }), emulatorHost: firestoreEmulatorHost },
 );
+
+if (firebaseConfig.projectId === SANDBOX_EMULATOR_PROJECT_ID && (__VERCEL_ENV__ === "production" || firestoreEmulatorHost !== SANDBOX_FIRESTORE_EMULATOR_HOST || authEmulatorHost !== SANDBOX_AUTH_EMULATOR_HOST)) {
+  throw new FirebaseProjectIsolationError("Local sandbox Firebase must use the Firestore and Auth emulators on 127.0.0.1.");
+}
 
 let app: FirebaseApp;
 
@@ -44,9 +63,15 @@ if (!getApps().length) {
 }
 
 export const auth: Auth = getAuth(app);
-export const db: Firestore = firebaseConfigData.firestoreDatabaseId && firebaseConfigData.firestoreDatabaseId !== "(default)"
-  ? getFirestore(app, firebaseConfigData.firestoreDatabaseId)
-  : getFirestore(app);
+export const db: Firestore = getFirestore(app);
+
+const emulatorState = globalThis as { __customPortfolioEmulators?: boolean };
+if (firebaseConfig.projectId === SANDBOX_EMULATOR_PROJECT_ID && !emulatorState.__customPortfolioEmulators) {
+  const [firestoreHost, firestorePort] = SANDBOX_FIRESTORE_EMULATOR_HOST.split(":");
+  connectFirestoreEmulator(db, firestoreHost, Number(firestorePort));
+  connectAuthEmulator(auth, `http://${SANDBOX_AUTH_EMULATOR_HOST}`, { disableWarnings: true });
+  emulatorState.__customPortfolioEmulators = true;
+}
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({

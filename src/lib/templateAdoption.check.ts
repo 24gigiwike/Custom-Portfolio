@@ -187,6 +187,15 @@ if (existingWdk.action !== "open") throw new Error("expected open");
 assert.equal(existingWdk.portfolioId, PORTFOLIO_ID);
 assert.equal(reconcileAdoption(existingWdk, PORTFOLIO_ID).outcome, "unchanged");
 
+const creativeInstead = plan({
+  id: PORTFOLIO_ID,
+  data: { ownerId: "user-1", selectedTemplate: WDK, profile: { brandName: "Ada" } },
+}, "the-creative");
+assert.equal(creativeInstead.action, "reject");
+if (creativeInstead.action !== "reject") throw new Error("expected the existing template to stay");
+assert.equal(creativeInstead.reason, "template-already-selected");
+assert.equal(templateChoiceMessage(creativeInstead.reason).includes("left unchanged"), true);
+
 const otherTemplate = {
   id: PORTFOLIO_ID,
   ownerId: "user-1",

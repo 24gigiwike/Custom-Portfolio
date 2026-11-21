@@ -2,7 +2,10 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import fs from 'node:fs';
 import path from 'path';
-import {defineConfig, type Plugin} from 'vite';
+import {defineConfig, loadEnv, type Plugin} from 'vite';
+import { FIREBASE_ENV_KEYS } from './src/lib/firebaseConfig';
+import { SANDBOX_AUTH_EMULATOR_HOST, SANDBOX_EMULATOR_PROJECT_ID, SANDBOX_FIRESTORE_EMULATOR_HOST } from './src/lib/firebaseEnvironment';
+import { committedFirebaseWebConfig, validateFirebaseEnvironment } from './src/server/firebaseIsolation';
 import { imageKitDevPlugin } from './src/server/imageKitDevPlugin';
 import { portfolioSeoPlugin } from './src/server/seoPlugin';
 
@@ -46,8 +49,28 @@ function imageCompressionWorkerPlugin(root: string): Plugin {
   };
 }
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+  const loaded = loadEnv(mode, __dirname, '');
+  const vercelEnv = process.env.VERCEL_ENV?.trim() ?? '';
+  const firebaseEnv: NodeJS.ProcessEnv = { ...loaded, VERCEL_ENV: vercelEnv };
+  if (vercelEnv === "production") {
+    for (const key of ["FIREBASE_PROJECT_ID", "FIRESTORE_EMULATOR_HOST", "FIREBASE_AUTH_EMULATOR_HOST", ...FIREBASE_ENV_KEYS]) {
+      firebaseEnv[key] = process.env[key];
+    }
+  } else if (
+    loaded.FIRESTORE_EMULATOR_HOST?.trim() === SANDBOX_FIRESTORE_EMULATOR_HOST
+    && loaded.FIREBASE_PROJECT_ID?.trim() === SANDBOX_EMULATOR_PROJECT_ID
+  ) {
+    process.env.FIRESTORE_EMULATOR_HOST = SANDBOX_FIRESTORE_EMULATOR_HOST;
+    process.env.FIREBASE_AUTH_EMULATOR_HOST = SANDBOX_AUTH_EMULATOR_HOST;
+    process.env.GCLOUD_PROJECT = SANDBOX_EMULATOR_PROJECT_ID;
+  }
+  const web = validateFirebaseEnvironment(firebaseEnv, committedFirebaseWebConfig(__dirname));
   return {
+    define: {
+      __VERCEL_ENV__: JSON.stringify(vercelEnv),
+      __FIREBASE_COMMITTED_CONFIG__: JSON.stringify(vercelEnv === 'production' ? web : null),
+    },
     plugins: [imageKitDevPlugin(), react(), tailwindcss(), portfolioSeoPlugin(__dirname), imageCompressionWorkerPlugin(__dirname)],
     resolve: {
       alias: {

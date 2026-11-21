@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from "react";
+import { TheCreative } from "../../templates/the-creative";
+import { templateConfig as creativeTemplateConfig } from "../../templates/the-creative/data/template-config";
 import { WdkPremiumPortfolio } from "../../templates/wdk-premium-portfolio-1";
+import { templateConfig as wdkTemplateConfig } from "../../templates/wdk-premium-portfolio-1/data/template-config";
 import { getPublicPortfolio, type PublicPortfolioLookup } from "../../lib/publicPortfolioStore";
 import { resolvePublicPortfolioSeo, resolvedToPortfolioSeo, siteEnvironmentFromHost } from "../../lib/portfolioSeo";
 import { publicPortfolioPresentation } from "../../lib/publicPortfolio";
@@ -84,13 +87,20 @@ function PublishedPortfolio({ portfolio }: { portfolio: PublicPortfolio }) {
     return <PublicStatus title="This portfolio is not available." titleText="Portfolio" />;
   }
 
-  return (
-    <WdkPremiumPortfolio
-      data={{ ...presentation.data, seo: resolvedToPortfolioSeo(resolved) }}
-      palette={presentation.palette}
-      robots={resolved.robots}
-    />
-  );
+  const data = { ...presentation.data, seo: resolvedToPortfolioSeo(resolved) };
+  if (portfolio.selectedTemplate === creativeTemplateConfig.id) {
+    return <TheCreative data={data} robots={resolved.robots} />;
+  }
+  if (portfolio.selectedTemplate === wdkTemplateConfig.id) {
+    return (
+      <WdkPremiumPortfolio
+        data={data}
+        palette={presentation.palette}
+        robots={resolved.robots}
+      />
+    );
+  }
+  return <PublicStatus title="This portfolio is not available." titleText="Portfolio" />;
 }
 
 function PublicStatus({

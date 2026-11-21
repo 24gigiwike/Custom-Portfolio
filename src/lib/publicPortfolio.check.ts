@@ -281,6 +281,8 @@ assert.equal(publicPortfolioIdFromPath("/p/ABC123/"), "ABC123");
 assert.equal(publicPortfolioIdFromPath("/p/ABC123?ref=1"), "ABC123");
 assert.equal(isPublicPortfolioPath("/p/ABC123"), true);
 assert.equal(publicPortfolioIdFromPath("/p/"), null);
+assert.equal(publicPortfolioIdFromPath("/p/ABC123/work/atelier"), "ABC123");
+assert.equal(isPublicPortfolioPath("/p/ABC123/work/atelier"), true);
 assert.equal(publicPortfolioIdFromPath("/p/ABC123/edit"), null);
 assert.equal(isPublicPortfolioPath("/portfolio"), false);
 assert.equal(isPublicPortfolioPath("/portfolio/publish"), false);

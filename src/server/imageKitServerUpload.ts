@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import ImageKit from "@imagekit/nodejs";
 import { FirebaseIdTokenError, firebaseProjectId, verifyFirebaseIdToken } from "./firebaseIdToken.js";
-import { firebaseAdminFirestore } from "./firebaseAdmin.js";
+import { FirebaseProjectIsolationError } from "../lib/firebaseEnvironment.js";
+import { assertFirebaseAdminForRuntime, firebaseAdminFirestore } from "./firebaseAdmin.js";
 import {
   createFirestoreImageKitQuotaStore,
   imageKitDefaultQuotaBytes,
@@ -296,9 +297,21 @@ export async function handleImageKitServerUpload(
     return;
   }
 
+  const env = options.env ?? process.env;
+  let tokenProject = "";
+  try {
+    tokenProject = firebaseProjectId(env);
+    assertFirebaseAdminForRuntime(env);
+  } catch (error) {
+    if (error instanceof FirebaseProjectIsolationError) {
+      send(res, 503, { error: "Image upload storage is not configured." });
+      return;
+    }
+    throw error;
+  }
   let uid = "";
   try {
-    const verified = await (options.verify ?? verifyFirebaseIdToken)(token, firebaseProjectId());
+    const verified = await (options.verify ?? verifyFirebaseIdToken)(token, tokenProject);
     uid = verified.uid;
   } catch (error) {
     const message = error instanceof FirebaseIdTokenError ? error.message : "Sign in to upload an image.";
@@ -306,7 +319,6 @@ export async function handleImageKitServerUpload(
     return;
   }
 
-  const env = options.env ?? process.env;
   const allowed = options.developmentProof === true || imageKitUploadAllowUids(env).has(uid);
   if (!allowed) {
     send(res, 403, { error: "Image upload is not available." });

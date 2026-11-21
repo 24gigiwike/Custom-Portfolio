@@ -1,4 +1,5 @@
 import type { PortfolioPublishing, UserPortfolio, UserPortfolioContent } from "../types/userPortfolio";
+import { publishingAccessMessage } from "./publishingTerm";
 import { userFacingWriteError } from "./accountLoad";
 import { normalizeUserPortfolio, readPublishing } from "./normalizeUserPortfolio";
 import { reviewAssessment, type ReviewItem } from "./portfolioReview";
@@ -42,6 +43,7 @@ export function publishChoiceError(error: unknown, fallback: string): string {
   if (guarded) return guarded;
   const raw = error instanceof Error ? error.message : "";
   if ((Object.values(PUBLISH_MESSAGES) as readonly string[]).includes(raw)) return raw;
+  if (raw === publishingAccessMessage("payment-required") || raw === publishingAccessMessage("renewal-required")) return raw;
   return fallback;
 }
 

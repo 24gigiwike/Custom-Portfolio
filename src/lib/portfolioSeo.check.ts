@@ -257,6 +257,9 @@ assert.equal(platformTitle("/portfolio/edit"), "Edit Portfolio — Custom Portfo
 assert.equal(platformTitle("/portfolio/design"), "Portfolio Design — Custom Portfolio");
 assert.equal(platformTitle("/portfolio/review"), "Review Portfolio — Custom Portfolio");
 assert.equal(platformTitle("/portfolio/publish"), "Publish Portfolio — Custom Portfolio");
+assert.equal(platformTitle("/portfolio/publish/return"), "Payment verification — Custom Portfolio");
+assert.equal(platformTitle("/portfolio/publish/cancelled"), "Checkout cancelled — Custom Portfolio");
+assert.equal(platformTitle("/portfolio/publish/return?checkout_id=chk_1"), "Payment verification — Custom Portfolio");
 assert.equal(platformTitle("/portfolio/seo"), "Portfolio SEO — Custom Portfolio");
 assert.equal(isPortfolioSeoPath(PORTFOLIO_SEO_PATH), true);
 assert.equal(isPortfolioSeoPath("/p/ABC123"), false);

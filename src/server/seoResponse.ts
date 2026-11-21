@@ -1,4 +1,6 @@
 import firebaseConfig from "../../firebase-applet-config.json" with { type: "json" };
+import { resolveFirebaseWebConfig, type FirebaseWebConfig } from "../lib/firebaseConfig.js";
+import { firebaseRuntime } from "../lib/firebaseEnvironment.js";
 import { readPublicPortfolio } from "../lib/publicPortfolio.js";
 import {
   applyHead,
@@ -17,9 +19,24 @@ import type { PublicPortfolio } from "../types/publicPortfolio.js";
 const PAGE_SIZE = 300;
 const MAX_PAGES = 20;
 
-function firestoreDocuments(): string {
+function committedWebConfig(): FirebaseWebConfig {
+  return {
+    apiKey: firebaseConfig.apiKey,
+    authDomain: firebaseConfig.authDomain,
+    projectId: firebaseConfig.projectId,
+    storageBucket: firebaseConfig.storageBucket,
+    messagingSenderId: firebaseConfig.messagingSenderId,
+    appId: firebaseConfig.appId,
+  };
+}
+
+function firestoreDocuments(env: NodeJS.ProcessEnv = process.env): { root: string; apiKey: string } {
+  const selected = resolveFirebaseWebConfig(env, committedWebConfig(), { runtime: firebaseRuntime(env) });
   const database = encodeURIComponent(firebaseConfig.firestoreDatabaseId || "(default)");
-  return `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${database}/documents`;
+  return {
+    root: `https://firestore.googleapis.com/v1/projects/${selected.projectId}/databases/${database}/documents`,
+    apiKey: selected.apiKey,
+  };
 }
 
 function fromFirestore(value: unknown): unknown {
@@ -50,14 +67,18 @@ function documentFields(body: { fields?: Record<string, unknown> }): Record<stri
   return record;
 }
 
-async function firestoreGet(path: string): Promise<Response> {
-  const url = new URL(`${firestoreDocuments()}/${path}`);
-  url.searchParams.set("key", firebaseConfig.apiKey);
+async function firestoreGet(path: string, env: NodeJS.ProcessEnv = process.env): Promise<Response> {
+  const documents = firestoreDocuments(env);
+  const url = new URL(`${documents.root}/${path}`);
+  url.searchParams.set("key", documents.apiKey);
   return fetch(url);
 }
 
-async function readAddressedPortfolio(publicId: string): Promise<PublicPortfolio | "invalid" | "error" | null> {
-  const response = await firestoreGet(`publicPortfolios/${encodeURIComponent(publicId)}`);
+async function readAddressedPortfolio(
+  publicId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<PublicPortfolio | "invalid" | "error" | null> {
+  const response = await firestoreGet(`publicPortfolios/${encodeURIComponent(publicId)}`, env);
   if (response.status === 404 || response.status === 403) return null;
   if (!response.ok) return "error";
   const body = (await response.json()) as { fields?: Record<string, unknown> };
@@ -65,8 +86,8 @@ async function readAddressedPortfolio(publicId: string): Promise<PublicPortfolio
   return portfolio ?? "invalid";
 }
 
-async function readSlugRecord(slug: string): Promise<SlugRegistryView | "error"> {
-  const response = await firestoreGet(`portfolioSlugs/${encodeURIComponent(slug)}`);
+async function readSlugRecord(slug: string, env: NodeJS.ProcessEnv = process.env): Promise<SlugRegistryView | "error"> {
+  const response = await firestoreGet(`portfolioSlugs/${encodeURIComponent(slug)}`, env);
   if (response.status === 404 || response.status === 403) return null;
   if (!response.ok) return "error";
   const fields = documentFields((await response.json()) as { fields?: Record<string, unknown> });
@@ -85,12 +106,13 @@ export type PublicHtmlResult = {
 export async function publicPortfolioHtml(
   publicId: string,
   shell: string,
-  environment: SiteEnvironment
+  environment: SiteEnvironment,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<PublicHtmlResult> {
   const unavailable = { status: 404, html: applyHead(shell, renderUnavailableHead()) };
   const requested = publicId.trim();
   try {
-    const direct = await readAddressedPortfolio(requested);
+    const direct = await readAddressedPortfolio(requested, env);
     if (direct === "error") return { status: 502, html: unavailable.html };
     if (direct === "invalid") return unavailable;
 
@@ -99,11 +121,11 @@ export async function publicPortfolioHtml(
     if (!direct) {
       const parsed = parsePublicSlug(requested);
       if (parsed.ok && parsed.slug) {
-        const record = await readSlugRecord(parsed.slug);
+        const record = await readSlugRecord(parsed.slug, env);
         if (record === "error") return { status: 502, html: unavailable.html };
         slugRecord = record;
         if (record) {
-          const target = await readAddressedPortfolio(record.portfolioId);
+          const target = await readAddressedPortfolio(record.portfolioId, env);
           if (target === "error") return { status: 502, html: unavailable.html };
           if (target && target !== "invalid") bySlug = target;
         }
@@ -143,12 +165,15 @@ export function homeHtml(shell: string, environment: SiteEnvironment): string {
   return applyHead(shell, renderHomeHead(environment));
 }
 
-export async function loadSitemapEntries(): Promise<{ publicId: string; slug?: string; updatedAt?: string }[]> {
+export async function loadSitemapEntries(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ publicId: string; slug?: string; updatedAt?: string }[]> {
   const entries: { publicId: string; slug?: string; updatedAt?: string }[] = [];
   let pageToken = "";
   for (let page = 0; page < MAX_PAGES; page += 1) {
-    const url = new URL(`${firestoreDocuments()}/sitemapEntries`);
-    url.searchParams.set("key", firebaseConfig.apiKey);
+    const documents = firestoreDocuments(env);
+    const url = new URL(`${documents.root}/sitemapEntries`);
+    url.searchParams.set("key", documents.apiKey);
     url.searchParams.set("pageSize", String(PAGE_SIZE));
     if (pageToken) url.searchParams.set("pageToken", pageToken);
     const response = await fetch(url);
@@ -167,5 +192,12 @@ export async function loadSitemapEntries(): Promise<{ publicId: string; slug?: s
     if (!body.nextPageToken) break;
     pageToken = body.nextPageToken;
   }
-  return entries;
+  const visible = [];
+  for (const entry of entries) {
+    const response = await firestoreGet(`publicPortfolios/${encodeURIComponent(entry.publicId)}`, env);
+    if (response.status === 404 || response.status === 403) continue;
+    if (!response.ok) throw new Error("Sitemap source unavailable");
+    visible.push(entry);
+  }
+  return visible;
 }

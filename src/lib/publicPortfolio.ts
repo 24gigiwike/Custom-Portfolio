@@ -7,6 +7,7 @@ import type {
   SocialLink,
   SocialPlatform,
 } from "../templates/wdk-premium-portfolio-1/types/portfolio";
+import { templateConfig as creativeTemplateConfig } from "../templates/the-creative/data/template-config.js";
 import { templateConfig } from "../templates/wdk-premium-portfolio-1/data/template-config.js";
 import type { PortfolioDesign, PortfolioPaletteId } from "../types/portfolioDesign";
 import { normalizePortfolioDesign } from "../types/portfolioDesign.js";
@@ -22,6 +23,7 @@ import { toWdkPremiumPortfolioData, wdkPaletteForPortfolio } from "./wdkPortfoli
 const PLATFORMS = new Set<SocialPlatform>(["x", "instagram", "facebook", "youtube", "tiktok", "email"]);
 
 const WDK_TEMPLATE_ID = templateConfig.id;
+const CREATIVE_TEMPLATE_ID = creativeTemplateConfig.id;
 
 /**
  * Fields copied into the public document.
@@ -105,13 +107,20 @@ function publicSocialLinks(links: SocialLink[]): SocialLink[] {
 }
 
 function publicProjects(projects: Project[]): Project[] {
-  return projects.map((project) => ({
-    id: project.id,
-    title: project.title,
-    category: project.category,
-    url: project.url,
-    tech: [...project.tech],
-  }));
+  return projects.map((project) => {
+    const next: Project = {
+      id: project.id,
+      title: project.title,
+      category: project.category,
+      url: project.url,
+      tech: [...project.tech],
+    };
+    if (project.image) next.image = project.image;
+    if (project.summary) next.summary = project.summary;
+    if (project.client) next.client = project.client;
+    if (project.year) next.year = project.year;
+    return next;
+  });
 }
 
 function publicContact(contact: PortfolioContact): PortfolioContact {
@@ -235,13 +244,22 @@ function readProjects(value: unknown): Project[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item) => {
     if (!isRecord(item) || typeof item.id !== "string" || typeof item.title !== "string") return [];
-    return [{
+    const project: Project = {
       id: item.id,
       title: item.title,
       category: text(item.category),
       url: text(item.url),
       tech: stringList(item.tech),
-    }];
+    };
+    const image = text(item.image).trim();
+    const summary = text(item.summary).trim();
+    const client = text(item.client).trim();
+    const year = text(item.year).trim();
+    if (image) project.image = image;
+    if (summary) project.summary = summary;
+    if (client) project.client = client;
+    if (year) project.year = year;
+    return [project];
   });
 }
 
@@ -312,11 +330,16 @@ export type PublicWdkPresentation = {
   palette: PortfolioPaletteId;
 };
 
-const publicRenderers: Record<string, (portfolio: PublicPortfolio) => PublicWdkPresentation> = {
-  [WDK_TEMPLATE_ID]: (portfolio) => ({
+function presentPortfolio(portfolio: PublicPortfolio): PublicWdkPresentation {
+  return {
     data: toWdkPremiumPortfolioData(portfolio),
     palette: wdkPaletteForPortfolio(portfolio),
-  }),
+  };
+}
+
+const publicRenderers: Record<string, (portfolio: PublicPortfolio) => PublicWdkPresentation> = {
+  [WDK_TEMPLATE_ID]: presentPortfolio,
+  [CREATIVE_TEMPLATE_ID]: presentPortfolio,
 };
 
 /** Template registry. An unknown id does not fall back to WDK. */

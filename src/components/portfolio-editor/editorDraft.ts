@@ -5,6 +5,7 @@ import type {
 } from "../../templates/wdk-premium-portfolio-1/types/portfolio";
 import type { ContentArea } from "../../lib/templateCatalog";
 import { templateContentAreas } from "../../lib/templateCatalog";
+import { templateConfig as creativeTemplateConfig } from "../../templates/the-creative/data/template-config";
 import type { UserPortfolio, UserPortfolioContent } from "../../types/userPortfolio";
 
 /** Matches normalizeUrl in src/lib/portfolio.ts without loading Firebase. */
@@ -127,6 +128,10 @@ export type EditorProjectDraft = {
   category: string;
   url: string;
   techText: string;
+  image?: string;
+  summary?: string;
+  client?: string;
+  year?: string;
 };
 
 export type EditorSocialDraft = {
@@ -164,7 +169,7 @@ export type EditorFieldErrors = {
   logo?: string;
   ctaHref?: string;
   socialLinks: Record<string, { url?: string }>;
-  projects: Record<string, { title?: string; url?: string }>;
+  projects: Record<string, { title?: string; url?: string; image?: string }>;
   formEndpoint?: string;
 };
 
@@ -225,6 +230,10 @@ export function draftFromPortfolio(portfolio: UserPortfolio): EditorDraft {
       category: project.category,
       url: project.url,
       techText: techToText(project.tech),
+      image: project.image ?? "",
+      summary: project.summary ?? "",
+      client: project.client ?? "",
+      year: project.year ?? "",
     })),
     contact: {
       eyebrow: portfolio.contact.eyebrow,
@@ -260,12 +269,19 @@ export function validateEditorDraft(draft: EditorDraft, selectedTemplate: string
   }
 
   if (areas.includes("projects")) {
+    const externalLinkOptional = selectedTemplate === creativeTemplateConfig.id;
     for (const project of draft.projects) {
-      const projectErrors: { title?: string; url?: string } = {};
+      const projectErrors: { title?: string; url?: string; image?: string } = {};
       if (!project.title.trim()) projectErrors.title = "Please enter a project title.";
-      if (!project.url.trim()) projectErrors.url = "Please enter the project URL.";
-      else if (!isHttpUrl(project.url)) projectErrors.url = "Enter a valid project URL.";
-      if (projectErrors.title || projectErrors.url) errors.projects[project.id] = projectErrors;
+      if (!project.url.trim()) {
+        if (!externalLinkOptional) projectErrors.url = "Please enter the project URL.";
+      } else if (!isHttpUrl(project.url)) {
+        projectErrors.url = "Enter a valid project URL.";
+      }
+      if ((project.image ?? "").trim() && !isHttpUrl(project.image ?? "")) {
+        projectErrors.image = "Enter a valid image address.";
+      }
+      if (projectErrors.title || projectErrors.url || projectErrors.image) errors.projects[project.id] = projectErrors;
     }
   }
 
@@ -316,13 +332,24 @@ export function applyEditorDraft(
 ): UserPortfolioContent {
   if (!areas) return portfolioContent(portfolio);
 
-  const projects: TemplateProject[] = draft.projects.map((project) => ({
-    id: project.id,
-    title: project.title.trim(),
-    category: project.category.trim(),
-    url: withHttpProtocol(project.url),
-    tech: textToTech(project.techText),
-  }));
+  const projects: TemplateProject[] = draft.projects.map((project) => {
+    const next: TemplateProject = {
+      id: project.id,
+      title: project.title.trim(),
+      category: project.category.trim(),
+      url: project.url.trim() ? withHttpProtocol(project.url) : "",
+      tech: textToTech(project.techText),
+    };
+    const image = (project.image ?? "").trim();
+    const summary = (project.summary ?? "").trim();
+    const client = (project.client ?? "").trim();
+    const year = (project.year ?? "").trim();
+    if (image) next.image = /^https?:\/\//i.test(image) ? image : withHttpProtocol(image);
+    if (summary) next.summary = summary;
+    if (client) next.client = client;
+    if (year) next.year = year;
+    return next;
+  });
 
   const socialLinks: SocialLink[] = draft.socialLinks
     .filter((link) => isSocialPlatform(link.platform))

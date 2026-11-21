@@ -5,12 +5,16 @@ import { useAuth } from "../../lib/authContext";
 import { canonicalPortfolioUrl } from "../../lib/portfolioSeo";
 import { isPortfolioPublished, publishChoiceError, publishEntry } from "../../lib/portfolioPublishing";
 import { PublicSlugForm } from "./PublicSlugForm";
+import { ANNUAL_PUBLISHING_PLAN } from "../../lib/publishingEntitlement";
+import { readPortfolioPublishingAccess, readPublishingTerm, requestPublishingCheckout, type PublishingTermView } from "../../lib/publishingCheckoutClient";
+import { publishingDashboardNotice, type PublishingAccess } from "../../lib/publishingTerm";
 import { getPortfolioByOwner, publishPortfolio, syncPublishedPortfolio, unpublishPortfolio, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
 import type { UserPortfolio } from "../../types/userPortfolio";
 import { TEMPLATE_DISCOVERY_PATH } from "../discover/templateDiscoveryPath";
 import { PORTFOLIO_REVIEW_PATH } from "../portfolio-review/portfolioReviewPath";
 import { PortfolioSectionNav, SignOutControl } from "../portfolio-workspace/PortfolioSectionNav";
 import { Button } from "../ui/Button";
+import { PublishingRefundNotice } from "./PublishingRefundNotice";
 
 type PortfolioPublishProps = {
   onOpenPath: (path: string) => void;
@@ -25,6 +29,8 @@ export function PortfolioPublish({ onOpenPath }: PortfolioPublishProps) {
   const [isPublishing, setIsPublishing] = useState(false);
   const [isUnpublishing, setIsUnpublishing] = useState(false);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
+  const [access, setAccess] = useState<PublishingAccess | "loading">("loading");
+  const [term, setTerm] = useState<PublishingTermView | null>(null);
   const publishingRef = useRef(false);
   const unpublishingRef = useRef(false);
 
@@ -93,7 +99,57 @@ export function PortfolioPublish({ onOpenPath }: PortfolioPublishProps) {
   };
 
   const entry = lookup ? publishEntry(lookup) : null;
+  const readyPortfolioId = lookup?.status === "ready" ? lookup.portfolio.id : "";
   const busy = isPublishing || isUnpublishing;
+  const publicHidden = term?.phase === "lapsed" || term?.phase === "revoked";
+
+  useEffect(() => {
+    if (!readyPortfolioId) return;
+    let active = true;
+    setAccess("loading");
+    setTerm(null);
+    void Promise.all([
+      readPortfolioPublishingAccess(readyPortfolioId),
+      readPublishingTerm(readyPortfolioId),
+    ])
+      .then(([result, lifecycle]) => {
+        if (!active) return;
+        setAccess(result);
+        setTerm(lifecycle);
+      })
+      .catch(() => {
+        if (!active) return;
+        setAccess("payment-required");
+        setTerm(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [readyPortfolioId]);
+
+  const pay = (portfolioId: string) => {
+    if (publishingRef.current || unpublishingRef.current) return;
+    const renewable = term?.phase === "renewal-window" || term?.phase === "grace" || term?.phase === "lapsed" || term?.phase === "revoked";
+    if (!renewable && access === "entitled") {
+      publish(portfolioId);
+      return;
+    }
+    publishingRef.current = true;
+    setIsPublishing(true);
+    setActionError(null);
+    void requestPublishingCheckout(portfolioId)
+      .then((result) => {
+        if (result.outcome === "entitled") return publishPortfolio(portfolioId).then(remember);
+        window.location.assign(result.checkoutUrl);
+      })
+      .catch((error: unknown) => {
+        setActionError(publishChoiceError(error, "The payment page could not be opened."));
+      })
+      .finally(() => {
+        publishingRef.current = false;
+        setIsPublishing(false);
+      });
+  };
 
   return (
     <div id="portfolio-publish" className="min-h-screen overflow-x-hidden bg-[#F3FAF9] font-sans text-[#243838]">
@@ -143,9 +199,18 @@ export function PortfolioPublish({ onOpenPath }: PortfolioPublishProps) {
               published={entry.kind === "published"}
               onSaved={remember}
             />
+            <PublishingTermNotice
+              term={term}
+              published={entry.kind === "published"}
+              busy={busy}
+              isPublishing={isPublishing}
+              onRenew={() => pay(entry.portfolio.id)}
+              onOpenPath={onOpenPath}
+            />
             {entry.kind === "published" ? (
           <PublishedState
             publicUrl={canonicalPortfolioUrl(entry.portfolio.id, entry.portfolio.publicSlug) ?? ""}
+            publicHidden={publicHidden}
             confirming={confirmUnpublish}
             busy={busy}
             isUnpublishing={isUnpublishing}
@@ -158,11 +223,14 @@ export function PortfolioPublish({ onOpenPath }: PortfolioPublishProps) {
           <DraftState
             ready={entry.blockers.length === 0}
             blockers={entry.blockers}
+            access={access}
             busy={busy}
             isPublishing={isPublishing}
             error={actionError}
             onPublish={() => publish(entry.portfolio.id)}
+            onPay={() => pay(entry.portfolio.id)}
             onReview={() => onOpenPath(PORTFOLIO_REVIEW_PATH)}
+            onOpenPath={onOpenPath}
           />
             )}
           </>
@@ -177,28 +245,38 @@ export function PortfolioPublish({ onOpenPath }: PortfolioPublishProps) {
 function DraftState({
   ready,
   blockers,
+  access,
   busy,
   isPublishing,
   error,
   onPublish,
+  onPay,
   onReview,
+  onOpenPath,
 }: {
   ready: boolean;
   blockers: { id: string; label: string; detail: string }[];
+  access: PublishingAccess | "loading";
   busy: boolean;
   isPublishing: boolean;
   error: string | null;
   onPublish: () => void;
+  onPay: () => void;
   onReview: () => void;
+  onOpenPath: (path: string) => void;
 }) {
+  const plan = ANNUAL_PUBLISHING_PLAN;
+  const needsPayment = ready && (access === "payment-required" || access === "renewal-required");
   return (
     <div className="max-w-xl">
       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">Draft</p>
       <h1 className="mt-3 text-4xl font-bold tracking-[-0.045em] sm:text-5xl">
-        {ready ? "Ready to publish" : "Not ready to publish"}
+        {!ready ? "Not ready to publish" : access === "renewal-required" ? "Renew Annual Publishing" : needsPayment ? "Annual Publishing Plan" : "Ready to publish"}
       </h1>
       <p className="mt-4 text-base leading-relaxed text-[#5C7372]">
-        Publish makes this portfolio available at a public address. You can still edit it afterward.
+        {needsPayment
+          ? `${plan.priceLabel} gives this portfolio ${plan.duration} of publishing access. This is a one-time payment. Renewal is manual, and there are no automatic charges.`
+          : "Publish makes this portfolio available at a public address. You can still edit it afterward."}
       </p>
       {blockers.length > 0 && (
         <ul className="mt-8 divide-y divide-[#D5E6E5] border-y border-[#D5E6E5]">
@@ -210,12 +288,41 @@ function DraftState({
           ))}
         </ul>
       )}
-      {isPublishing && <p className="mt-6 text-sm font-medium text-[#5C7372]" aria-live="polite">Publishing…</p>}
+      {needsPayment && (
+        <dl className="mt-8 divide-y divide-[#D5E6E5] border-y border-[#D5E6E5]">
+          {[
+            ["Plan", "Annual Publishing Plan"],
+            ["Price", plan.priceLabel],
+            ["Access", "12 months of publishing access"],
+            ["Payment", plan.payment],
+            ["Renewal", plan.renewal],
+            ["Automatic charges", plan.automaticCharges],
+            ["Applies to", "The selected portfolio only"],
+          ].map(([label, value]) => (
+            <div key={label} className="flex items-baseline justify-between gap-6 py-3 text-sm">
+              <dt className="text-[#5C7372]">{label}</dt>
+              <dd className="text-right font-semibold">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {isPublishing && <p className="mt-6 text-sm font-medium text-[#5C7372]" aria-live="polite">{needsPayment ? "Opening the payment page…" : "Publishing…"}</p>}
       {error && <p className="mt-6 text-sm font-medium text-[#B93838]" role="alert">{error}</p>}
+      {needsPayment && (
+        <div className="mt-6">
+          <PublishingRefundNotice onOpenPath={onOpenPath} />
+        </div>
+      )}
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-        {ready ? (
+        {ready && access === "loading" ? (
+          <p className="text-sm font-medium text-[#5C7372]">Checking publishing access…</p>
+        ) : ready && access === "entitled" ? (
           <Button id="portfolio-publish-action" isLoading={isPublishing} disabled={busy} onClick={onPublish}>
             {isPublishing ? "Publishing…" : "Publish Portfolio"}
+          </Button>
+        ) : ready ? (
+          <Button id="portfolio-publish-pay" isLoading={isPublishing} disabled={busy} onClick={onPay}>
+            {isPublishing ? "Opening payment…" : access === "renewal-required" ? "Renew publishing" : "Continue to payment"}
           </Button>
         ) : (
           <Button id="portfolio-publish-review" onClick={onReview}>
@@ -227,8 +334,52 @@ function DraftState({
   );
 }
 
+function PublishingTermNotice({
+  term,
+  published,
+  busy,
+  isPublishing,
+  onRenew,
+  onOpenPath,
+}: {
+  term: PublishingTermView | null;
+  published: boolean;
+  busy: boolean;
+  isPublishing: boolean;
+  onRenew: () => void;
+  onOpenPath: (path: string) => void;
+}) {
+  if (!term || term.phase === "none") return null;
+  const notice = publishingDashboardNotice({
+    phase: term.phase,
+    published,
+    expiresAt: term.expiresAt,
+    gracePeriodEndsAt: term.gracePeriodEndsAt,
+    renewalOpensAt: term.renewalOpensAt,
+    renewed: term.renewed,
+    now: new Date(),
+  });
+  return (
+    <section className="max-w-xl rounded-2xl border border-[#D5E6E5] bg-white px-5 py-5">
+      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">{notice.title}</p>
+      <p className="mt-3 text-sm leading-relaxed text-[#5C7372]">{notice.body}</p>
+      {notice.renewalAvailable && (
+        <>
+          <div className="mt-5">
+            <PublishingRefundNotice onOpenPath={onOpenPath} />
+          </div>
+          <Button id="portfolio-renew-action" className="mt-4" isLoading={isPublishing} disabled={busy} onClick={onRenew}>
+            {isPublishing ? "Opening payment…" : "Renew for ₦10,000"}
+          </Button>
+        </>
+      )}
+    </section>
+  );
+}
+
 function PublishedState({
   publicUrl,
+  publicHidden,
   confirming,
   busy,
   isUnpublishing,
@@ -238,6 +389,7 @@ function PublishedState({
   onConfirm,
 }: {
   publicUrl: string;
+  publicHidden: boolean;
   confirming: boolean;
   busy: boolean;
   isUnpublishing: boolean;
@@ -262,10 +414,12 @@ function PublishedState({
 
   return (
     <div className="max-w-xl">
-      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">Published</p>
-      <h1 className="mt-3 text-4xl font-bold tracking-[-0.045em] sm:text-5xl">Your portfolio is live</h1>
+      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">{publicHidden ? "Saved" : "Published"}</p>
+      <h1 className="mt-3 text-4xl font-bold tracking-[-0.045em] sm:text-5xl">{publicHidden ? "Your portfolio is saved" : "Your portfolio is live"}</h1>
       <p className="mt-4 text-base leading-relaxed text-[#5C7372]">
-        Anyone with this address can view the published portfolio. You can still edit it.
+        {publicHidden
+          ? "The public address is not showing this portfolio right now. Your content, projects, and images stay in your account, and you can keep editing."
+          : "Anyone with this address can view the published portfolio. You can still edit it."}
       </p>
       <label className="mt-8 block text-[11px] font-bold uppercase tracking-[0.16em] text-[#3E7574]" htmlFor="portfolio-public-url">
         Public address

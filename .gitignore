@@ -8,3 +8,6 @@ coverage/
 !.env.example
 .env.local
 .env.*.local
+*firebase-adminsdk*.json
+service-account*.json
+serviceAccount*.json

@@ -7,6 +7,8 @@ export const IMAGEKIT_NOT_AVAILABLE = "Image upload is not available.";
 export const IMAGEKIT_NOT_CONFIGURED = "Image upload storage is not configured.";
 export const IMAGEKIT_QUOTA_EXCEEDED = "You have reached your image storage limit.";
 export const IMAGEKIT_UPLOAD_IN_PROGRESS = "This upload is already being processed. Try again.";
+export const IMAGEKIT_STILL_USED = "This image is still used.";
+export const IMAGEKIT_CANNOT_REMOVE = "This image cannot be removed.";
 
 export class ImageKitTransferError extends Error {
   readonly name = "ImageKitTransferError";
@@ -46,6 +48,10 @@ const SAFE_SERVER_ERRORS = new Set([
   "Image upload failed. Try again.",
   IMAGEKIT_QUOTA_EXCEEDED,
   IMAGEKIT_UPLOAD_IN_PROGRESS,
+  IMAGEKIT_STILL_USED,
+  IMAGEKIT_CANNOT_REMOVE,
+  "We couldn't remove the stored image file.",
+  "This removal request is not valid.",
   "This upload route is no longer available.",
 ]);
 
@@ -165,4 +171,38 @@ export async function uploadOptimizedFileToImageKit(input: {
   }
   if (response.status !== 200) throw new ImageKitTransferError(messageForStatus(response.status, response.json));
   return readResult(response.json);
+}
+
+/**
+ * Ask the server to delete one ImageKit file recorded for the signed-in user.
+ * The server ignores any owner id and refuses files it did not record for that user.
+ */
+export async function deleteOwnedImageKitFile(input: {
+  idToken: string;
+  fileId?: string;
+  filePath?: string;
+}): Promise<void> {
+  if (!input.idToken) throw new ImageKitTransferError(IMAGEKIT_AUTH_REQUIRED);
+  const body = input.fileId ? { fileId: input.fileId } : { filePath: input.filePath ?? "" };
+  let response: Response;
+  try {
+    response = await fetch("/api/imagekit-delete", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${input.idToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ImageKitTransferError("We couldn't remove the stored image file.");
+  }
+  if (response.status === 200) return;
+  let json: unknown = {};
+  try {
+    json = await response.json();
+  } catch {
+    json = {};
+  }
+  throw new ImageKitTransferError(messageForStatus(response.status, json));
 }

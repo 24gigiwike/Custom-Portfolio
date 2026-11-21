@@ -5,12 +5,16 @@ import {
   getDocs,
   query,
   where,
-  setDoc,
   updateDoc,
   serverTimestamp,
   limit,
 } from "firebase/firestore";
 import { db, auth } from "./firebase";
+import {
+  completePortfolioCreateRequest,
+  portfolioCreateRequestId,
+  requestPortfolioCreate,
+} from "./portfolioCreateRequest";
 import type {
   Portfolio,
   CreatePortfolioInput,
@@ -19,6 +23,7 @@ import type {
   PortfolioEnabledSections,
   PortfolioTheme,
 } from "../types/portfolio";
+export { generateSlug } from "./portfolioSlugText";
 
 enum OperationType {
   CREATE = "create",
@@ -72,19 +77,6 @@ function handleFirestoreError(
   throw new Error(JSON.stringify(errInfo));
 }
 
-/**
- * Generate a clean URL-friendly slug from title
- */
-export function generateSlug(title: string): string {
-  const base = title
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/[\s_-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return base || `portfolio-${Date.now().toString(36)}`;
-}
-
 export const DEFAULT_ENABLED_SECTIONS: PortfolioEnabledSections = {
   hero: true,
   about: true,
@@ -103,6 +95,29 @@ export const DEFAULT_PORTFOLIO_THEME: PortfolioTheme = {
   mode: "light",
   accent: "#6DAEAD",
 };
+
+function portfolioRecord(id: string, data: Record<string, unknown>): Portfolio {
+  return {
+    id,
+    ownerId: typeof data.ownerId === "string" ? data.ownerId : "",
+    title: typeof data.title === "string" && data.title ? data.title : "Untitled Portfolio",
+    slug: typeof data.slug === "string" && data.slug ? data.slug : id,
+    profession: typeof data.profession === "string" ? data.profession : "",
+    headline: typeof data.headline === "string" ? data.headline : "",
+    bio: typeof data.bio === "string" ? data.bio : "",
+    location: typeof data.location === "string" ? data.location : undefined,
+    profileImage: typeof data.profileImage === "string" ? data.profileImage : null,
+    availability: data.availability as Portfolio["availability"],
+    email: typeof data.email === "string" ? data.email : "",
+    socialLinks: legacySocialLinks(data.socialLinks),
+    stylePreset: (data.stylePreset as PortfolioStylePreset) || "MINIMAL",
+    theme: (data.theme as Portfolio["theme"]) || DEFAULT_PORTFOLIO_THEME,
+    enabledSections: (data.enabledSections as Portfolio["enabledSections"]) || DEFAULT_ENABLED_SECTIONS,
+    createdAt: (data.createdAt as Portfolio["createdAt"]) || null,
+    updatedAt: (data.updatedAt as Portfolio["updatedAt"]) || null,
+    published: Boolean(data.published),
+  };
+}
 
 function legacySocialLinks(value: unknown): Portfolio["socialLinks"] {
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {
@@ -125,27 +140,7 @@ export async function getUserPortfolio(ownerId: string): Promise<Portfolio | nul
     const snap = await getDocs(q);
     if (!snap.empty) {
       const docData = snap.docs[0];
-      const data = docData.data();
-      return {
-        id: docData.id,
-        ownerId: data.ownerId,
-        title: data.title || "Untitled Portfolio",
-        slug: data.slug || docData.id,
-        profession: data.profession || "",
-        headline: data.headline || "",
-        bio: data.bio || "",
-        location: data.location || undefined,
-        profileImage: data.profileImage || null,
-        availability: data.availability || undefined,
-        email: data.email || "",
-        socialLinks: legacySocialLinks(data.socialLinks),
-        stylePreset: (data.stylePreset as PortfolioStylePreset) || "MINIMAL",
-        theme: data.theme || DEFAULT_PORTFOLIO_THEME,
-        enabledSections: data.enabledSections || DEFAULT_ENABLED_SECTIONS,
-        createdAt: data.createdAt || null,
-        updatedAt: data.updatedAt || null,
-        published: Boolean(data.published),
-      };
+      return portfolioRecord(docData.id, docData.data());
     }
     return null;
   } catch (error) {
@@ -154,47 +149,39 @@ export async function getUserPortfolio(ownerId: string): Promise<Portfolio | nul
 }
 
 /**
- * Create a new portfolio for an authenticated user
+ * Ask the server to create one setup portfolio.
+ * Ownership comes from the signed-in token. The supplied ownerId is not sent.
  */
 export async function createPortfolio(input: CreatePortfolioInput): Promise<Portfolio> {
-  const newPortfolioRef = doc(collection(db, "portfolios"));
-  const portfolioId = newPortfolioRef.id;
-  const path = `portfolios/${portfolioId}`;
-
-  const slug = generateSlug(input.title);
-  const stylePreset: PortfolioStylePreset = input.stylePreset || "MINIMAL";
-
-  const payload = {
-    id: portfolioId,
-    ownerId: input.ownerId,
-    title: input.title.trim(),
-    slug,
-    profession: input.profession.trim(),
-    headline: input.headline.trim(),
-    bio: input.bio.trim(),
-    location: input.location?.trim() || "",
-    profileImage: input.profileImage || null,
-    availability: input.availability || "Available for work",
-    email: input.email.trim(),
-    socialLinks: input.socialLinks || {},
-    stylePreset,
-    theme: DEFAULT_PORTFOLIO_THEME,
-    enabledSections: DEFAULT_ENABLED_SECTIONS,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    published: false,
-  };
-
+  const ownerId = auth.currentUser?.uid;
+  if (!ownerId) {
+    throw new Error("You need to be signed in to use your portfolio.");
+  }
+  const path = "portfolios";
   try {
-    await setDoc(newPortfolioRef, payload);
-
-    return {
-      ...payload,
-      id: portfolioId,
-      createdAt: null,
-      updatedAt: null,
-    };
+    const created = await requestPortfolioCreate({
+      purpose: "setup",
+      requestId: portfolioCreateRequestId("setup"),
+      title: input.title.trim(),
+      profession: input.profession.trim(),
+      headline: input.headline.trim(),
+      bio: input.bio.trim(),
+      location: input.location?.trim() || "",
+      profileImage: input.profileImage || null,
+      availability: input.availability || "Available for work",
+      email: input.email.trim(),
+      socialLinks: input.socialLinks || {},
+      stylePreset: input.stylePreset || "MINIMAL",
+    });
+    const snap = await getDoc(doc(db, "portfolios", created.portfolioId));
+    if (!snap.exists()) {
+      throw new Error("Your portfolio was created, but it could not be read back.");
+    }
+    completePortfolioCreateRequest("setup");
+    return portfolioRecord(snap.id, snap.data());
   } catch (error) {
+    const existing = await getUserPortfolio(ownerId);
+    if (existing) return existing;
     handleFirestoreError(error, OperationType.CREATE, path);
   }
 }

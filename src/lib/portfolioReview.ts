@@ -67,7 +67,6 @@ function item(
  * An unknown template does not borrow WDK's rules.
  */
 export function reviewAssessment(portfolio: UserPortfolio): ReviewAssessment | null {
-  if (portfolio.selectedTemplate !== WDK_TEMPLATE_ID) return null;
   const areas = templateContentAreas(portfolio.selectedTemplate);
   if (!areas) return null;
 
@@ -181,7 +180,6 @@ export function reviewEntry(lookup: {
 export function savedPortfolioPresentation(
   portfolio: UserPortfolio
 ): { data: PortfolioData; palette: PortfolioPaletteId } | null {
-  if (portfolio.selectedTemplate !== WDK_TEMPLATE_ID) return null;
   if (!templateContentAreas(portfolio.selectedTemplate)) return null;
   const data = toWdkPremiumPortfolioData(portfolio);
   const environment = typeof window === "undefined" ? "development" : siteEnvironmentFromHost(window.location.hostname);

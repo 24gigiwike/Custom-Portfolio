@@ -14,8 +14,12 @@ import type { UserPortfolio, UserPortfolioContent } from "../types/userPortfolio
 import { auth, db } from "./firebase";
 import { DEFAULT_ENABLED_SECTIONS, DEFAULT_PORTFOLIO_THEME, generateSlug } from "./portfolio";
 import { normalizeUserPortfolio } from "./normalizeUserPortfolio";
-import { seedPortfolioFromAccount } from "./portfolioSeed";
 import { findCatalogTemplate, templateForCreation } from "./templateCatalog";
+import {
+  completePortfolioCreateRequest,
+  portfolioCreateRequestId,
+  requestPortfolioCreate,
+} from "./portfolioCreateRequest";
 import { userFacingWriteError } from "./accountLoad";
 import {
   contentPreservingPublishing,
@@ -25,6 +29,8 @@ import {
   publishPlanMessage,
   unpublishDocumentFields,
 } from "./portfolioPublishing";
+import { PORTFOLIO_PUBLISHING_ENTITLEMENT_COLLECTION } from "./publishingEntitlement";
+import { publicationAttemptAccess, publishingAccessMessage } from "./publishingTerm";
 import {
   publicDeliveryForSavedContent,
   publicDeliveryForUnpublish,
@@ -155,6 +161,7 @@ export async function createPortfolio(
   templateId: string
 ): Promise<UserPortfolio> {
   const ownerId = requireUid();
+  void account;
   const template = templateForCreation(templateId);
   if (!template) {
     throw new Error("That template is not available.");
@@ -167,18 +174,29 @@ export async function createPortfolio(
     throw new Error("This account already has a workspace portfolio. It was left unchanged.");
   }
 
-  const content = seedPortfolioFromAccount(account, template.id);
-  const portfolioRef = doc(collection(db, "portfolios"));
-  const portfolioId = portfolioRef.id;
-  await runTransaction(db, async (transaction) => {
-    transaction.set(portfolioRef, firestorePayload(portfolioId, ownerId, content, true));
-    transaction.set(identityRef(portfolioId), { portfolioId });
-  });
+  let portfolioId = "";
+  try {
+    const response = await requestPortfolioCreate({
+      purpose: "template",
+      templateId: template.id,
+      requestId: portfolioCreateRequestId(`template:${template.id}`),
+    });
+    portfolioId = response.portfolioId;
+  } catch (error) {
+    const raced = await findOwnedDocument(ownerId);
+    if (raced) {
+      const portfolio = readyPortfolio(raced.id, raced.data(), ownerId);
+      if (portfolio) return portfolio;
+    }
+    if (error instanceof Error && !("code" in error)) throw error;
+    rethrowPortfolioWrite(error, "Your portfolio could not be created.");
+  }
 
   const created = await getPortfolio(portfolioId);
   if (!created) {
     throw new Error("Your portfolio was created, but it could not be read back.");
   }
+  completePortfolioCreateRequest(`template:${template.id}`);
   return created;
 }
 
@@ -240,6 +258,7 @@ export async function publishPortfolio(portfolioId: string): Promise<UserPortfol
     await runTransaction(db, async (transaction) => {
       const snap = await transaction.get(portfolioRef);
       const identitySnap = await transaction.get(identityRef(portfolioId));
+      const entitlementSnap = await transaction.get(doc(db, PORTFOLIO_PUBLISHING_ENTITLEMENT_COLLECTION, portfolioId));
       const plan = planPublish({
         actorId,
         owned: snap.exists() ? { id: snap.id, data: snap.data() } : null,
@@ -258,6 +277,12 @@ export async function publishPortfolio(portfolioId: string): Promise<UserPortfol
       }
 
       if (plan.action !== "publish" || plan.portfolioId !== portfolioId) return;
+      const access = publicationAttemptAccess({
+        uid: actorId,
+        portfolioId,
+        record: entitlementSnap.exists() ? entitlementSnap.data() : null,
+      });
+      if (access !== "entitled") throw new Error(publishingAccessMessage(access));
       const publishedAt = plan.publishedAt ?? serverTimestamp();
       const fields = publicPortfolioFromUserPortfolio({
         ...current,

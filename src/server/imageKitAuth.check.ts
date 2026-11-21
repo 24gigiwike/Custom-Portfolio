@@ -3,7 +3,7 @@ import { createHash, createSign, generateKeyPairSync } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { imageKitDevServerEnv } from "./imageKitDevPlugin";
+import { imageKitDevPlugin, imageKitDevServerEnv } from "./imageKitDevPlugin";
 import { ImageUploadCancelled } from "../lib/imageAttempt";
 import {
   IMAGEKIT_UPLOAD_FAILED,
@@ -13,7 +13,9 @@ import {
 import { accountPhotoImageStorageProvider, activeImageStorageProvider, configuredImageStorageProvider } from "../lib/imageStorageProvider";
 import { proveImageKitUpload } from "../dev/imageKitUploadProof";
 import { verifyFirebaseIdToken } from "./firebaseIdToken";
-import { imageKitFolderForUser } from "./imageKitUploadAuth";
+import { imageKitFolderForUser, portfolioIdFromImageKitPath } from "./imageKitUploadAuth";
+import { handleImageKitServerDelete } from "./imageKitServerDelete";
+import { imageKitFileIdFromToken } from "../lib/imageKitMedia";
 import {
   handleImageKitServerUpload,
   IMAGEKIT_MAX_UPLOAD_BYTES,
@@ -35,7 +37,7 @@ import {
 import retiredAuth from "../../api/imagekit-auth";
 
 const root = new URL("../../", import.meta.url);
-const read = (path: string) => readFileSync(new URL(path, root), "utf8");
+const read = (path: string) => readFileSync(new URL(path, root), "utf8").replace(/\r\n/g, "\n");
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const certificate = publicKey.export({ type: "spki", format: "pem" }).toString();
@@ -242,6 +244,17 @@ class MemoryQuotaStore implements ImageKitQuotaStore {
     return true;
   }
 
+  async findOwnedUpload(input: { uid: string; fileId?: string; filePath?: string }): Promise<ImageKitTrackedUpload | null> {
+    if (input.fileId && input.filePath) return null;
+    const matches = [...this.uploads.values()].filter((upload) => {
+      if (upload.uid !== input.uid) return false;
+      if (input.fileId) return upload.fileId === input.fileId;
+      if (input.filePath) return upload.filePath === input.filePath;
+      return false;
+    });
+    return matches.length === 1 ? matches[0] : null;
+  }
+
   async safeDeleteUpload(input: Parameters<ImageKitQuotaStore["safeDeleteUpload"]>[0]): Promise<ImageKitCleanupResult> {
     const existing = this.uploads.get(input.uploadId);
     if (!existing) return { deleted: false, uploadId: input.uploadId, reason: "not-found" as const };
@@ -301,6 +314,7 @@ function call(input: {
   headers?: Record<string, string>;
   quotaStore?: ImageKitQuotaStore | null;
   useHandlerDefaultQuotaStore?: boolean;
+  env?: NodeJS.ProcessEnv;
   uploadFile?: (input: {
     bytes: Uint8Array;
     fileName: string;
@@ -341,7 +355,8 @@ function call(input: {
       verify,
       ...(input.useHandlerDefaultQuotaStore ? {} : { quotaStore }),
       uploadFile: input.uploadFile,
-      env: {
+      env: input.env ?? {
+        VERCEL_ENV: "production",
         IMAGEKIT_PRIVATE_KEY: privateApiKey,
         IMAGEKIT_PUBLIC_KEY: "public_test_key",
         IMAGEKIT_URL_ENDPOINT: "https://ik.imagekit.io/example",
@@ -432,6 +447,18 @@ assert.match(pluginSource, /apply: "serve"/);
 assert.match(pluginSource, /loadEnv\(mode, envDir, ""\)/);
 assert.match(pluginSource, /developmentProof: true/);
 assert.match(pluginSource, /\/api\/imagekit-upload/);
+assert.match(pluginSource, /\/api\/imagekit-delete/);
+assert.match(pluginSource, /\/api\/portfolio-create/);
+assert.match(pluginSource, /\/api\/portfolio-policy/);
+assert.match(pluginSource, /\/api\/publishing-checkout/);
+assert.match(pluginSource, /IMAGEKIT_UPLOAD_ALLOW_UIDS/);
+assert.match(pluginSource, /IMAGEKIT_DEFAULT_ACCOUNT_QUOTA_BYTES/);
+assert.equal(read("src/server/imageKitUploadAuth.ts").includes("imageKitFolderForCategory"), false);
+assert.equal(uploadSource.includes("imageKitFolderForCategory"), false);
+assert.equal(imageKitFolderForUser("user123"), "/custom-portfolio/user123/proof");
+assert.match(read("vercel.json"), /api\/imagekit-delete\.ts/);
+assert.match(read("vercel.json"), /api\/publishing-checkout\.ts/);
+assert.match(read("vercel.json"), /api\/site\.ts/);
 assert.equal(pluginSource.includes("handleImageKitAuth"), false);
 assert.equal(pluginSource.includes("getAuthenticationParameters"), false);
 assert.equal(pluginSource.includes("console."), false);
@@ -860,6 +887,7 @@ const unavailableStore: ImageKitQuotaStore = {
   markUploadRecoverable: async () => { throw new Error("firestore unavailable"); },
   reconcileStaleReservations: async () => { throw new Error("firestore unavailable"); },
   releaseVerifiedUnstoredUpload: async () => false,
+  findOwnedUpload: async () => null,
   safeDeleteUpload: async () => ({ deleted: false, uploadId: "x", reason: "reference-check-failed" }),
 };
 const unavailable = await call({
@@ -1168,5 +1196,369 @@ const proof = await proveImageKitUpload({
 });
 assert.equal(proof.optimizedBytes, gif.length);
 assert.equal(proof.fileId, "gif_1");
+
+function callDelete(input: {
+  token?: string | null;
+  body?: unknown;
+  developmentProof?: boolean;
+  allowUids?: string;
+  quotaStore?: ImageKitQuotaStore | null;
+  loadPortfolio?: (portfolioId: string) => Promise<{ ownerId: string } | null | "unconfigured">;
+  deleteFile?: (fileId: string) => Promise<void>;
+  env?: NodeJS.ProcessEnv;
+}) {
+  let status = 0;
+  let body = "";
+  const res: ImageKitUploadResponse = {
+    status(code: number) {
+      status = code;
+      return res;
+    },
+    setHeader() {},
+    end(value: string) {
+      body = value;
+    },
+  };
+  const headers: Record<string, string> = {};
+  if (input.token) headers.authorization = `Bearer ${input.token}`;
+  return handleImageKitServerDelete(
+    { method: "POST", headers, body: input.body ?? { fileId: "file_delete_me" } },
+    res,
+    {
+      developmentProof: input.developmentProof,
+      verify,
+      quotaStore: input.quotaStore === undefined ? new MemoryQuotaStore() : input.quotaStore,
+      loadPortfolio: input.loadPortfolio,
+      deleteFile: input.deleteFile,
+      env: input.env ?? {
+        VERCEL_ENV: "production",
+        IMAGEKIT_PRIVATE_KEY: privateApiKey,
+        IMAGEKIT_PUBLIC_KEY: "public_test_key",
+        IMAGEKIT_URL_ENDPOINT: "https://ik.imagekit.io/example",
+        IMAGEKIT_UPLOAD_ALLOW_UIDS: input.allowUids,
+      },
+    },
+  ).then(() => ({ status, body, json: body ? JSON.parse(body) as Record<string, unknown> : {} }));
+}
+
+const deleteStore = new MemoryQuotaStore();
+const deletable = await call({
+  token: signToken(validPayload()),
+  body: jpegForm.body,
+  contentType: jpegForm.contentType,
+  developmentProof: true,
+  headers: { "x-imagekit-upload-id": "delete-me" },
+  quotaStore: deleteStore,
+  uploadFile: acceptingUpload("image/jpeg"),
+});
+assert.equal(deletable.status, 200);
+assert.equal(deleteStore.quota("user123").usedBytes, JPEG.length);
+const owned = deleteStore.uploads.get("user123:delete-me");
+if (!owned?.fileId) throw new Error("owned upload is missing its file id");
+const ownedFileId = owned.fileId;
+
+const deleteOtherUser = await callDelete({
+  token: signToken(validPayload("other-user")),
+  body: { fileId: ownedFileId, ownerId: "user123" },
+  developmentProof: true,
+  quotaStore: deleteStore,
+  deleteFile: async () => {
+    throw new Error("another user must not delete this file");
+  },
+});
+assert.equal(deleteOtherUser.status, 400);
+assert.equal(deleteStore.quota("user123").usedBytes, JPEG.length);
+
+const deleteForeignUid = await callDelete({
+  token: signToken(validPayload("other-user")),
+  body: { fileId: ownedFileId },
+  developmentProof: true,
+  quotaStore: deleteStore,
+  deleteFile: async () => {
+    throw new Error("another user's file id must not be deleted");
+  },
+});
+assert.equal(deleteForeignUid.status, 403);
+assert.equal(deleteForeignUid.json.error, "This image cannot be removed.");
+
+const outside = deleteStore.uploads.get("user123:delete-me");
+assert.ok(outside);
+deleteStore.uploads.set("user123:delete-me", { ...outside, filePath: "/elsewhere/user123/proof/file.jpg" });
+const deleteOutside = await callDelete({
+  token: signToken(validPayload()),
+  body: { fileId: ownedFileId },
+  developmentProof: true,
+  quotaStore: deleteStore,
+  deleteFile: async () => {
+    throw new Error("a path outside the user prefix must not be deleted");
+  },
+});
+assert.equal(deleteOutside.status, 403);
+deleteStore.uploads.set("user123:delete-me", { ...outside, filePath: "/custom-portfolio/user123/../secret.jpg" });
+const deleteTraversalRecord = await callDelete({
+  token: signToken(validPayload()),
+  body: { fileId: ownedFileId },
+  developmentProof: true,
+  quotaStore: deleteStore,
+  deleteFile: async () => {
+    throw new Error("a stored traversal path must not be deleted");
+  },
+});
+assert.equal(deleteTraversalRecord.status, 403);
+const deleteTraversalBody = await callDelete({
+  token: signToken(validPayload()),
+  body: { filePath: "/custom-portfolio/user123/../secret.jpg" },
+  developmentProof: true,
+  quotaStore: deleteStore,
+  deleteFile: async () => {
+    throw new Error("a traversal request must not be deleted");
+  },
+});
+assert.equal(deleteTraversalBody.status, 400);
+assert.equal(deleteTraversalBody.json.error, "This removal request is not valid.");
+deleteStore.uploads.set("user123:delete-me", outside);
+
+const duplicate = { ...outside, uploadId: "user123:duplicate" };
+deleteStore.uploads.set(duplicate.uploadId, duplicate);
+const deleteAmbiguous = await callDelete({
+  token: signToken(validPayload()),
+  body: { fileId: ownedFileId },
+  developmentProof: true,
+  quotaStore: deleteStore,
+  deleteFile: async () => {
+    throw new Error("an ambiguous file id must not be deleted");
+  },
+});
+assert.equal(deleteAmbiguous.status, 403);
+deleteStore.uploads.delete(duplicate.uploadId);
+
+deleteStore.uploads.set("user123:delete-me", {
+  ...outside,
+  filePath: "/custom-portfolio/user123/portfolios/port-other/portrait/stolen.jpg",
+});
+const deleteWrongPortfolio = await callDelete({
+  token: signToken(validPayload()),
+  body: { fileId: ownedFileId },
+  developmentProof: true,
+  quotaStore: deleteStore,
+  loadPortfolio: async () => ({ ownerId: "someone-else" }),
+  deleteFile: async () => {
+    throw new Error("portfolio owner mismatch must not delete");
+  },
+});
+assert.equal(deleteWrongPortfolio.status, 403);
+deleteStore.uploads.set("user123:delete-me", outside);
+
+const missingCredentials = await callDelete({
+  token: signToken(validPayload()),
+  body: { fileId: ownedFileId },
+  developmentProof: true,
+  quotaStore: deleteStore,
+  env: { VERCEL_ENV: "production" },
+  deleteFile: async () => {
+    throw new Error("missing credentials must not delete");
+  },
+});
+assert.equal(missingCredentials.status, 503);
+assert.equal(missingCredentials.json.error, "Image upload storage is not configured.");
+assert.equal(missingCredentials.body.includes(privateApiKey), false);
+assert.equal(missingCredentials.body.includes("custom-portfolio-2026"), false);
+
+const isolatedUpload = await call({
+  token: signToken(validPayload()),
+  body: jpegForm.body,
+  contentType: jpegForm.contentType,
+  developmentProof: true,
+  env: {
+    VERCEL_ENV: "preview",
+    FIREBASE_PROJECT_ID: "custom-portfolio-2026",
+    VITE_FIREBASE_PROJECT_ID: "custom-portfolio-2026",
+    IMAGEKIT_PRIVATE_KEY: privateApiKey,
+    IMAGEKIT_PUBLIC_KEY: "public_test_key",
+    IMAGEKIT_URL_ENDPOINT: "https://ik.imagekit.io/example",
+  },
+  uploadFile: async () => {
+    throw new Error("project isolation must stop the upload");
+  },
+});
+assert.equal(isolatedUpload.status, 503);
+assert.equal(isolatedUpload.json.error, "Image upload storage is not configured.");
+assert.equal(isolatedUpload.body.includes("custom-portfolio-2026"), false);
+assert.equal(isolatedUpload.body.includes("FIREBASE_PROJECT_ID"), false);
+
+const isolatedDelete = await callDelete({
+  token: signToken(validPayload()),
+  body: { fileId: ownedFileId },
+  developmentProof: true,
+  quotaStore: deleteStore,
+  env: {
+    VERCEL_ENV: "preview",
+    FIREBASE_PROJECT_ID: "custom-portfolio-2026",
+    VITE_FIREBASE_PROJECT_ID: "custom-portfolio-2026",
+  },
+  deleteFile: async () => {
+    throw new Error("project isolation must stop the delete");
+  },
+});
+assert.equal(isolatedDelete.status, 503);
+assert.equal(isolatedDelete.json.error, "Image upload storage is not configured.");
+assert.equal(isolatedDelete.body.includes("custom-portfolio-2026"), false);
+
+deleteStore.savedReferences = [{ profile: { heroImage: deletable.json.url } }];
+const deleteReferenced = await callDelete({
+  token: signToken(validPayload()),
+  body: { fileId: ownedFileId },
+  developmentProof: true,
+  quotaStore: deleteStore,
+  deleteFile: async () => {
+    throw new Error("referenced image must not be deleted");
+  },
+});
+assert.equal(deleteReferenced.status, 409);
+assert.equal(deleteReferenced.json.error, "This image is still used.");
+assert.equal(deleteStore.uploads.get("user123:delete-me")?.status, "uploaded");
+assert.equal(deleteStore.quota("user123").usedBytes, JPEG.length);
+deleteStore.savedReferences = [];
+
+let providerCalled = false;
+const deleteFailed = await callDelete({
+  token: signToken(validPayload()),
+  body: { fileId: ownedFileId },
+  developmentProof: true,
+  quotaStore: deleteStore,
+  deleteFile: async () => {
+    providerCalled = true;
+    assert.equal(deleteStore.quota("user123").usedBytes, JPEG.length);
+    throw new Error("provider unavailable");
+  },
+});
+assert.equal(providerCalled, true);
+assert.equal(deleteFailed.status, 502);
+assert.equal(deleteFailed.json.error, "We couldn't remove the stored image file.");
+assert.equal(deleteStore.uploads.get("user123:delete-me")?.status, "uploaded");
+assert.equal(deleteStore.quota("user123").usedBytes, JPEG.length);
+
+const recoverableStore = new MemoryQuotaStore(JPEG.length);
+await recoverableStore.reserveUpload({
+  uid: "user123",
+  uploadKey: "reserved-delete",
+  sizeBytes: JPEG.length,
+  contentSha256: sha256(JPEG),
+  contentType: "image/jpeg",
+  folder: imageKitFolderForUser("user123"),
+  fileName: "reserved.jpg",
+});
+await recoverableStore.markUploadRecoverable({
+  uid: "user123",
+  uploadId: "user123:reserved-delete",
+  sizeBytes: JPEG.length,
+  uploaded: {
+    url: "https://ik.imagekit.io/example/custom-portfolio/user123/proof/reserved.jpg",
+    fileId: "file_reserved",
+    filePath: "/custom-portfolio/user123/proof/reserved.jpg",
+  },
+  reason: "firestore-completion-failed",
+});
+assert.equal(recoverableStore.quota("user123").reservedBytes, JPEG.length);
+const reservedFailed = await callDelete({
+  token: signToken(validPayload()),
+  body: { fileId: "file_reserved" },
+  developmentProof: true,
+  quotaStore: recoverableStore,
+  deleteFile: async () => {
+    assert.equal(recoverableStore.quota("user123").reservedBytes, JPEG.length);
+    throw new Error("provider unavailable");
+  },
+});
+assert.equal(reservedFailed.status, 502);
+assert.equal(recoverableStore.uploads.get("user123:reserved-delete")?.status, "recoverable");
+assert.equal(recoverableStore.quota("user123").reservedBytes, JPEG.length);
+const reservedRemoved = await callDelete({
+  token: signToken(validPayload()),
+  body: { filePath: "/custom-portfolio/user123/proof/reserved.jpg" },
+  developmentProof: true,
+  quotaStore: recoverableStore,
+  deleteFile: async () => {
+    assert.equal(recoverableStore.quota("user123").reservedBytes, JPEG.length);
+  },
+});
+assert.equal(reservedRemoved.status, 200);
+assert.equal(reservedRemoved.json.deleted, true);
+assert.equal(recoverableStore.quota("user123").reservedBytes, 0);
+assert.equal(recoverableStore.uploads.get("user123:reserved-delete")?.status, "deleted");
+
+let removedId = "";
+const removed = await callDelete({
+  token: signToken(validPayload()),
+  body: { fileId: ownedFileId },
+  developmentProof: true,
+  quotaStore: deleteStore,
+  deleteFile: async (fileId) => {
+    assert.equal(deleteStore.quota("user123").usedBytes, JPEG.length);
+    removedId = fileId;
+  },
+});
+assert.equal(removed.status, 200);
+assert.equal(removed.json.deleted, true);
+assert.equal(removedId, ownedFileId);
+assert.equal(deleteStore.quota("user123").usedBytes, 0);
+assert.equal(deleteStore.uploads.get("user123:delete-me")?.status, "deleted");
+assert.equal(JSON.stringify(removed.json).includes(privateApiKey), false);
+
+const productionDelete = read("api/imagekit-delete.ts");
+assert.equal(productionDelete.includes("developmentProof"), false);
+assert.equal(productionDelete.includes("IMAGEKIT_PRIVATE_KEY"), false);
+const deleteSource = read("src/server/imageKitServerDelete.ts");
+assert.equal(deleteSource.includes("developmentProof: true"), false);
+assert.doesNotMatch(deleteSource, /send\(res, 503, \{ error: error\.message \}\)/);
+assert.match(deleteSource, /error: IMAGEKIT_UNAVAILABLE/);
+assert.match(deleteSource, /portfolioIdFromImageKitPath/);
+const clientSourceAfterDelete = read("src/lib/imageKitStorage.ts");
+assert.equal(clientSourceAfterDelete.includes("IMAGEKIT_PRIVATE_KEY"), false);
+assert.match(clientSourceAfterDelete, /\/api\/imagekit-delete/);
+assert.equal(imageKitFileIdFromToken("imagekit:file_delete_me"), "file_delete_me");
+assert.equal(imageKitFileIdFromToken("imagekit:../file"), null);
+assert.equal(portfolioIdFromImageKitPath("/custom-portfolio/user123/portfolios/port-owned/portrait/a.jpg", "user123"), "port-owned");
+assert.equal(portfolioIdFromImageKitPath("/custom-portfolio/user123/proof/a.jpg", "user123"), null);
+assert.equal(portfolioIdFromImageKitPath("/custom-portfolio/user123/../secret.jpg", "user123"), null);
+
+const plugin = imageKitDevPlugin();
+assert.equal(typeof plugin.configureServer, "function");
+const routeHits: string[] = [];
+let devMiddleware: ((
+  req: { url?: string; method?: string; headers: Record<string, string | string[] | undefined> },
+  res: { statusCode: number; setHeader: (name: string, value: string) => void; end: (body?: string) => void },
+  next: () => void,
+) => Promise<void>) | undefined;
+if (typeof plugin.configureServer === "function") {
+  const server = {
+    config: { mode: "development", envDir: ".", root: "." },
+    middlewares: {
+      use(fn: NonNullable<typeof devMiddleware>) {
+        devMiddleware = fn;
+      },
+    },
+    async ssrLoadModule() {
+      return {
+        IMAGEKIT_MAX_BODY_BYTES: 1024,
+        IMAGEKIT_MAX_DELETE_BODY_BYTES: 1024,
+        readBoundedRequestBody: async () => Buffer.from("{}"),
+        handleImageKitServerUpload: async () => { routeHits.push("upload"); },
+        handleImageKitServerDelete: async () => { routeHits.push("delete"); },
+        handlePortfolioPolicy: async () => { routeHits.push("policy"); },
+        handlePortfolioCreate: async () => { routeHits.push("create"); },
+        handlePublishingCheckout: async () => { routeHits.push("checkout"); },
+      };
+    },
+  };
+  await plugin.configureServer(server as never);
+}
+assert.ok(devMiddleware);
+for (const path of ["/api/imagekit-delete", "/api/portfolio-policy", "/api/portfolio-create", "/api/publishing-checkout", "/api/imagekit-upload"]) {
+  await devMiddleware({ url: path, method: "POST", headers: {} }, { statusCode: 0, setHeader() {}, end() {} }, () => {
+    throw new Error(`${path} was not registered`);
+  });
+}
+assert.deepEqual(routeHits, ["delete", "policy", "create", "checkout", "upload"]);
 
 console.log("imagekit auth checks passed");

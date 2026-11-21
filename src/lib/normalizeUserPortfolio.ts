@@ -81,17 +81,30 @@ function readSocialLinks(value: unknown): SocialLink[] {
   return links;
 }
 
+function optionalProjectText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function readProjects(value: unknown): TemplateProject[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item) => {
     if (!isRecord(item) || typeof item.id !== "string" || typeof item.title !== "string") return [];
-    return [{
+    const project: TemplateProject = {
       id: item.id,
       title: item.title,
       category: text(item.category),
       url: text(item.url),
       tech: stringList(item.tech),
-    }];
+    };
+    const image = optionalProjectText(item.image);
+    const summary = optionalProjectText(item.summary);
+    const client = optionalProjectText(item.client);
+    const year = optionalProjectText(item.year);
+    if (image) project.image = image;
+    if (summary) project.summary = summary;
+    if (client) project.client = client;
+    if (year) project.year = year;
+    return [project];
   });
 }
 

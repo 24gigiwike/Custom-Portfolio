@@ -1,9 +1,19 @@
 import { createVerify } from "node:crypto";
+import {
+  expectedFirebaseProjectId,
+  FirebaseProjectIsolationError,
+  firebaseRuntime,
+  firebaseRuntimeLabel,
+  isLocalSandboxEmulator,
+  PRODUCTION_FIREBASE_PROJECT_ID,
+  SANDBOX_AUTH_EMULATOR_HOST,
+  SANDBOX_EMULATOR_PROJECT_ID,
+} from "../lib/firebaseEnvironment";
 
 const FIREBASE_CERTS_URL =
   "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com";
 
-export const DEFAULT_FIREBASE_PROJECT_ID = "custom-portfolio-2026";
+export const DEFAULT_FIREBASE_PROJECT_ID = PRODUCTION_FIREBASE_PROJECT_ID;
 
 const TOKEN_MAX_CHARS = 8192;
 const CLOCK_SKEW_SECONDS = 60;
@@ -24,9 +34,25 @@ type CertMap = Record<string, string>;
 
 let certCache: { expiresAt: number; certs: CertMap } | null = null;
 
-export function firebaseProjectId(): string {
-  const fromEnv = process.env.FIREBASE_PROJECT_ID?.trim() || process.env.VITE_FIREBASE_PROJECT_ID?.trim();
-  return fromEnv || DEFAULT_FIREBASE_PROJECT_ID;
+export function firebaseProjectId(env: NodeJS.ProcessEnv = process.env): string {
+  const runtime = firebaseRuntime(env);
+  const expected = expectedFirebaseProjectId(runtime);
+  const server = env.FIREBASE_PROJECT_ID?.trim() ?? "";
+  const client = env.VITE_FIREBASE_PROJECT_ID?.trim() ?? "";
+  if (server && client && server !== client) {
+    throw new FirebaseProjectIsolationError("Firebase client and server project IDs do not match.");
+  }
+  const selected = server || client;
+  const label = firebaseRuntimeLabel(runtime);
+  if (isLocalSandboxEmulator(env) && selected === SANDBOX_EMULATOR_PROJECT_ID) return selected;
+  if (!selected) {
+    if (runtime === "production") return expected;
+    throw new FirebaseProjectIsolationError(`${label} requires FIREBASE_PROJECT_ID=${expected}.`);
+  }
+  if (selected !== expected) {
+    throw new FirebaseProjectIsolationError(`${label} must use Firebase project ${expected}.`);
+  }
+  return selected;
 }
 
 function decodeBase64UrlJson(segment: string): unknown {
@@ -54,9 +80,36 @@ function audienceMatches(aud: unknown, projectId: string): boolean {
   return Array.isArray(aud) && aud.some((value) => value === projectId);
 }
 
+function useLocalAuthEmulator(projectId: string): boolean {
+  return projectId === SANDBOX_EMULATOR_PROJECT_ID
+    && (process.env.FIREBASE_AUTH_EMULATOR_HOST ?? "").trim() === SANDBOX_AUTH_EMULATOR_HOST
+    && isLocalSandboxEmulator(process.env);
+}
+
+/** Ask the local Auth emulator to accept the token. This never calls Google. */
+async function verifyLocalAuthEmulatorToken(token: string): Promise<VerifiedFirebaseUser> {
+  let response: Response;
+  try {
+    response = await fetch(`http://${SANDBOX_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:lookup`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ idToken: token }),
+    });
+  } catch {
+    throw new FirebaseIdTokenError();
+  }
+  if (!response.ok) throw new FirebaseIdTokenError();
+  const body = await response.json() as { users?: { localId?: unknown }[] };
+  const uid = body.users?.[0]?.localId;
+  if (typeof uid !== "string" || uid.length === 0 || uid.length > 128) throw new FirebaseIdTokenError();
+  return { uid };
+}
+
 /**
  * Verify a Firebase ID token with Google's published certificates.
  * The web API key is not a signing secret and is not used here.
+ * A local sandbox token is checked by the Auth emulator instead, and that
+ * path does not fall back to Google.
  */
 export async function verifyFirebaseIdToken(
   token: string,
@@ -87,6 +140,10 @@ export async function verifyFirebaseIdToken(
     payload = decodeBase64UrlJson(parts[1]) as typeof payload;
   } catch {
     throw new FirebaseIdTokenError();
+  }
+
+  if (useLocalAuthEmulator(projectId)) {
+    return verifyLocalAuthEmulatorToken(token);
   }
 
   if (header.alg !== "RS256" || typeof header.kid !== "string" || header.kid.length === 0) {
