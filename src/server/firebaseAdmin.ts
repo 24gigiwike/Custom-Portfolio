@@ -1,4 +1,5 @@
 import { cert, getApp, getApps, initializeApp, type App } from "firebase-admin/app";
+import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import {
   expectedFirebaseProjectId,
@@ -84,4 +85,9 @@ export function firebaseAdminApp(env: NodeJS.ProcessEnv = process.env): App | nu
 export function firebaseAdminFirestore(env: NodeJS.ProcessEnv = process.env): Firestore | null {
   const app = firebaseAdminApp(env);
   return app ? getFirestore(app) : null;
+}
+
+export function firebaseAdminAuth(env: NodeJS.ProcessEnv = process.env): Auth | null {
+  const app = firebaseAdminApp(env);
+  return app ? getAuth(app) : null;
 }

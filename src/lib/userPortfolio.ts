@@ -14,8 +14,12 @@ import type { UserPortfolio, UserPortfolioContent } from "../types/userPortfolio
 import { auth, db } from "./firebase";
 import { DEFAULT_ENABLED_SECTIONS, DEFAULT_PORTFOLIO_THEME, generateSlug } from "./portfolio";
 import { normalizeUserPortfolio } from "./normalizeUserPortfolio";
-import { seedPortfolioFromAccount } from "./portfolioSeed";
 import { findCatalogTemplate, templateForCreation } from "./templateCatalog";
+import {
+  completePortfolioCreateRequest,
+  portfolioCreateRequestId,
+  requestPortfolioCreate,
+} from "./portfolioCreateRequest";
 import { userFacingWriteError } from "./accountLoad";
 import {
   contentPreservingPublishing,
@@ -157,6 +161,7 @@ export async function createPortfolio(
   templateId: string
 ): Promise<UserPortfolio> {
   const ownerId = requireUid();
+  void account;
   const template = templateForCreation(templateId);
   if (!template) {
     throw new Error("That template is not available.");
@@ -169,18 +174,29 @@ export async function createPortfolio(
     throw new Error("This account already has a workspace portfolio. It was left unchanged.");
   }
 
-  const content = seedPortfolioFromAccount(account, template.id);
-  const portfolioRef = doc(collection(db, "portfolios"));
-  const portfolioId = portfolioRef.id;
-  await runTransaction(db, async (transaction) => {
-    transaction.set(portfolioRef, firestorePayload(portfolioId, ownerId, content, true));
-    transaction.set(identityRef(portfolioId), { portfolioId });
-  });
+  let portfolioId = "";
+  try {
+    const response = await requestPortfolioCreate({
+      purpose: "template",
+      templateId: template.id,
+      requestId: portfolioCreateRequestId(`template:${template.id}`),
+    });
+    portfolioId = response.portfolioId;
+  } catch (error) {
+    const raced = await findOwnedDocument(ownerId);
+    if (raced) {
+      const portfolio = readyPortfolio(raced.id, raced.data(), ownerId);
+      if (portfolio) return portfolio;
+    }
+    if (error instanceof Error && !("code" in error)) throw error;
+    rethrowPortfolioWrite(error, "Your portfolio could not be created.");
+  }
 
   const created = await getPortfolio(portfolioId);
   if (!created) {
     throw new Error("Your portfolio was created, but it could not be read back.");
   }
+  completePortfolioCreateRequest(`template:${template.id}`);
   return created;
 }
 

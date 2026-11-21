@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from "react";
+import { TheCreative } from "../templates/the-creative";
+import { templateConfig as creativeTemplateConfig } from "../templates/the-creative/data/template-config";
 import { WdkPremiumPortfolio } from "../templates/wdk-premium-portfolio-1";
+import { templateConfig as wdkTemplateConfig } from "../templates/wdk-premium-portfolio-1/data/template-config";
 import type { PortfolioData } from "../templates/wdk-premium-portfolio-1";
 import { useAuth } from "../lib/authContext";
 import { userFacingWriteError } from "../lib/accountLoad";
@@ -17,9 +20,10 @@ import { PORTFOLIO_EDITOR_PATH } from "../components/portfolio-editor/portfolioE
 import { isFramedPortfolioReview, PORTFOLIO_REVIEW_PATH } from "../components/portfolio-review/portfolioReviewPath";
 import { PORTFOLIO_WORKSPACE_PATH } from "../components/portfolio-workspace/portfolioWorkspacePath";
 import { TEMPLATE_DISCOVERY_PATH } from "../components/discover/templateDiscoveryPath";
-import { WDK_TEMPLATE_PREVIEW_PATH } from "./templatePreviewPath";
+import { CREATIVE_TEMPLATE_PREVIEW_PATH } from "./templatePreviewPath";
 import type { UserPortfolio } from "../types/userPortfolio";
 import { Button } from "../components/ui/Button";
+import { creativeSamplePortfolioData } from "../templates/the-creative/preview/creativeSamplePortfolio";
 import { wdkFictionalPortfolioData } from "./wdkFictionalPortfolioData";
 import { wdkSamplePortfolioData } from "./wdkSamplePortfolioData";
 
@@ -39,8 +43,29 @@ function useFontAwesomeKit() {
 
 function fixtureData(): PortfolioData | null {
   const data = new URLSearchParams(window.location.search).get("data");
-  if (data === "sample") return wdkSamplePortfolioData;
-  if (data === "fictional") return wdkFictionalPortfolioData;
+  const creative = window.location.pathname.startsWith(CREATIVE_TEMPLATE_PREVIEW_PATH);
+  if (data === "sample") return creative ? creativeSamplePortfolioData : wdkSamplePortfolioData;
+  if (data === "fictional") return creative ? creativeSamplePortfolioData : wdkFictionalPortfolioData;
+  return null;
+}
+
+function PortfolioSurface({
+  templateId,
+  data,
+  palette,
+  robots,
+}: {
+  templateId: string;
+  data: PortfolioData;
+  palette?: string;
+  robots?: string;
+}) {
+  if (templateId === creativeTemplateConfig.id) {
+    return <TheCreative data={data} robots={robots} />;
+  }
+  if (templateId === wdkTemplateConfig.id) {
+    return <WdkPremiumPortfolio data={data} palette={palette} robots={robots} />;
+  }
   return null;
 }
 
@@ -67,7 +92,7 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palet
   framed,
 }) => {
   const { user, userAccount, authPhase, accountError } = useAuth();
-  const template = catalogTemplateForPreviewPath(WDK_TEMPLATE_PREVIEW_PATH);
+  const template = catalogTemplateForPreviewPath(window.location.pathname);
   const [lookup, setLookup] = useState<OwnedPortfolioLookup | null>(null);
   const [portfolio, setPortfolio] = useState<UserPortfolio | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -130,6 +155,7 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palet
   if (fixture && (!user || authPhase === "SIGNED_OUT" || authPhase === "AUTH_LOADING")) {
     return (
       <DesignPreview
+        templateId={template?.id ?? ""}
         data={fixture}
         palette={palette}
         note="This is a template preview."
@@ -142,6 +168,7 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palet
   if (fixture && (authPhase === "ACCOUNT_LOADING" || isLoading)) {
     return (
       <DesignPreview
+        templateId={template?.id ?? ""}
         data={fixture}
         palette={palette}
         note="This is a template preview."
@@ -182,7 +209,7 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palet
     return (
       <>
         {!framed && <OwnedPreviewActions />}
-        <WdkPremiumPortfolio data={presentation.data} palette={presentation.palette} />
+        <PortfolioSurface templateId={portfolio.selectedTemplate} data={presentation.data} palette={presentation.palette} />
       </>
     );
   }
@@ -191,7 +218,7 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palet
     return (
       <>
         <OwnedPreviewActions />
-        <WdkPremiumPortfolio data={fixture} palette={palette} />
+        <PortfolioSurface templateId={template?.id ?? portfolio.selectedTemplate} data={fixture} palette={palette} />
       </>
     );
   }
@@ -216,7 +243,8 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palet
 
   return (
     <DesignPreview
-      data={fixture ?? wdkSamplePortfolioData}
+      templateId={template?.id ?? ""}
+      data={fixture ?? (template?.id === creativeTemplateConfig.id ? creativeSamplePortfolioData : wdkSamplePortfolioData)}
       palette={palette}
       note="This is the template. Your portfolio starts when you use it."
       actionLabel="Use this template"
@@ -268,6 +296,7 @@ function OwnedPreviewActions() {
 }
 
 function DesignPreview({
+  templateId,
   data,
   palette = "original",
   note,
@@ -277,6 +306,7 @@ function DesignPreview({
   error,
   onTemplates,
 }: {
+  templateId: string;
   data: PortfolioData;
   palette?: string;
   note: string;
@@ -302,7 +332,7 @@ function DesignPreview({
         </div>
         {error && <p className="w-full text-sm font-medium text-[#B93838]">{error}</p>}
       </div>
-      <WdkPremiumPortfolio data={data} palette={palette} />
+      <PortfolioSurface templateId={templateId} data={data} palette={palette} />
     </>
   );
 }

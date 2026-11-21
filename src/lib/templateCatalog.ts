@@ -1,4 +1,5 @@
-import { WDK_TEMPLATE_PREVIEW_PATH } from "../preview/templatePreviewPath.js";
+import { catalogPreviewPathname, CREATIVE_TEMPLATE_PREVIEW_PATH, WDK_TEMPLATE_PREVIEW_PATH } from "../preview/templatePreviewPath.js";
+import { templateConfig as creativeTemplateConfig } from "../templates/the-creative/data/template-config.js";
 import { templateConfig } from "../templates/wdk-premium-portfolio-1/data/template-config.js";
 import type { PortfolioData } from "../templates/wdk-premium-portfolio-1/types/portfolio";
 import type { PortfolioPaletteId } from "../types/portfolioDesign";
@@ -132,6 +133,17 @@ export type CatalogTemplate = {
   design: TemplateDesignCapabilities;
 };
 
+const CREATIVE_PREVIEW_IMAGE: TemplatePreviewImage = {
+  src: "/the-creative-preview.svg",
+  width: 1352,
+  height: 610,
+  alt: "Preview of The Creative, with a large name beside a tall image.",
+};
+
+const CREATIVE_DESIGN_CAPABILITIES = {
+  controls: [],
+} as const satisfies TemplateDesignCapabilities;
+
 const catalog: CatalogTemplate[] = [
   {
     id: templateConfig.id,
@@ -144,6 +156,18 @@ const catalog: CatalogTemplate[] = [
     availability: "available",
     capabilities: { areas: WDK_CONTENT_AREAS },
     design: WDK_DESIGN_CAPABILITIES,
+  },
+  {
+    id: creativeTemplateConfig.id,
+    name: creativeTemplateConfig.name,
+    version: creativeTemplateConfig.version,
+    description: creativeTemplateConfig.description,
+    fit: "A personal portfolio for a designer, art director, or other creative professional.",
+    previewPath: CREATIVE_TEMPLATE_PREVIEW_PATH,
+    previewImage: CREATIVE_PREVIEW_IMAGE,
+    availability: "available",
+    capabilities: { areas: WDK_CONTENT_AREAS },
+    design: CREATIVE_DESIGN_CAPABILITIES,
   },
 ];
 
@@ -161,7 +185,7 @@ export function templatePreviewImage(selectedTemplate: string): TemplatePreviewI
 }
 
 export function catalogTemplateForPreviewPath(path: string): CatalogTemplate | null {
-  const pathname = path.split("?")[0].split("#")[0];
+  const pathname = catalogPreviewPathname(path);
   return catalog.find((template) => template.previewPath === pathname) ?? null;
 }
 

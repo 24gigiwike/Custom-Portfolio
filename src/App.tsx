@@ -8,11 +8,13 @@ import { TemplateDiscovery } from "./components/discover/TemplateDiscovery";
 import { isTemplateDiscoveryPath, TEMPLATE_DISCOVERY_PATH } from "./components/discover/templateDiscoveryPath";
 import { PortfolioAppView } from "./components/portfolio/PortfolioAppView";
 import { Button } from "./components/ui/Button";
-import { isWdkTemplatePreviewPath } from "./preview/templatePreviewPath";
+import { isCatalogTemplatePreviewPath } from "./preview/templatePreviewPath";
 import { isPortfolioEditorPath } from "./components/portfolio-editor/portfolioEditorPath";
 import { PortfolioEditor } from "./components/portfolio-editor/PortfolioEditor";
 import { isPortfolioDesignPath } from "./components/portfolio-design/portfolioDesignPath";
 import { PortfolioDesign } from "./components/portfolio-design/PortfolioDesign";
+import { isPortfolioDomainPath } from "./components/portfolio-domain/domainSettingsPath";
+import { DomainSettings } from "./components/portfolio-domain/DomainSettings";
 import { isPortfolioPublishPath } from "./components/portfolio-publish/portfolioPublishPath";
 import { PortfolioPublish } from "./components/portfolio-publish/PortfolioPublish";
 import { PublishingPaymentReturn } from "./components/portfolio-publish/PublishingPaymentReturn";
@@ -25,6 +27,9 @@ import { PortfolioReview } from "./components/portfolio-review/PortfolioReview";
 import { isPortfolioWorkspacePath, PORTFOLIO_WORKSPACE_PATH } from "./components/portfolio-workspace/portfolioWorkspacePath";
 import { PortfolioWorkspace } from "./components/portfolio-workspace/PortfolioWorkspace";
 import { isPublicPortfolioPath, publicPortfolioIdFromPath } from "./components/public/publicPortfolioPath";
+import { LegalDocumentPage } from "./components/legal/LegalDocumentPage";
+import { ProductLegalFooter } from "./components/legal/ProductLegalFooter";
+import { isLegalPath } from "./lib/legalPaths";
 import {
   allocateHistoryIndex,
   allowHistoryLeave,
@@ -61,6 +66,7 @@ function AppContent() {
     () => isFramedPortfolioReview(window.location.search)
       || isPublicPortfolioPath(window.location.pathname)
       || isPublishingPaymentReturnPath(window.location.pathname)
+      || isLegalPath(window.location.pathname)
   );
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
     const path = window.location.pathname;
@@ -79,7 +85,7 @@ function AppContent() {
   }
 
   useLayoutEffect(() => {
-    if (isPublicPortfolioPath(currentRoute) || isWdkTemplatePreviewPath(currentRoute)) return;
+    if (isPublicPortfolioPath(currentRoute) || isCatalogTemplatePreviewPath(currentRoute)) return;
     document.title = platformTitle(currentRoute);
     const robots = platformRobots(currentRoute, siteEnvironmentFromHost(window.location.hostname));
     let meta = document.head.querySelector('meta[name="robots"]');
@@ -143,11 +149,12 @@ function AppContent() {
       return;
     }
     if (
-      isWdkTemplatePreviewPath(initialPath) ||
+      isCatalogTemplatePreviewPath(initialPath) ||
       isPortfolioEditorPath(initialPath) ||
       isPortfolioDesignPath(initialPath) ||
       isPortfolioReviewPath(initialPath) ||
       isPortfolioPublishPath(initialPath) ||
+      isPortfolioDomainPath(initialPath) ||
       isPortfolioSeoPath(initialPath) ||
       isPortfolioWorkspacePath(initialPath)
     ) {
@@ -167,7 +174,7 @@ function AppContent() {
         navigateTo(initialPath);
       }
     } else if (authPhase === "ONBOARDING_REQUIRED") {
-      navigateTo("/onboarding");
+      navigateTo(isLegalPath(initialPath) ? initialPath : "/onboarding");
     } else if (initialPath === "/discover") {
       navigateTo(TEMPLATE_DISCOVERY_PATH);
     } else if (authPhase === "TEMPLATE_DISCOVERY") {
@@ -188,13 +195,13 @@ function AppContent() {
 
   // Route protection & state synchronization
   useEffect(() => {
-    if (isPublicPortfolioPath(currentRoute)) return;
+    if (isPublicPortfolioPath(currentRoute) || isLegalPath(currentRoute)) return;
 
     if (!hasCompletedSplash || isAuthLoading || authPhase === "AUTH_LOADING" || authPhase === "ACCOUNT_LOADING") return;
 
     if (authPhase === "ACCOUNT_ERROR") return;
 
-    if (isWdkTemplatePreviewPath(currentRoute)) return;
+    if (isCatalogTemplatePreviewPath(currentRoute)) return;
 
     if (currentRoute === "/discover") {
       if (authPhase === "SIGNED_OUT" || !user) {
@@ -217,6 +224,7 @@ function AppContent() {
         isPortfolioDesignPath(currentRoute) ||
         isPortfolioReviewPath(currentRoute) ||
         isPortfolioPublishPath(currentRoute) ||
+        isPortfolioDomainPath(currentRoute) ||
         isPortfolioSeoPath(currentRoute) ||
         isPortfolioWorkspacePath(currentRoute) ||
         isTemplateDiscoveryPath(currentRoute)
@@ -253,6 +261,10 @@ function AppContent() {
     );
   }
 
+  if (isLegalPath(currentRoute)) {
+    return <LegalDocumentPage path={currentRoute.split("?")[0]?.split("#")[0] ?? currentRoute} onOpenPath={navigateTo} />;
+  }
+
   const paymentReturn = publishingPaymentReturnOutcome(currentRoute);
   if (paymentReturn) {
     const session = user
@@ -274,7 +286,7 @@ function AppContent() {
     return <SplashScreen onComplete={handleSplashComplete} minDuration={2000} />;
   }
 
-  if (isWdkTemplatePreviewPath(currentRoute)) {
+  if (isCatalogTemplatePreviewPath(currentRoute)) {
     return (
       <Suspense fallback={<div className="min-h-screen bg-[#F8F5F0]" />}>
         <WdkTemplatePreview />
@@ -284,35 +296,38 @@ function AppContent() {
 
   if (user && (authPhase === "ACCOUNT_ERROR" || isRetryingAccount)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F3FAF9] px-6 font-sans text-[#243838]">
-        <div className="w-full max-w-md rounded-2xl border border-[#D5E6E5] bg-white p-8 shadow-[0_12px_32px_rgba(109,174,173,0.08)]">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">Account</p>
-          <h1 className="mt-2 text-2xl font-bold tracking-[-0.04em]">Account data couldn't be loaded</h1>
-          <p className="mt-3 text-sm font-medium leading-relaxed text-[#5C7372]">
-            {accountError || "You're signed in, but your account could not be loaded. This is not a new account."}
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Button
-              id="retry-account-load"
-              isLoading={isRetryingAccount}
-              onClick={() => {
-                setIsRetryingAccount(true);
-                void retryLoadAccount().finally(() => setIsRetryingAccount(false));
-              }}
-            >
-              Try again
-            </Button>
-            <Button id="sign-out-account-error" variant="outline" onClick={() => void signOutUser()}>
-              Sign out
-            </Button>
+      <div className="flex min-h-screen flex-col bg-[#F3FAF9] font-sans text-[#243838]">
+        <div className="flex flex-1 items-center justify-center px-6">
+          <div className="w-full max-w-md rounded-2xl border border-[#D5E6E5] bg-white p-8 shadow-[0_12px_32px_rgba(109,174,173,0.08)]">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#3E7574]">Account</p>
+            <h1 className="mt-2 text-2xl font-bold tracking-[-0.04em]">Account data couldn't be loaded</h1>
+            <p className="mt-3 text-sm font-medium leading-relaxed text-[#5C7372]">
+              {accountError || "You're signed in, but your account could not be loaded. This is not a new account."}
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button
+                id="retry-account-load"
+                isLoading={isRetryingAccount}
+                onClick={() => {
+                  setIsRetryingAccount(true);
+                  void retryLoadAccount().finally(() => setIsRetryingAccount(false));
+                }}
+              >
+                Try again
+              </Button>
+              <Button id="sign-out-account-error" variant="outline" onClick={() => void signOutUser()}>
+                Sign out
+              </Button>
+            </div>
           </div>
         </div>
+        <ProductLegalFooter onOpenPath={navigateTo} />
       </div>
     );
   }
 
   return (
-    <div className="w-full min-h-screen bg-[#F3FAF9]">
+    <div className="flex min-h-screen w-full flex-col bg-[#F3FAF9]">
       <AnimatePresence mode="wait">
         {currentRoute === "/app" && user && authPhase === "READY" ? (
           <motion.div
@@ -340,7 +355,7 @@ function AppContent() {
           >
             <TemplateDiscovery onOpenPath={navigateTo} />
           </motion.div>
-        ) : (isPortfolioWorkspacePath(currentRoute) || isPortfolioEditorPath(currentRoute) || isPortfolioDesignPath(currentRoute) || isPortfolioReviewPath(currentRoute) || isPortfolioPublishPath(currentRoute) || isPortfolioSeoPath(currentRoute)) && !user ? (
+        ) : (isPortfolioWorkspacePath(currentRoute) || isPortfolioEditorPath(currentRoute) || isPortfolioDesignPath(currentRoute) || isPortfolioReviewPath(currentRoute) || isPortfolioPublishPath(currentRoute) || isPortfolioDomainPath(currentRoute) || isPortfolioSeoPath(currentRoute)) && !user ? (
           <div className="flex min-h-screen items-center justify-center bg-[#F3FAF9] font-sans text-[#243838]">
             <p className="text-sm font-medium text-[#5C7372]">Loading your portfolio…</p>
           </div>
@@ -407,6 +422,17 @@ function AppContent() {
           >
             <PortfolioPublish onOpenPath={navigateTo} />
           </motion.div>
+        ) : isPortfolioDomainPath(currentRoute) && user ? (
+          <motion.div
+            key="portfolio-domain-route"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full min-h-screen"
+          >
+            <DomainSettings onOpenPath={navigateTo} />
+          </motion.div>
         ) : isPortfolioSeoPath(currentRoute) && user ? (
           <motion.div
             key="portfolio-seo-route"
@@ -438,10 +464,11 @@ function AppContent() {
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
             className="w-full min-h-screen"
           >
-            <AuthScreen />
+            <AuthScreen onOpenPath={navigateTo} />
           </motion.div>
         )}
       </AnimatePresence>
+      <ProductLegalFooter onOpenPath={navigateTo} className="pb-24 lg:pb-6" />
     </div>
   );
 }

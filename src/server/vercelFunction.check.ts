@@ -48,6 +48,26 @@ function emittedName(file: string): string {
   return rel;
 }
 
+const firebaseEnvNames = [
+  "VERCEL_ENV",
+  "FIREBASE_PROJECT_ID",
+  "VITE_FIREBASE_API_KEY",
+  "VITE_FIREBASE_AUTH_DOMAIN",
+  "VITE_FIREBASE_PROJECT_ID",
+  "VITE_FIREBASE_STORAGE_BUCKET",
+  "VITE_FIREBASE_MESSAGING_SENDER_ID",
+  "VITE_FIREBASE_APP_ID",
+] as const;
+const savedFirebaseEnv = Object.fromEntries(firebaseEnvNames.map((name) => [name, process.env[name]]));
+for (const name of firebaseEnvNames) delete process.env[name];
+process.env.VERCEL_ENV = "production";
+const originalFetch = globalThis.fetch;
+let requestedFirestoreUrl = "";
+globalThis.fetch = (async (input: RequestInfo | URL) => {
+  requestedFirestoreUrl = String(input);
+  return new Response("{}", { status: 404 });
+}) as typeof fetch;
+
 try {
   for (const file of files) {
     const dest = join(out, emittedName(file));
@@ -108,7 +128,18 @@ try {
   assert.equal(missing.status, 404);
   assert.match(missing.body, /<title>Portfolio<\/title>/);
   assert.match(missing.body, /noindex, nofollow/);
+  assert.equal(missing.body.includes("custom-portfolio-2026"), false);
+  assert.equal(missing.body.includes("VITE_FIREBASE"), false);
+  const requested = new URL(requestedFirestoreUrl);
+  assert.equal(requested.pathname.includes("/projects/custom-portfolio-2026/"), true);
+  assert.equal(requested.pathname.includes("custom-by-broadbrand"), false);
 } finally {
+  globalThis.fetch = originalFetch;
+  for (const name of firebaseEnvNames) {
+    const value = savedFirebaseEnv[name];
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
   rmSync(out, { recursive: true, force: true });
 }
 

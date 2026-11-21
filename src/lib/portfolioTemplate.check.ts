@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { isPortfolioEditorPath } from "../components/portfolio-editor/portfolioEditorPath";
 import { isPortfolioWorkspacePath, PORTFOLIO_WORKSPACE_PATH } from "../components/portfolio-workspace/portfolioWorkspacePath";
 import { isTemplateDiscoveryPath, TEMPLATE_DISCOVERY_PATH } from "../components/discover/templateDiscoveryPath";
-import { WDK_TEMPLATE_PREVIEW_PATH } from "../preview/templatePreviewPath";
+import { CREATIVE_TEMPLATE_PREVIEW_PATH, WDK_TEMPLATE_PREVIEW_PATH, catalogSamplePreviewPath, isCatalogTemplatePreviewPath } from "../preview/templatePreviewPath";
+import { editorAreasForTemplate } from "../components/portfolio-editor/editorDraft";
 import { portfolioTemplateInfo, publishingStatusLabel } from "./portfolioTemplate";
 import {
   catalogTemplateForPreviewPath,
@@ -10,14 +11,16 @@ import {
   findCatalogTemplate,
   listCatalogTemplates,
   templateContentAreas,
+  templateDesignCapabilities,
   templateForCreation,
   templatePreviewImage,
   templateSupportsContentArea,
 } from "./templateCatalog";
 
 const templates = listCatalogTemplates();
-assert.equal(templates.length, 1);
+assert.equal(templates.length, 2);
 assert.equal(templates[0]?.id, "wdk-premium-portfolio-1");
+assert.equal(templates[1]?.id, "the-creative");
 
 const wdk = findCatalogTemplate("wdk-premium-portfolio-1");
 assert.ok(wdk);
@@ -62,6 +65,21 @@ assert.equal(templateSupportsContentArea("unknown-template", "profile"), false);
 assert.notDeepEqual(templateContentAreas("unknown-template"), templateContentAreas(wdk.id));
 assert.equal(templateForCreation(""), null);
 assert.equal(catalogTemplateForPreviewPath("/template-preview/future-template"), null);
+
+const creative = findCatalogTemplate("the-creative");
+assert.ok(creative);
+assert.equal(creative.name, "The Creative");
+assert.equal(creative.availability, "available");
+assert.equal(creative.previewPath, CREATIVE_TEMPLATE_PREVIEW_PATH);
+assert.equal(creative.previewImage.src, "/the-creative-preview.svg");
+assert.equal(templateForCreation("the-creative")?.id, "the-creative");
+assert.equal(templateDesignCapabilities("the-creative")?.controls.length, 0);
+assert.deepEqual(editorAreasForTemplate("the-creative"), editorAreasForTemplate(wdk.id));
+assert.equal(catalogSamplePreviewPath(CREATIVE_TEMPLATE_PREVIEW_PATH), `${CREATIVE_TEMPLATE_PREVIEW_PATH}?data=sample`);
+assert.equal(isCatalogTemplatePreviewPath(`${CREATIVE_TEMPLATE_PREVIEW_PATH}?data=sample`), true);
+assert.equal(isCatalogTemplatePreviewPath("/template-preview/the-creative/work/atelier"), true);
+assert.equal(catalogTemplateForPreviewPath("/template-preview/the-creative/work/atelier")?.id, "the-creative");
+assert.notEqual(creative.previewPath, wdk.previewPath);
 
 const unknown = portfolioTemplateInfo("future-template");
 assert.equal(unknown.name, "future-template");

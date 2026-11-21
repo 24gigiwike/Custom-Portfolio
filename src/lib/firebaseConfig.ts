@@ -2,6 +2,8 @@ import {
   expectedFirebaseProjectId,
   FirebaseProjectIsolationError,
   firebaseRuntimeLabel,
+  SANDBOX_EMULATOR_PROJECT_ID,
+  SANDBOX_FIRESTORE_EMULATOR_HOST,
   type FirebaseRuntime,
 } from "./firebaseEnvironment";
 
@@ -43,8 +45,11 @@ function bucketMatchesProject(bucket: string, projectId: string): boolean {
   return true;
 }
 
-function assertSelectedProject(config: FirebaseWebConfig, runtime: FirebaseRuntime): void {
-  const expected = expectedFirebaseProjectId(runtime);
+function assertSelectedProject(config: FirebaseWebConfig, runtime: FirebaseRuntime, emulatorHost?: string): void {
+  const sandbox = runtime === "local"
+    && (emulatorHost ?? "").trim() === SANDBOX_FIRESTORE_EMULATOR_HOST
+    && config.projectId === SANDBOX_EMULATOR_PROJECT_ID;
+  const expected = sandbox ? SANDBOX_EMULATOR_PROJECT_ID : expectedFirebaseProjectId(runtime);
   const label = firebaseRuntimeLabel(runtime);
   if (config.projectId !== expected) {
     throw new FirebaseProjectIsolationError(`${label} must use Firebase project ${expected}.`);
@@ -66,7 +71,7 @@ function assertSelectedProject(config: FirebaseWebConfig, runtime: FirebaseRunti
 export function resolveFirebaseWebConfig(
   env: Partial<Record<(typeof FIREBASE_ENV_KEYS)[number], string | undefined>>,
   fallback: FirebaseWebConfig,
-  options: { runtime: FirebaseRuntime },
+  options: { runtime: FirebaseRuntime; emulatorHost?: string },
 ): FirebaseWebConfig {
   const runtime = options.runtime;
   const expected = expectedFirebaseProjectId(runtime);
@@ -80,7 +85,7 @@ export function resolveFirebaseWebConfig(
       );
     }
     const selected = webConfigFromEnv(env);
-    assertSelectedProject(selected, runtime);
+    assertSelectedProject(selected, runtime, options.emulatorHost);
     return selected;
   }
 
@@ -96,7 +101,7 @@ export function resolveFirebaseWebConfig(
   }
 
   const selected = webConfigFromEnv(env);
-  assertSelectedProject(selected, runtime);
+  assertSelectedProject(selected, runtime, options.emulatorHost);
   return selected;
 }
 

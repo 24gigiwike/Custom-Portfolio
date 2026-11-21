@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { initializeTestEnvironment, assertFails } from "@firebase/rules-unit-testing";
-import { collection, doc, getDoc, getDocs, runTransaction, updateDoc, type Firestore } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, type Firestore } from "firebase/firestore";
 import { commitPublicSlug, inspectPublicSlug } from "./portfolioSlugAccess";
 import {
   SLUG_CHECK_MESSAGE,
@@ -54,13 +54,12 @@ try {
   const otherDb = other.firestore() as unknown as Firestore;
   const anonDb = anon.firestore() as unknown as Firestore;
 
-  await runTransaction(ownerDb, async (transaction) => {
-    transaction.set(doc(ownerDb, "portfolios", "slugPortA"), portfolioDoc("owner-a"));
-    transaction.set(doc(ownerDb, "portfolioIds", "slugPortA"), { portfolioId: "slugPortA" });
-  });
-  await runTransaction(otherDb, async (transaction) => {
-    transaction.set(doc(otherDb, "portfolios", "slugPortB"), portfolioDoc("owner-b"));
-    transaction.set(doc(otherDb, "portfolioIds", "slugPortB"), { portfolioId: "slugPortB" });
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(doc(db, "portfolios", "slugPortA"), portfolioDoc("owner-a"));
+    await setDoc(doc(db, "portfolioIds", "slugPortA"), { portfolioId: "slugPortA" });
+    await setDoc(doc(db, "portfolios", "slugPortB"), portfolioDoc("owner-b"));
+    await setDoc(doc(db, "portfolioIds", "slugPortB"), { portfolioId: "slugPortB" });
   });
 
   const missing = await getDoc(doc(ownerDb, "portfolioSlugs", "motionbyjp"));
@@ -132,13 +131,12 @@ try {
 
   const first = testEnv.authenticatedContext("owner-c").firestore() as unknown as Firestore;
   const secondWriter = testEnv.authenticatedContext("owner-d").firestore() as unknown as Firestore;
-  await runTransaction(first, async (transaction) => {
-    transaction.set(doc(first, "portfolios", "slugPortC"), portfolioDoc("owner-c"));
-    transaction.set(doc(first, "portfolioIds", "slugPortC"), { portfolioId: "slugPortC" });
-  });
-  await runTransaction(secondWriter, async (transaction) => {
-    transaction.set(doc(secondWriter, "portfolios", "slugPortD"), portfolioDoc("owner-d"));
-    transaction.set(doc(secondWriter, "portfolioIds", "slugPortD"), { portfolioId: "slugPortD" });
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(doc(db, "portfolios", "slugPortC"), portfolioDoc("owner-c"));
+    await setDoc(doc(db, "portfolioIds", "slugPortC"), { portfolioId: "slugPortC" });
+    await setDoc(doc(db, "portfolios", "slugPortD"), portfolioDoc("owner-d"));
+    await setDoc(doc(db, "portfolioIds", "slugPortD"), { portfolioId: "slugPortD" });
   });
   const race = await Promise.allSettled([
     commitPublicSlug(first, "owner-c", "slugPortC", "shared-studio"),
@@ -155,6 +153,18 @@ try {
   assert.equal(shared.exists(), true);
   assert.ok(shared.data()?.portfolioId === "slugPortC" || shared.data()?.portfolioId === "slugPortD");
 
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(doc(db, "publishingControls", "gate"), { enabled: true });
+    await setDoc(doc(db, "portfolioPublishingEntitlements", "slugPortA"), {
+      uid: "owner-a",
+      portfolioId: "slugPortA",
+      status: "active",
+      source: "payment",
+      paymentId: "pay-slug",
+      schemaVersion: 1,
+    });
+  });
   await updateDoc(doc(ownerDb, "portfolios", "slugPortA"), {
     publishing: { status: "published" },
   });

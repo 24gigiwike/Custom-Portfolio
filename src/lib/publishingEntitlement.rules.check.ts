@@ -189,7 +189,7 @@ try {
     profile: { brandName: "Ada", headline: "Saved while live" },
   }));
   await assertSucceeds(setDoc(doc(ownerDb, "publicPortfolios", "port-kept"), publicBody("port-kept")));
-  await assertSucceeds(getDoc(doc(anonDb, "publicPortfolios", "port-kept")));
+  await assertFails(getDoc(doc(anonDb, "publicPortfolios", "port-kept")));
   await assertSucceeds(updateDoc(doc(ownerDb, "portfolios", "port-kept"), {
     publishing: { status: "draft", publishedAt: null },
     published: false,
@@ -310,7 +310,7 @@ try {
     slug: "ada-notes",
     updatedAt: serverTimestamp(),
   }));
-  await assertSucceeds(getDoc(doc(anonDb, "publicPortfolios", "port-unpaid")));
+  await assertFails(getDoc(doc(anonDb, "publicPortfolios", "port-unpaid")));
   await assertFails(getDoc(doc(anonDb, "portfolios", "port-unpaid")));
   await assertFails(deleteDoc(doc(ownerDb, "publishingEntitlements", "owner-a")));
   await assertSucceeds(updateDoc(doc(ownerDb, "portfolios", "port-unpaid"), {
@@ -332,6 +332,7 @@ try {
     profile: { brandName: "Ada", headline: "Still public" },
   }));
   await assertSucceeds(setDoc(doc(ownerDb, "publicPortfolios", "port-live"), publicBody("port-live")));
+  await assertFails(getDoc(doc(anonDb, "publicPortfolios", "port-live")));
   await assertSucceeds(updateDoc(doc(ownerDb, "portfolios", "port-live"), {
     publishing: { status: "draft", publishedAt: null },
     published: false,
@@ -578,6 +579,49 @@ try {
   await assertFails(updateDoc(doc(ownerDb, "portfolios", "port-expiry-mismatch"), publishFields));
   await assertFails(updateDoc(doc(ownerDb, "portfolios", "port-expiry-owner"), publishFields));
   await assertFails(updateDoc(doc(ownerDb, "portfolios", "port-expiry-missing"), publishFields));
+  await seed(async (db) => {
+    await setDoc(doc(db, "portfolios", "port-grace-open"), publishedPortfolio("owner-a"));
+    await setDoc(doc(db, "portfolioPublishingEntitlements", "port-grace-open"), expiryEntitlement("port-grace-open", "owner-a", Timestamp.fromMillis(Date.now() - 2 * 86_400_000)));
+    await setDoc(doc(db, "publicPortfolios", "port-grace-open"), publicBody("port-grace-open"));
+    await setDoc(doc(db, "portfolios", "port-grace-closed"), publishedPortfolio("owner-a"));
+    await setDoc(doc(db, "portfolioPublishingEntitlements", "port-grace-closed"), expiryEntitlement("port-grace-closed", "owner-a", Timestamp.fromMillis(Date.now() - 8 * 86_400_000)));
+    await setDoc(doc(db, "publicPortfolios", "port-grace-closed"), publicBody("port-grace-closed"));
+  });
+  await assertSucceeds(getDoc(doc(anonDb, "publicPortfolios", "port-grace-open")));
+  await assertFails(getDoc(doc(anonDb, "publicPortfolios", "port-grace-closed")));
+  await seed(async (db) => {
+    await setDoc(doc(db, "portfolios", "port-legacy-public"), publishedPortfolio("owner-a"));
+    await setDoc(doc(db, "portfolioPublishingEntitlements", "port-legacy-public"), expiryEntitlement("port-legacy-public", "owner-a"));
+    await setDoc(doc(db, "publicPortfolios", "port-legacy-public"), publicBody("port-legacy-public"));
+    await setDoc(doc(db, "portfolios", "port-legacy-draft"), draftPortfolio("owner-a"));
+    await setDoc(doc(db, "portfolioPublishingEntitlements", "port-legacy-draft"), expiryEntitlement("port-legacy-draft", "owner-a"));
+    await setDoc(doc(db, "publicPortfolios", "port-legacy-draft"), publicBody("port-legacy-draft"));
+    await setDoc(doc(db, "portfolios", "port-renewed-public"), publishedPortfolio("owner-a"));
+    await setDoc(doc(db, "portfolioPublishingEntitlements", "port-renewed-public"), expiryEntitlement("port-renewed-public", "owner-a", futureExpiry));
+    await setDoc(doc(db, "publicPortfolios", "port-renewed-public"), publicBody("port-renewed-public"));
+    await setDoc(doc(db, "portfolios", "port-manual-hidden"), {
+      ...publishedPortfolio("owner-a"),
+      publishing: { status: "draft", publishedAt: null },
+      published: false,
+    });
+    await setDoc(doc(db, "portfolioPublishingEntitlements", "port-manual-hidden"), expiryEntitlement("port-manual-hidden", "owner-a", futureExpiry));
+    await setDoc(doc(db, "publicPortfolios", "port-manual-hidden"), publicBody("port-manual-hidden"));
+    const revoked = expiryEntitlement("port-revoked-public", "owner-a", futureExpiry);
+    revoked.status = "revoked";
+    await setDoc(doc(db, "portfolios", "port-revoked-public"), publishedPortfolio("owner-a"));
+    await setDoc(doc(db, "portfolioPublishingEntitlements", "port-revoked-public"), revoked);
+    await setDoc(doc(db, "publicPortfolios", "port-revoked-public"), publicBody("port-revoked-public"));
+  });
+  await assertSucceeds(getDoc(doc(anonDb, "publicPortfolios", "port-legacy-public")));
+  await assertFails(getDoc(doc(anonDb, "publicPortfolios", "port-legacy-draft")));
+  await assertSucceeds(getDoc(doc(anonDb, "publicPortfolios", "port-renewed-public")));
+  await assertFails(getDoc(doc(anonDb, "publicPortfolios", "port-manual-hidden")));
+  await assertFails(getDoc(doc(anonDb, "publicPortfolios", "port-revoked-public")));
+  await assertSucceeds(updateDoc(doc(ownerDb, "portfolios", "port-grace-closed"), {
+    profile: { brandName: "Ada", headline: "Still editable after grace" },
+  }));
+  await assertSucceeds(getDoc(doc(ownerDb, "portfolios", "port-grace-closed")));
+
   await assertSucceeds(updateDoc(doc(ownerDb, "portfolios", "port-expiry-live"), {
     profile: { brandName: "Ada", headline: "Saved while the entitlement is expired" },
   }));

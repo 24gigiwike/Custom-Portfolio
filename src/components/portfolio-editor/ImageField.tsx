@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { imagePhaseLabel } from "../../lib/imageAttempt";
+import { imageValueUsesUploadMode } from "../../lib/imageKitMedia";
 import type { ImageUploadStatus } from "../../lib/storage";
 import { FieldError, fieldClass } from "../onboarding/StepFrame";
 
@@ -42,7 +43,7 @@ export function ImageField({
   onRetry,
   onCancel,
 }: ImageFieldProps) {
-  const [mode, setMode] = useState<"upload" | "link">(value && !value.startsWith("https://firebasestorage.googleapis.com") && !value.includes("/portfolio-assets/") ? "link" : "upload");
+  const [mode, setMode] = useState<"upload" | "link">(imageValueUsesUploadMode(value) ? "upload" : "link");
   const busy = status?.phase === "preparing" || status?.phase === "optimizing" || status?.phase === "uploading" || status?.phase === "finalizing";
   const statusText = imageStatusLabel(status);
   const preview = localUrl || value;

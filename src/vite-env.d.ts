@@ -7,6 +7,10 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_STORAGE_BUCKET?: string;
   readonly VITE_FIREBASE_MESSAGING_SENDER_ID?: string;
   readonly VITE_FIREBASE_APP_ID?: string;
+  /** Local Firestore emulator host, for example 127.0.0.1:8080. Absent in production builds. */
+  readonly VITE_FIRESTORE_EMULATOR_HOST?: string;
+  /** Local Auth emulator host, for example 127.0.0.1:9099. Absent in production builds. */
+  readonly VITE_FIREBASE_AUTH_EMULATOR_HOST?: string;
   readonly VITE_PORTFOLIO_PUBLIC_ORIGIN?: string;
   /** BroadBrand support WhatsApp number: digits with country code, or E.164. Empty hides Contact Support. */
   readonly VITE_BROADBRAND_SUPPORT_WHATSAPP?: string;

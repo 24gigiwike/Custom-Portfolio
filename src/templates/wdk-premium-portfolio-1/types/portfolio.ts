@@ -29,6 +29,11 @@ export type Project = {
     category: string;
     url: string;
     tech: string[];
+    /** Optional editorial fields. Omitted when empty. The WDK template does not read them. */
+    image?: string;
+    summary?: string;
+    client?: string;
+    year?: string;
 };
 
 export type PortfolioContact = {

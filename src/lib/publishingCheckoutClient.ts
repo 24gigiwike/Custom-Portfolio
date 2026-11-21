@@ -3,7 +3,9 @@ import { auth, db } from "./firebase";
 import { PORTFOLIO_PUBLISHING_ENTITLEMENT_COLLECTION } from "./publishingEntitlement";
 import {
   classifyPortfolioPublishingAccess,
+  describePublishingLifecycle,
   type PublishingAccess,
+  type PublishingLifecyclePhase,
 } from "./publishingTerm";
 
 const ATTEMPT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -28,6 +30,35 @@ export function publishingCheckoutAttemptId(portfolioId: string): string {
   } catch {
     return crypto.randomUUID();
   }
+}
+
+export type PublishingTermView = {
+  phase: PublishingLifecyclePhase;
+  expiresAt: string | null;
+  gracePeriodEndsAt: string | null;
+  renewalOpensAt: string | null;
+  renewed: boolean;
+};
+
+export async function readPublishingTerm(portfolioId: string, now = new Date()): Promise<PublishingTermView> {
+  const user = auth.currentUser;
+  if (!user) return { phase: "none", expiresAt: null, gracePeriodEndsAt: null, renewalOpensAt: null, renewed: false };
+  const snap = await getDoc(doc(db, PORTFOLIO_PUBLISHING_ENTITLEMENT_COLLECTION, portfolioId));
+  const lifecycle = describePublishingLifecycle({
+    record: snap.exists() ? snap.data() : null,
+    now,
+  });
+  if (snap.exists()) {
+    const data = snap.data();
+    if (data.uid !== user.uid || data.portfolioId !== portfolioId) {
+      return { phase: "none", expiresAt: null, gracePeriodEndsAt: null, renewalOpensAt: null, renewed: false };
+    }
+  }
+  const basis = snap.exists() ? snap.data().renewalBasis : null;
+  return {
+    ...lifecycle,
+    renewed: lifecycle.phase === "active" && (basis === "early" || basis === "grace" || basis === "late"),
+  };
 }
 
 export async function readPortfolioPublishingAccess(portfolioId: string): Promise<PublishingAccess> {

@@ -6,7 +6,8 @@
 import type { Firestore } from "firebase-admin/firestore";
 import type { CreateCheckoutSessionRequest } from "@bachs/sdk";
 import { serverPublishingPriceQuote } from "./publishingPaymentDecision";
-import { classifyPortfolioPublishingAccess, type PublishingAccess } from "../lib/publishingTerm";
+import { publishingCheckoutEligibility } from "../lib/publishingTerm";
+import { firebaseRuntime } from "../lib/firebaseEnvironment";
 import { assertBachsApiKeyForRuntime, assertBachsProductForRuntime, BachsRuntimeError } from "./bachsRuntime";
 
 export const PUBLISHING_CHECKOUT_COLLECTION = "publishingCheckoutAttempts";
@@ -35,6 +36,10 @@ export type PublishingCheckoutAttempt = {
   checkoutUrl: string | null;
   expiresAt: string;
   createdAt: string;
+  renewalBasis: "extend" | "fresh";
+  anchoredExpiresAt: string | null;
+  initiatedAt: string;
+  ledgerEnvironment: "production" | "preview" | "local";
 };
 
 export type PublishingCheckoutStore = {
@@ -187,14 +192,9 @@ export async function executePublishingCheckout(input: {
   }
 
   const entitlement = await input.loadEntitlement(portfolioId);
-  const access: PublishingAccess = classifyPortfolioPublishingAccess({
-    uid: input.uid,
-    portfolioId,
-    record: entitlement,
-    now: input.now,
-  });
-  if (access === "entitled") return { status: 200, body: { outcome: "entitled" } };
-  const purpose = access === "renewal-required" ? "renew" : "publish";
+  const eligibility = publishingCheckoutEligibility({ record: entitlement, now: input.now });
+  if (!eligibility.allowed) return { status: 200, body: { outcome: "entitled" } };
+  const purpose = eligibility.purpose;
 
   const urls = readPublishingReturnUrls(input.env);
   if (urls.ok === false) {
@@ -244,6 +244,10 @@ export async function executePublishingCheckout(input: {
     checkoutUrl: null,
     expiresAt: new Date(input.now.getTime() + 60 * 60 * 1000).toISOString(),
     createdAt,
+    renewalBasis: eligibility.renewalBasis,
+    anchoredExpiresAt: eligibility.anchoredExpiresAt,
+    initiatedAt: createdAt,
+    ledgerEnvironment: firebaseRuntime(input.env),
   };
   if (draft.reference.length > 128 || draft.idempotencyKey.length > 128) {
     return { status: 400, body: { error: "The publishing request is not valid.", code: "invalid-request" } };
@@ -298,12 +302,17 @@ export function memoryPublishingCheckoutStore(): PublishingCheckoutStore {
   const docs = new Map<string, PublishingCheckoutAttempt>();
   return {
     async mutate(portfolioId, change) {
-      const next = change(docs.get(portfolioId) ?? null);
+      const current = docs.get(portfolioId) ?? null;
+      const next = change(current);
       if (!next) {
         docs.delete(portfolioId);
         return null;
       }
-      if (next.portfolioId !== portfolioId) return docs.get(portfolioId) ?? null;
+      if (next.portfolioId !== portfolioId) return current;
+      if (current && current.attemptId !== next.attemptId) {
+        const prior = docs.get(`${portfolioId}/attempts/${current.attemptId}`) ?? current;
+        docs.set(`${portfolioId}/attempts/${current.attemptId}`, prior);
+      }
       docs.set(portfolioId, next);
       return next;
     },
@@ -323,6 +332,9 @@ export function firestorePublishingCheckoutStore(db: Firestore): PublishingCheck
           return null;
         }
         if (next.portfolioId !== portfolioId) return current;
+        if (current && current.attemptId !== next.attemptId) {
+          transaction.set(ref.collection("attempts").doc(current.attemptId), current);
+        }
         transaction.set(ref, next);
         return next;
       });

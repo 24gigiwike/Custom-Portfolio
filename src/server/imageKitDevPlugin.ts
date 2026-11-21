@@ -57,6 +57,8 @@ export function imageKitDevServerEnv(mode: string, envDir: string): NodeJS.Proce
     IMAGEKIT_PRIVATE_KEY: loaded.IMAGEKIT_PRIVATE_KEY,
     IMAGEKIT_PUBLIC_KEY: loaded.IMAGEKIT_PUBLIC_KEY,
     IMAGEKIT_URL_ENDPOINT: loaded.IMAGEKIT_URL_ENDPOINT,
+    IMAGEKIT_UPLOAD_ALLOW_UIDS: loaded.IMAGEKIT_UPLOAD_ALLOW_UIDS,
+    IMAGEKIT_DEFAULT_ACCOUNT_QUOTA_BYTES: loaded.IMAGEKIT_DEFAULT_ACCOUNT_QUOTA_BYTES,
     FIREBASE_PROJECT_ID: loaded.FIREBASE_PROJECT_ID,
     VITE_FIREBASE_PROJECT_ID: loaded.VITE_FIREBASE_PROJECT_ID,
     FIREBASE_ADMIN_PROJECT_ID: loaded.FIREBASE_ADMIN_PROJECT_ID,
@@ -64,9 +66,39 @@ export function imageKitDevServerEnv(mode: string, envDir: string): NodeJS.Proce
     FIREBASE_ADMIN_PRIVATE_KEY: loaded.FIREBASE_ADMIN_PRIVATE_KEY,
     BACHS_API_KEY: loaded.BACHS_API_KEY,
     BACHS_WEBHOOK_SECRET: loaded.BACHS_WEBHOOK_SECRET,
+    BACHS_SANDBOX_WEBHOOK_SECRET: loaded.BACHS_SANDBOX_WEBHOOK_SECRET,
+    BACHS_SANDBOX_API_KEY: loaded.BACHS_SANDBOX_API_KEY,
+    BACHS_SANDBOX_DOMAIN_PRODUCT_ID: loaded.BACHS_SANDBOX_DOMAIN_PRODUCT_ID,
     BACHS_PUBLISHING_PRODUCT_ID: loaded.BACHS_PUBLISHING_PRODUCT_ID,
     BACHS_PUBLISHING_SUCCESS_URL: loaded.BACHS_PUBLISHING_SUCCESS_URL,
     BACHS_PUBLISHING_CANCEL_URL: loaded.BACHS_PUBLISHING_CANCEL_URL,
+    DNA_API_BASE: loaded.DNA_API_BASE,
+    DNA_API_KEY: loaded.DNA_API_KEY,
+    DNA_RESELLER_ID: loaded.DNA_RESELLER_ID,
+    DNA_ALLOW_REGISTRATION: loaded.DNA_ALLOW_REGISTRATION,
+    DOMAINNAMEAPI_ENV: loaded.DOMAINNAMEAPI_ENV,
+    DOMAINNAMEAPI_API_KEY: loaded.DOMAINNAMEAPI_API_KEY,
+    DOMAIN_NAME_API_OTE_KEY: loaded.DOMAIN_NAME_API_OTE_KEY,
+    DOMAIN_NAME_API_OTE_RESELLER_ID: loaded.DOMAIN_NAME_API_OTE_RESELLER_ID,
+    DOMAIN_MARKUP_BASIS_POINTS: loaded.DOMAIN_MARKUP_BASIS_POINTS,
+    EXCHANGE_RATE_PROVIDER: loaded.EXCHANGE_RATE_PROVIDER,
+    OPEN_EXCHANGE_RATES_APP_ID: loaded.OPEN_EXCHANGE_RATES_APP_ID,
+    EXCHANGE_RATE_MAX_AGE_SECONDS: loaded.EXCHANGE_RATE_MAX_AGE_SECONDS,
+    DOMAIN_QUOTE_TTL_SECONDS: loaded.DOMAIN_QUOTE_TTL_SECONDS,
+    FIRESTORE_EMULATOR_HOST: loaded.FIRESTORE_EMULATOR_HOST,
+    FIREBASE_AUTH_EMULATOR_HOST: loaded.FIREBASE_AUTH_EMULATOR_HOST,
+    BACHS_DOMAIN_PRODUCT_ID: loaded.BACHS_DOMAIN_PRODUCT_ID,
+    BACHS_DOMAIN_SUCCESS_URL: loaded.BACHS_DOMAIN_SUCCESS_URL,
+    BACHS_DOMAIN_CANCEL_URL: loaded.BACHS_DOMAIN_CANCEL_URL,
+    CLOUDFLARE_API_TOKEN: loaded.CLOUDFLARE_API_TOKEN,
+    CLOUDFLARE_ACCOUNT_ID: loaded.CLOUDFLARE_ACCOUNT_ID,
+    CLOUDFLARE_DNS_WRITES: loaded.CLOUDFLARE_DNS_WRITES,
+    VERCEL_APEX_IPV4: loaded.VERCEL_APEX_IPV4,
+    VERCEL_CNAME_TARGET: loaded.VERCEL_CNAME_TARGET,
+    VERCEL_TOKEN: loaded.VERCEL_TOKEN,
+    VERCEL_PROJECT_ID: loaded.VERCEL_PROJECT_ID,
+    VERCEL_TEAM_ID: loaded.VERCEL_TEAM_ID,
+    VERCEL_DOMAIN_WRITES: loaded.VERCEL_DOMAIN_WRITES,
     VERCEL_ENV: "",
   };
 }
@@ -108,6 +140,112 @@ export function imageKitDevPlugin(): Plugin {
           res.setHeader("cache-control", "no-store");
           res.setHeader("x-robots-tag", "noindex");
           res.end(RETIRED_ROUTE);
+          return;
+        }
+        if (pathname === "/api/imagekit-delete") {
+          const upload = await server.ssrLoadModule("/src/server/imageKitServerUpload.ts") as typeof import("./imageKitServerUpload");
+          const removal = await server.ssrLoadModule("/src/server/imageKitServerDelete.ts") as typeof import("./imageKitServerDelete");
+          const body = await upload.readBoundedRequestBody(req, removal.IMAGEKIT_MAX_DELETE_BODY_BYTES);
+          await removal.handleImageKitServerDelete(
+            {
+              method: req.method,
+              headers: req.headers,
+              body: body === "too-large" ? undefined : body,
+              bodyTooLarge: body === "too-large",
+            },
+            nodeResponse(res),
+            {
+              env: imageKitDevServerEnv(server.config.mode, server.config.envDir || server.config.root),
+              developmentProof: true,
+            },
+          );
+          return;
+        }
+        if (pathname === "/api/portfolio-policy") {
+          const creation = await server.ssrLoadModule("/src/server/portfolioCreateHandler.ts") as typeof import("./portfolioCreateHandler");
+          await creation.handlePortfolioPolicy(
+            { method: req.method, headers: req.headers },
+            nodeResponse(res),
+            { env: imageKitDevServerEnv(server.config.mode, server.config.envDir || server.config.root) },
+          );
+          return;
+        }
+        if (pathname === "/api/portfolio-create") {
+          const upload = await server.ssrLoadModule("/src/server/imageKitServerUpload.ts") as typeof import("./imageKitServerUpload");
+          const creation = await server.ssrLoadModule("/src/server/portfolioCreateHandler.ts") as typeof import("./portfolioCreateHandler");
+          const body = await upload.readBoundedRequestBody(req, 32_768);
+          if (body === "too-large") {
+            res.statusCode = 413;
+            res.setHeader("content-type", "application/json; charset=utf-8");
+            res.setHeader("cache-control", "no-store");
+            res.end(JSON.stringify({ error: "The portfolio request is not valid.", code: "invalid-request" }));
+            return;
+          }
+          await creation.handlePortfolioCreate(
+            { method: req.method, headers: req.headers, body },
+            nodeResponse(res),
+            { env: imageKitDevServerEnv(server.config.mode, server.config.envDir || server.config.root) },
+          );
+          return;
+        }
+        if (pathname === "/api/bachs-webhook") {
+          const webhook = await server.ssrLoadModule("/src/server/bachsWebhookHandler.ts") as typeof import("./bachsWebhookHandler");
+          const body = await webhook.readRawWebhookBody(req, webhook.BACHS_WEBHOOK_MAX_BODY_BYTES);
+          await webhook.handleBachsWebhook(
+            {
+              method: req.method,
+              headers: req.headers,
+              body: body === "too-large" ? undefined : new Uint8Array(body),
+              bodyTooLarge: body === "too-large",
+            },
+            nodeResponse(res),
+            { env: imageKitDevServerEnv(server.config.mode, server.config.envDir || server.config.root) },
+          );
+          return;
+        }
+        if (pathname === "/api/domain-order" || pathname === "/api/domain-checkout") {
+          const upload = await server.ssrLoadModule("/src/server/imageKitServerUpload.ts") as typeof import("./imageKitServerUpload");
+          const checkout = await server.ssrLoadModule("/src/server/domainCheckoutHandler.ts") as typeof import("./domainCheckoutHandler");
+          const token = await server.ssrLoadModule("/src/server/firebaseIdToken.ts") as typeof import("./firebaseIdToken");
+          const body = await upload.readBoundedRequestBody(req, 16_384);
+          if (body === "too-large") {
+            res.statusCode = 413;
+            res.setHeader("content-type", "application/json; charset=utf-8");
+            res.setHeader("cache-control", "no-store");
+            res.end(JSON.stringify({ error: "The domain request is not valid.", code: "invalid-request" }));
+            return;
+          }
+          const env = imageKitDevServerEnv(server.config.mode, server.config.envDir || server.config.root);
+          const options = await checkout.domainPurchaseOptions(env, (idToken, projectId) => token.verifyFirebaseIdToken(idToken, projectId));
+          const response = nodeResponse(res);
+          if (pathname === "/api/domain-order") {
+            await checkout.handleDomainOrder({ method: req.method, url: req.url, headers: req.headers, body }, response, options.order);
+          } else {
+            await checkout.handleDomainCheckout({ method: req.method, headers: req.headers, body }, response, options.checkout);
+          }
+          return;
+        }
+        if (pathname === "/api/domain-search") {
+          const upload = await server.ssrLoadModule("/src/server/imageKitServerUpload.ts") as typeof import("./imageKitServerUpload");
+          const search = await server.ssrLoadModule("/src/server/domainOrderHandler.ts") as typeof import("./domainOrderHandler");
+          const token = await server.ssrLoadModule("/src/server/firebaseIdToken.ts") as typeof import("./firebaseIdToken");
+          const body = await upload.readBoundedRequestBody(req, 4_096);
+          if (body === "too-large") {
+            res.statusCode = 413;
+            res.setHeader("content-type", "application/json; charset=utf-8");
+            res.setHeader("cache-control", "no-store");
+            res.end(JSON.stringify({ error: "The domain request is not valid.", code: "invalid-request" }));
+            return;
+          }
+          const env = imageKitDevServerEnv(server.config.mode, server.config.envDir || server.config.root);
+          await search.handleDomainSearch(
+            { method: req.method, headers: req.headers, body },
+            nodeResponse(res),
+            {
+              env,
+              verify: (idToken, projectId) => token.verifyFirebaseIdToken(idToken, projectId),
+            },
+          );
           return;
         }
         if (pathname === "/api/publishing-checkout") {

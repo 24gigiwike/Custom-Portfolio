@@ -50,6 +50,19 @@ const published = documentFor({
 });
 
 const originalFetch = globalThis.fetch;
+const firebaseEnvNames = [
+  "VERCEL_ENV",
+  "FIREBASE_PROJECT_ID",
+  "VITE_FIREBASE_API_KEY",
+  "VITE_FIREBASE_AUTH_DOMAIN",
+  "VITE_FIREBASE_PROJECT_ID",
+  "VITE_FIREBASE_STORAGE_BUCKET",
+  "VITE_FIREBASE_MESSAGING_SENDER_ID",
+  "VITE_FIREBASE_APP_ID",
+] as const;
+const savedFirebaseEnv = Object.fromEntries(firebaseEnvNames.map((name) => [name, process.env[name]]));
+for (const name of firebaseEnvNames) delete process.env[name];
+process.env.VERCEL_ENV = "production";
 
 function mockFetch(handler: (url: string) => Response) {
   globalThis.fetch = (async (input: RequestInfo | URL) => handler(String(input))) as typeof fetch;
@@ -246,8 +259,53 @@ try {
   assert.equal(idRefresh.status, 301);
   assert.equal(idRefresh.headers.location, "https://customportfolio.broadbrand.com.ng/p/johnpaul");
   assert.equal(idRefresh.body.includes("John Paul"), false);
+
+  process.env.VERCEL_ENV = "preview";
+  const isolated = await respond("/api/site?kind=sitemap", "preview-deployment.vercel.app");
+  assert.equal(isolated.status, 503);
+  assert.equal(isolated.body, "Sitemap unavailable");
+  assert.equal(isolated.body.includes("custom-portfolio-2026"), false);
+  assert.equal(isolated.body.includes("custom-by-broadbrand"), false);
+  assert.equal(isolated.body.includes("VITE_FIREBASE"), false);
+  const isolatedPage = await publicPortfolioHtml("ABC123", shell, "production", process.env);
+  assert.equal(isolatedPage.status, 502);
+  assert.equal(isolatedPage.html.includes("custom-portfolio-2026"), false);
+  assert.equal(isolatedPage.html.includes("custom-by-broadbrand"), false);
+  assert.equal(isolatedPage.html.includes("VITE_FIREBASE"), false);
+  process.env.VERCEL_ENV = "production";
+  mockFetch((url) => {
+    if (url.includes("/sitemapEntries")) {
+      return new Response(JSON.stringify({
+        documents: ["ACTIVE1", "LEGACY1", "EXPIRED1", "REVOKED1", "MANUAL1", "DRAFT01"].map((publicId) => ({
+          fields: { publicId: { stringValue: publicId } },
+        })),
+      }), { status: 200 });
+    }
+    if (url.includes("/publicPortfolios/ACTIVE1") || url.includes("/publicPortfolios/LEGACY1")) {
+      return new Response("{}", { status: 200 });
+    }
+    if (url.includes("/publicPortfolios/DRAFT01")) return new Response("{}", { status: 404 });
+    return new Response("{}", { status: 403 });
+  });
+  const sitemap = await respond("/api/site?kind=sitemap", "customportfolio.broadbrand.com.ng");
+  assert.equal(sitemap.status, 200);
+  assert.equal(sitemap.headers["cache-control"], "public, max-age=0, must-revalidate");
+  assert.match(sitemap.body, /\/p\/ACTIVE1/);
+  assert.match(sitemap.body, /\/p\/LEGACY1/);
+  assert.equal(sitemap.body.includes("EXPIRED1"), false);
+  assert.equal(sitemap.body.includes("REVOKED1"), false);
+  assert.equal(sitemap.body.includes("MANUAL1"), false);
+  assert.equal(sitemap.body.includes("DRAFT01"), false);
+  const plugin = readFileSync(new URL("./seoPlugin.ts", import.meta.url), "utf8");
+  assert.match(plugin, /cache-control", "public, max-age=0, must-revalidate"/);
+  assert.equal(plugin.includes("max-age=300"), false);
 } finally {
   globalThis.fetch = originalFetch;
+  for (const name of firebaseEnvNames) {
+    const value = savedFirebaseEnv[name];
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
 }
 
 console.log("seo response checks passed");

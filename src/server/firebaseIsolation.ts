@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolveFirebaseWebConfig, type FirebaseWebConfig } from "../lib/firebaseConfig";
-import { firebaseRuntime } from "../lib/firebaseEnvironment";
+import { FirebaseProjectIsolationError, firebaseRuntime, SANDBOX_EMULATOR_PROJECT_ID } from "../lib/firebaseEnvironment";
 import { assertFirebaseAdminForRuntime } from "./firebaseAdmin";
 import { firebaseProjectId } from "./firebaseIdToken";
 
@@ -23,7 +23,12 @@ export function committedFirebaseWebConfig(root: string): FirebaseWebConfig {
  */
 export function validateFirebaseEnvironment(env: NodeJS.ProcessEnv, fallback: FirebaseWebConfig): FirebaseWebConfig {
   const runtime = firebaseRuntime(env);
-  const web = resolveFirebaseWebConfig(env, fallback, { runtime });
+  const web = resolveFirebaseWebConfig(env, fallback, { runtime, emulatorHost: env.FIRESTORE_EMULATOR_HOST });
+  if (runtime === "local" && web.projectId === SANDBOX_EMULATOR_PROJECT_ID) {
+    if (web.apiKey === fallback.apiKey || web.appId === fallback.appId || web.projectId === fallback.projectId) {
+      throw new FirebaseProjectIsolationError("Local sandbox cannot use the production Firebase web configuration.");
+    }
+  }
   firebaseProjectId(env);
   assertFirebaseAdminForRuntime(env);
   return web;

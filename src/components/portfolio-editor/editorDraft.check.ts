@@ -68,6 +68,7 @@ assert.deepEqual(editorAreasForTemplate("wdk-premium-portfolio-1"), [
   "projects",
   "contact",
 ]);
+assert.deepEqual(editorAreasForTemplate("the-creative"), editorAreasForTemplate("wdk-premium-portfolio-1"));
 assert.equal(editorAreasForTemplate("future-template"), null);
 assert.equal(editorAreasForTemplate("unknown-template"), null);
 
@@ -254,5 +255,20 @@ assert.deepEqual(unknownContent.seo, portfolio.seo);
 assert.deepEqual(unknownContent.design, { palette: "ocean" });
 assert.deepEqual(unknownContent.publishing, portfolio.publishing);
 assert.equal(validateEditorDraft(unknownDraft, unknownPortfolio.selectedTemplate), null);
+
+const creativePortfolio: UserPortfolio = { ...portfolio, selectedTemplate: "the-creative" };
+const creativeDraft = draftFromPortfolio(creativePortfolio);
+creativeDraft.projects[0].url = "";
+creativeDraft.projects[0].image = "https://images.unsplash.com/photo-1497366216548-37526070297c";
+creativeDraft.projects[0].summary = "A quieter identity.";
+creativeDraft.projects[0].client = "Northline";
+creativeDraft.projects[0].year = "2024";
+assert.equal(validateEditorDraft(creativeDraft, "the-creative"), null);
+const creativeContent = contentFromDraft(creativePortfolio, creativeDraft);
+assert.equal(creativeContent.projects[0]?.url, "");
+assert.equal(creativeContent.projects[0]?.client, "Northline");
+assert.equal(creativeContent.projects[0]?.year, "2024");
+assert.equal(creativeContent.projects[0]?.summary, "A quieter identity.");
+assert.match(creativeContent.projects[0]?.image ?? "", /unsplash\.com/);
 
 console.log("editor draft checks passed");

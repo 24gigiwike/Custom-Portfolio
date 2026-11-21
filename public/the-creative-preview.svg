@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1352" height="610" viewBox="0 0 1352 610" fill="none">
+  <rect width="1352" height="610" fill="#F3EEE6"/>
+  <rect x="760" y="0" width="592" height="610" fill="#D8CBB8"/>
+  <rect x="808" y="72" width="470" height="466" fill="#8C8176"/>
+  <text x="72" y="250" fill="#211915" font-family="Geist, sans-serif" font-size="84">The Creative</text>
+  <text x="76" y="318" fill="#6E6258" font-family="Geist, sans-serif" font-size="28">Editorial portfolio</text>
+  <path d="M76 390 H420" stroke="#9A4032" stroke-width="3"/>
+</svg>

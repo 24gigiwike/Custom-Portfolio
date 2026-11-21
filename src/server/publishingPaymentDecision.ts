@@ -106,10 +106,15 @@ export function serverPublishingPriceQuote(clientSubmitted?: unknown): Publishin
   return quote.quote;
 }
 
+/** True only for tax this server approved. A client-shaped object is not approved. */
+export function isApprovedPublishingTax(value: unknown): value is ApprovedPublishingTax {
+  return isApprovedTax(value);
+}
+
 export function quotePublishingPayment(
   tax: ApprovedPublishingTax,
 ): { ok: true; quote: PublishingPriceQuote } | { ok: false; reason: "unapproved-tax" | "invalid-tax" } {
-  if (!isApprovedTax(tax)) return { ok: false, reason: "unapproved-tax" };
+  if (!isApprovedPublishingTax(tax)) return { ok: false, reason: "unapproved-tax" };
   const parts = priceParts(tax);
   if (parts === null) return { ok: false, reason: "invalid-tax" };
   return {
@@ -162,6 +167,11 @@ export function decidePublishingCharge(input: {
     taxAmount: quoted.quote.taxAmount,
     expectedCustomerAmount: expected,
   };
+}
+
+/** A request from the customer is not a completed reversal and does not change publishing access. */
+export function customerRefundRequestChangesEntitlement(): false {
+  return false;
 }
 
 export function decidePublishingRefund(input: {

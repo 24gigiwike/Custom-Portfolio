@@ -1,7 +1,11 @@
+import { imageKitFileIdFromToken } from "./imageKitMedia";
+
 const STORAGE_PREFIX = "portfolio-assets/";
 
 export function isStoredImagePath(value: unknown): value is string {
-  return typeof value === "string" && value.startsWith(STORAGE_PREFIX) && !value.includes("..");
+  if (typeof value !== "string" || value.includes("..")) return false;
+  if (value.startsWith(STORAGE_PREFIX)) return true;
+  return imageKitFileIdFromToken(value) !== null;
 }
 
 export function readCoverImagePath(value: unknown): string | null {

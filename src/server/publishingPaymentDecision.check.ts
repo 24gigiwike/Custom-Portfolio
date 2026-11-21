@@ -7,8 +7,8 @@ import {
   decidePublishingRefund,
   quotePublishingPayment,
   serverPublishingPriceQuote,
+  isApprovedPublishingTax,
   serverPublishingTaxConfiguration,
-  type ApprovedPublishingTax,
   type BoundPublishingCheckout,
   type RetrievedPublishingCharge,
 } from "./publishingPaymentDecision";
@@ -35,8 +35,8 @@ const clientShaped = {
   rateNumerator: 75,
   rateDenominator: 1000,
   amount: "1.00",
-} as ApprovedPublishingTax;
-assert.equal(quotePublishingPayment(clientShaped).ok, false);
+};
+assert.equal(isApprovedPublishingTax(clientShaped), false);
 
 const syntheticVat = approvePublishingTax({
   applicable: true,

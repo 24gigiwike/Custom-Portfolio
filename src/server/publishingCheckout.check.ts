@@ -83,6 +83,30 @@ assert.equal(entitled.body.outcome, "entitled");
 assert.equal(paid.calls.length, 0);
 assert.equal(paid.productReads.length, 0);
 
+const tooSoon = harness({
+  entitlement: {
+    uid: "owner-1",
+    portfolioId: "portfolio01",
+    status: "active",
+    expiresAt: { toMillis: () => Date.parse("2026-11-25T08:00:00.000Z") },
+  },
+});
+const closed = await tooSoon.run({ portfolioId: "portfolio01", attemptId: attemptA });
+assert.equal(closed.body.outcome, "entitled");
+assert.equal(tooSoon.calls.length, 0);
+
+const due = harness({
+  entitlement: {
+    uid: "owner-1",
+    portfolioId: "portfolio01",
+    status: "active",
+    expiresAt: { toMillis: () => Date.parse("2026-11-24T08:00:00.000Z") },
+  },
+});
+const windowCheckout = await due.run({ portfolioId: "portfolio01", attemptId: attemptB });
+assert.equal(windowCheckout.body.outcome, "checkout");
+assert.equal(windowCheckout.body.purpose, "renew");
+
 const expired = harness({ entitlement: { uid: "owner-1", portfolioId: "portfolio01", status: "active", expiresAt: "2026-01-01T00:00:00.000Z" } });
 const renewal = await expired.run({ portfolioId: "portfolio01", attemptId: attemptA, amount: "1.00", success_url: "http://localhost/stolen" });
 assert.equal(renewal.body.outcome, "checkout");

@@ -1,11 +1,12 @@
 import React from "react";
 import { motion } from "motion/react";
 import { brand } from "../../config/branding";
+import { PRIVACY_POLICY_PATH, TERMS_PATH } from "../../lib/legalPaths";
 import { GoogleSignInButton } from "./GoogleSignInButton";
 import { useAuth } from "../../lib/authContext";
 import { AlertCircle } from "lucide-react";
 
-export const AuthScreen: React.FC = () => {
+export const AuthScreen: React.FC<{ onOpenPath?: (path: string) => void }> = ({ onOpenPath }) => {
   const { signInWithGoogle, status, error, clearError } = useAuth();
   const isLoading = status === "authenticating";
 
@@ -90,13 +91,21 @@ export const AuthScreen: React.FC = () => {
             />
             <p className="max-w-xs text-[11px] leading-relaxed text-[#6E8887]">
               By continuing, you agree to Custom Portfolio&apos;s{" "}
-              <span className="cursor-pointer font-semibold text-[#3E7574] underline underline-offset-2">
-                Terms of Service
-              </span>{" "}
+              <button
+                type="button"
+                onClick={() => onOpenPath?.(TERMS_PATH)}
+                className="font-semibold text-[#3E7574] underline underline-offset-2"
+              >
+                Terms &amp; Conditions
+              </button>{" "}
               and{" "}
-              <span className="cursor-pointer font-semibold text-[#3E7574] underline underline-offset-2">
+              <button
+                type="button"
+                onClick={() => onOpenPath?.(PRIVACY_POLICY_PATH)}
+                className="font-semibold text-[#3E7574] underline underline-offset-2"
+              >
                 Privacy Policy
-              </span>
+              </button>
               .
             </p>
           </div>

@@ -1,4 +1,4 @@
-const PUBLIC_ID = /^\/p\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})\/?$/;
+const PUBLIC_ID = /^\/p\/([A-Za-z0-9][A-Za-z0-9_-]{0,127})(?:\/work\/[A-Za-z0-9][A-Za-z0-9_-]{0,80})?\/?$/;
 
 export function publicPortfolioPath(publicId: string): string {
   return `/p/${publicId}`;

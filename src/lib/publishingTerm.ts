@@ -9,10 +9,22 @@
  */
 
 export const PUBLISHING_TERM_MONTHS = 12;
+export const PUBLISHING_RENEWAL_WINDOW_DAYS = 7;
+export const PUBLISHING_GRACE_PERIOD_DAYS = 7;
+const PUBLISHING_WINDOW_MS = PUBLISHING_RENEWAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
 export type PublishingAccess = "entitled" | "payment-required" | "renewal-required";
 
-export type PublishingRenewalBasis = "first" | "early" | "late";
+export type PublishingRenewalBasis = "first" | "early" | "grace" | "late";
+
+export type PublishingLifecyclePhase =
+  | "none"
+  | "grandfather"
+  | "active"
+  | "renewal-window"
+  | "grace"
+  | "lapsed"
+  | "revoked";
 
 export type PublishingPaymentHistoryEntry = {
   paymentId: string;
@@ -135,19 +147,212 @@ export function publicationAttemptAccess(input: {
   return "entitled";
 }
 
+export function renewalWindowOpensAt(expiresAt: Date): Date {
+  return new Date(expiresAt.getTime() - PUBLISHING_WINDOW_MS);
+}
+
+export function gracePeriodEndsAt(expiresAt: Date): Date {
+  return new Date(expiresAt.getTime() + PUBLISHING_WINDOW_MS);
+}
+
+/** One current term. Renewal is closed until seven days before expiry. Public access lasts through the grace period. */
+export function describePublishingLifecycle(input: {
+  record: unknown;
+  now: Date;
+}): {
+  phase: PublishingLifecyclePhase;
+  expiresAt: string | null;
+  gracePeriodEndsAt: string | null;
+  renewalOpensAt: string | null;
+} {
+  if (!input.record || typeof input.record !== "object") {
+    return { phase: "none", expiresAt: null, gracePeriodEndsAt: null, renewalOpensAt: null };
+  }
+  const data = input.record as Record<string, unknown>;
+  if (data.status === "revoked") {
+    return { phase: "revoked", expiresAt: null, gracePeriodEndsAt: null, renewalOpensAt: null };
+  }
+  if (data.status !== "active") {
+    return { phase: "none", expiresAt: null, gracePeriodEndsAt: null, renewalOpensAt: null };
+  }
+  if (!Object.prototype.hasOwnProperty.call(data, "expiresAt")) {
+    return { phase: "grandfather", expiresAt: null, gracePeriodEndsAt: null, renewalOpensAt: null };
+  }
+  const millis = firestoreExpiryMillis(data.expiresAt);
+  if (millis == null) return { phase: "lapsed", expiresAt: null, gracePeriodEndsAt: null, renewalOpensAt: null };
+  const expires = new Date(millis);
+  const opens = renewalWindowOpensAt(expires);
+  const graceEnds = gracePeriodEndsAt(expires);
+  const now = input.now.getTime();
+  const phase: PublishingLifecyclePhase = now < opens.getTime()
+    ? "active"
+    : now < expires.getTime()
+      ? "renewal-window"
+      : now < graceEnds.getTime()
+        ? "grace"
+        : "lapsed";
+  return {
+    phase,
+    expiresAt: expires.toISOString(),
+    gracePeriodEndsAt: graceEnds.toISOString(),
+    renewalOpensAt: opens.toISOString(),
+  };
+}
+
+/**
+ * Checkout opens for a first purchase, the final seven days, the grace period,
+ * and any time after grace. It stays closed while the current term has more than seven days left.
+ */
+export function publishingCheckoutEligibility(input: {
+  record: unknown;
+  now: Date;
+}): { allowed: false; reason: "not-due" } | {
+  allowed: true;
+  purpose: "publish" | "renew";
+  renewalBasis: "extend" | "fresh";
+  anchoredExpiresAt: string | null;
+} {
+  const lifecycle = describePublishingLifecycle(input);
+  if (lifecycle.phase === "grandfather" || lifecycle.phase === "active") {
+    return { allowed: false, reason: "not-due" };
+  }
+  if (lifecycle.phase === "renewal-window" || lifecycle.phase === "grace") {
+    return {
+      allowed: true,
+      purpose: "renew",
+      renewalBasis: "extend",
+      anchoredExpiresAt: lifecycle.expiresAt,
+    };
+  }
+  return {
+    allowed: true,
+    purpose: lifecycle.phase === "none" ? "publish" : "renew",
+    renewalBasis: "fresh",
+    anchoredExpiresAt: null,
+  };
+}
+
+export type PublishingDashboardNotice = {
+  title: string;
+  body: string;
+  renewalAvailable: boolean;
+  describesPublic: boolean;
+};
+
+function utcDate(iso: string | null): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+function daysUntil(iso: string | null, now: Date): number {
+  if (!iso) return 0;
+  return Math.max(0, Math.ceil((Date.parse(iso) - now.getTime()) / 86_400_000));
+}
+
+/**
+ * Customer-facing publishing state. A draft is never described as publicly available.
+ * Renewal does not by itself publish a portfolio the owner has unpublished.
+ */
+export function publishingDashboardNotice(input: {
+  phase: PublishingLifecyclePhase;
+  published: boolean;
+  expiresAt: string | null;
+  gracePeriodEndsAt: string | null;
+  renewalOpensAt: string | null;
+  renewed: boolean;
+  now: Date;
+}): PublishingDashboardNotice {
+  const expiry = utcDate(input.expiresAt);
+  const grace = utcDate(input.gracePeriodEndsAt);
+  const opens = utcDate(input.renewalOpensAt);
+  const renewalAvailable = input.phase === "renewal-window" || input.phase === "grace" || input.phase === "lapsed" || input.phase === "revoked";
+  if (!input.published) {
+    const refunded = input.phase === "revoked";
+    return {
+      title: refunded ? "Publishing refunded" : "Unpublished",
+      body: refunded
+        ? "A refund ended this publishing period. This portfolio is not on its public address. Your content, projects, and images are still saved. Publishing it again is a separate step after you renew."
+        : "This portfolio is not on its public address. Your content, projects, and images are still saved. A renewal keeps the publishing period, and the page stays unpublished until you choose to publish it.",
+      renewalAvailable,
+      describesPublic: false,
+    };
+  }
+  if (input.phase === "grandfather") {
+    return {
+      title: "Published",
+      body: "This portfolio is on its public address. It was published before annual publishing payments, so no payment is due for its current availability.",
+      renewalAvailable: false,
+      describesPublic: true,
+    };
+  }
+  if (input.phase === "revoked") {
+    return {
+      title: "Publishing refunded",
+      body: "A refund ended this publishing period, so the public page is not available. Your content, projects, and images are still saved.",
+      renewalAvailable: true,
+      describesPublic: false,
+    };
+  }
+  if (input.phase === "lapsed") {
+    return {
+      title: "Public page paused",
+      body: `The publishing period ended on ${expiry}, and the grace period ended on ${grace}. The public page is not available. Your content is still saved. Renewing for ₦10,000 can bring the public page back, because you had published it.`,
+      renewalAvailable: true,
+      describesPublic: false,
+    };
+  }
+  if (input.phase === "grace") {
+    return {
+      title: "Grace period",
+      body: `Your publishing period ended on ${expiry}. The public page stays available through ${grace}. ${daysUntil(input.gracePeriodEndsAt, input.now)} days remain in this grace period. You can renew for ₦10,000.`,
+      renewalAvailable: true,
+      describesPublic: true,
+    };
+  }
+  if (input.phase === "renewal-window") {
+    return {
+      title: "Renewal available",
+      body: `Publishing expires on ${expiry}. ${daysUntil(input.expiresAt, input.now)} days remaining. You can renew now for ₦10,000. The public page stays available.`,
+      renewalAvailable: true,
+      describesPublic: true,
+    };
+  }
+  if (input.renewed) {
+    return {
+      title: "Renewed",
+      body: `Your renewal is active through ${expiry}. The public page stays available. The renewal price remains ₦10,000, and there are no automatic charges.`,
+      renewalAvailable: false,
+      describesPublic: true,
+    };
+  }
+  return {
+    title: "Active",
+    body: `Your portfolio is published through ${expiry}. Renewal opens on ${opens}. Your portfolio stays saved here.`,
+    renewalAvailable: false,
+    describesPublic: true,
+  };
+}
+
+/** Public visitors can open the portfolio through the paid term and the seven-day grace period. */
+export function publishingPubliclyVisible(record: unknown, now: Date): boolean {
+  const lifecycle = describePublishingLifecycle({ record, now });
+  return lifecycle.phase === "grandfather" || lifecycle.phase === "active" || lifecycle.phase === "renewal-window" || lifecycle.phase === "grace";
+}
+
 /**
  * First payment runs twelve months from the verified timestamp.
- * A payment verified while the current expiry is still ahead adds twelve
- * months to that expiry. A payment verified after expiry starts again from
- * the verified timestamp. The same payment id does not extend the period twice.
- * Earlier payment records stay in the returned history.
+ * A renewal in the final seven days, during grace, or from a checkout opened in that covered period
+ * adds twelve months to the existing expiry. A renewal after grace starts from the verified timestamp.
+ * The same payment id does not extend the period twice.
  */
 export function planPublishingRenewal(input: {
   verifiedAt: string;
   currentExpiresAt: string | null;
   history: readonly PublishingPaymentHistoryEntry[];
   payment: PublishingPaymentHistoryEntry;
-}): { basis: PublishingRenewalBasis; expiresAt: string; history: PublishingPaymentHistoryEntry[] } | { ok: false; reason: "invalid-timestamp" } {
+  honorAnchor?: boolean;
+  anchoredExpiresAt?: string | null;
+}): { basis: PublishingRenewalBasis; expiresAt: string; history: PublishingPaymentHistoryEntry[] } | { ok: false; reason: "invalid-timestamp" | "too-early" } {
   const verified = instant(input.verifiedAt);
   if (!verified || input.payment.verifiedAt !== input.verifiedAt) return { ok: false, reason: "invalid-timestamp" };
   const existing = input.history.find((entry) => entry.paymentId === input.payment.paymentId);
@@ -161,11 +366,34 @@ export function planPublishingRenewal(input: {
   }
   const current = input.currentExpiresAt ? instant(input.currentExpiresAt) : null;
   if (input.currentExpiresAt && !current) return { ok: false, reason: "invalid-timestamp" };
-  const early = current !== null && current.getTime() > verified.getTime();
-  const expiresAt = addPublishingTerm(early ? current : verified).toISOString();
+  const anchor = input.anchoredExpiresAt ? instant(input.anchoredExpiresAt) : null;
+  if (input.anchoredExpiresAt && !anchor) return { ok: false, reason: "invalid-timestamp" };
+  if (input.honorAnchor && anchor) {
+    return {
+      basis: verified.getTime() < anchor.getTime() ? "early" : "grace",
+      expiresAt: addPublishingTerm(anchor).toISOString(),
+      history: [...input.history, input.payment],
+    };
+  }
+  if (!current) {
+    return {
+      basis: "first",
+      expiresAt: addPublishingTerm(verified).toISOString(),
+      history: [...input.history, input.payment],
+    };
+  }
+  const verifiedAt = verified.getTime();
+  if (verifiedAt < renewalWindowOpensAt(current).getTime()) return { ok: false, reason: "too-early" };
+  if (verifiedAt < gracePeriodEndsAt(current).getTime()) {
+    return {
+      basis: verifiedAt < current.getTime() ? "early" : "grace",
+      expiresAt: addPublishingTerm(current).toISOString(),
+      history: [...input.history, input.payment],
+    };
+  }
   return {
-    basis: early ? "early" : input.currentExpiresAt ? "late" : "first",
-    expiresAt,
+    basis: "late",
+    expiresAt: addPublishingTerm(verified).toISOString(),
     history: [...input.history, input.payment],
   };
 }

@@ -168,8 +168,35 @@ service cloud.firestore {
         return getAfter(/databases/$(database)/documents/portfolioSlugs/$(slug));
       }
 
+      function explicitLegacyEntitlement(data) {
+        return data.status == "active"
+          && data.source == "grandfathered"
+          && data.grantReason == "published-before-payment-gate"
+          && !data.keys().hasAny(["expiresAt"]);
+      }
+
+      function publicEntitlementRecord(data, portfolioId) {
+        return data.uid == privatePortfolio().data.ownerId
+          && data.portfolioId == portfolioId
+          && data.status == "active"
+          && (
+            explicitLegacyEntitlement(data)
+            || (
+              data.keys().hasAny(["expiresAt"])
+              && data.expiresAt is timestamp
+              && request.time < data.expiresAt + duration.time(168, 0, 0, 0)
+            )
+          );
+      }
+
+      function entitlementAllowsPublicRead(portfolioId) {
+        let path = /databases/$(database)/documents/portfolioPublishingEntitlements/$(portfolioId);
+        return exists(path) && publicEntitlementRecord(get(path).data, portfolioId);
+      }
+
       allow read: if resource.data.publicId == publicId
-        && isPublished(privatePortfolio().data);
+        && isPublished(privatePortfolio().data)
+        && entitlementAllowsPublicRead(publicId);
 
       allow create, update: if isSignedIn()
         && privatePortfolioAfter().data.ownerId == request.auth.uid
@@ -414,6 +441,50 @@ service cloud.firestore {
       match /items/{requestId} {
         allow read, write: if false;
       }
+    }
+
+    // Domain orders. The owner may read one of their own orders.
+    // Clients cannot create or change payment, registrar, or provisioning facts.
+    match /domainOrders/{orderId} {
+      allow get: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    match /domainRegistrations/{orderId} {
+      allow get: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    match /domainProvisioning/{orderId} {
+      allow get: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    match /domainLifecycleEvents/{orderId} {
+      allow get: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    // Registrant contact details and hostname routing records are server-only.
+    match /domainRegistrants/{orderId} {
+      allow read, write: if false;
+    }
+
+    match /domainHostnames/{hostname} {
+      allow read, write: if false;
+    }
+
+    match /domainPaymentHolds/{paymentId} {
+      allow read, write: if false;
+    }
+
+    // Sandbox webhook receipts are server-only. They are not entitlements.
+    match /sandboxWebhookReceipts/{eventId} {
+      allow read, write: if false;
     }
 
     // Default deny all other collections

@@ -234,6 +234,63 @@ export interface PortfolioPublishingEntitlement {
   schemaVersion: 1;
 }
 
+/**
+ * One explicit legacy right for a portfolio that is already published.
+ * The application never writes publishingControls/gate, so there is no stored
+ * calendar cutoff. Eligibility is the portfolio's publication state at the
+ * moment an operator runs the backfill: a published portfolio with no portfolio
+ * entitlement is the set that was public before this rules change. Drafts are
+ * not included. An existing portfolio entitlement is never replaced.
+ * Run the backfill before deploying the public-read rule. This function does not write.
+ */
+export function planLegacyPortfolioBackfill(input: {
+  portfolios: readonly GrandfatherPortfolio[];
+  existingByPortfolioId: ReadonlyMap<string, unknown>;
+  grantedAt: string;
+}): { creates: PortfolioPublishingEntitlement[]; skipped: GrandfatherSkip[] } {
+  const creates: PortfolioPublishingEntitlement[] = [];
+  const skipped: GrandfatherSkip[] = [];
+  for (const portfolio of input.portfolios) {
+    const owner = classifyGrandfatherOwnerId(portfolio.ownerId);
+    const publication = classifyPublicationForGrandfathering(portfolio.data);
+    if (owner.ok === false) {
+      skipped.push({ uid: "", portfolioId: portfolio.portfolioId, reason: owner.reason });
+      continue;
+    }
+    if (publication === "not-published") {
+      skipped.push({ uid: owner.uid, portfolioId: portfolio.portfolioId, reason: "not-published" });
+      continue;
+    }
+    if (publication !== "published") {
+      skipped.push({ uid: owner.uid, portfolioId: portfolio.portfolioId, reason: "ambiguous-publishing" });
+      continue;
+    }
+    const existing = input.existingByPortfolioId.get(portfolio.portfolioId);
+    if (existing != null) {
+      skipped.push({
+        uid: owner.uid,
+        portfolioId: portfolio.portfolioId,
+        reason: isValidPortfolioPublishingEntitlement(existing, owner.uid, portfolio.portfolioId)
+          ? "already-entitled"
+          : "existing-record-needs-review",
+      });
+      continue;
+    }
+    creates.push({
+      uid: owner.uid,
+      portfolioId: portfolio.portfolioId,
+      status: "active",
+      source: "grandfathered",
+      paymentId: null,
+      providerReference: null,
+      grantedAt: input.grantedAt,
+      grantReason: "published-before-payment-gate",
+      schemaVersion: 1,
+    });
+  }
+  return { creates, skipped };
+}
+
 export function portfolioPublishingEntitlementPath(portfolioId: string): string {
   return `${PORTFOLIO_PUBLISHING_ENTITLEMENT_COLLECTION}/${portfolioId}`;
 }

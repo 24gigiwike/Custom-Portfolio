@@ -4,7 +4,10 @@ import {
   FirebaseProjectIsolationError,
   firebaseRuntime,
   firebaseRuntimeLabel,
+  isLocalSandboxEmulator,
   PRODUCTION_FIREBASE_PROJECT_ID,
+  SANDBOX_AUTH_EMULATOR_HOST,
+  SANDBOX_EMULATOR_PROJECT_ID,
 } from "../lib/firebaseEnvironment";
 
 const FIREBASE_CERTS_URL =
@@ -41,6 +44,7 @@ export function firebaseProjectId(env: NodeJS.ProcessEnv = process.env): string 
   }
   const selected = server || client;
   const label = firebaseRuntimeLabel(runtime);
+  if (isLocalSandboxEmulator(env) && selected === SANDBOX_EMULATOR_PROJECT_ID) return selected;
   if (!selected) {
     if (runtime === "production") return expected;
     throw new FirebaseProjectIsolationError(`${label} requires FIREBASE_PROJECT_ID=${expected}.`);
@@ -76,9 +80,36 @@ function audienceMatches(aud: unknown, projectId: string): boolean {
   return Array.isArray(aud) && aud.some((value) => value === projectId);
 }
 
+function useLocalAuthEmulator(projectId: string): boolean {
+  return projectId === SANDBOX_EMULATOR_PROJECT_ID
+    && (process.env.FIREBASE_AUTH_EMULATOR_HOST ?? "").trim() === SANDBOX_AUTH_EMULATOR_HOST
+    && isLocalSandboxEmulator(process.env);
+}
+
+/** Ask the local Auth emulator to accept the token. This never calls Google. */
+async function verifyLocalAuthEmulatorToken(token: string): Promise<VerifiedFirebaseUser> {
+  let response: Response;
+  try {
+    response = await fetch(`http://${SANDBOX_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:lookup`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ idToken: token }),
+    });
+  } catch {
+    throw new FirebaseIdTokenError();
+  }
+  if (!response.ok) throw new FirebaseIdTokenError();
+  const body = await response.json() as { users?: { localId?: unknown }[] };
+  const uid = body.users?.[0]?.localId;
+  if (typeof uid !== "string" || uid.length === 0 || uid.length > 128) throw new FirebaseIdTokenError();
+  return { uid };
+}
+
 /**
  * Verify a Firebase ID token with Google's published certificates.
  * The web API key is not a signing secret and is not used here.
+ * A local sandbox token is checked by the Auth emulator instead, and that
+ * path does not fall back to Google.
  */
 export async function verifyFirebaseIdToken(
   token: string,
@@ -109,6 +140,10 @@ export async function verifyFirebaseIdToken(
     payload = decodeBase64UrlJson(parts[1]) as typeof payload;
   } catch {
     throw new FirebaseIdTokenError();
+  }
+
+  if (useLocalAuthEmulator(projectId)) {
+    return verifyLocalAuthEmulatorToken(token);
   }
 
   if (header.alg !== "RS256" || typeof header.kid !== "string" || header.kid.length === 0) {

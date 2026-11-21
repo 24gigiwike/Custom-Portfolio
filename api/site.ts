@@ -3,6 +3,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { productionOrigin, robotsTxt, siteEnvironmentFromHost, sitemapXml } from "../src/lib/portfolioSeo.js";
 import { homeHtml, loadSitemapEntries, publicPortfolioHtml } from "../src/server/seoResponse.js";
+import { siteRoutePlan } from "../src/server/domainHostname.js";
+import { loadVerifiedDomainRecords } from "../src/server/domainRecords.js";
 
 type HeaderValue = string | string[] | undefined;
 
@@ -42,8 +44,8 @@ function environmentFor(req: SiteRequest) {
  */
 export default async function handler(req: SiteRequest, res: SiteResponse) {
   const url = new URL(req.url ?? "/", productionOrigin());
-  const kind = url.searchParams.get("kind");
   const environment = environmentFor(req);
+  const kind = url.searchParams.get("kind");
 
   if (kind === "robots") {
     res.status(200);
@@ -54,10 +56,10 @@ export default async function handler(req: SiteRequest, res: SiteResponse) {
 
   if (kind === "sitemap") {
     try {
-      const entries = await loadSitemapEntries();
+      const entries = await loadSitemapEntries(process.env);
       res.status(200);
       res.setHeader("content-type", "application/xml; charset=utf-8");
-      res.setHeader("cache-control", "public, max-age=300");
+      res.setHeader("cache-control", "public, max-age=0, must-revalidate");
       res.end(sitemapXml(entries));
     } catch {
       res.status(503);
@@ -67,14 +69,27 @@ export default async function handler(req: SiteRequest, res: SiteResponse) {
     return;
   }
 
-  if (kind === "portfolio") {
-    const publicId = url.searchParams.get("publicId") ?? "";
-    const result = await publicPortfolioHtml(publicId, shellHtml(), environment);
+  let records: Awaited<ReturnType<typeof loadVerifiedDomainRecords>> = [];
+  try {
+    records = await loadVerifiedDomainRecords(process.env);
+  } catch {
+    records = [];
+  }
+  const plan = siteRoutePlan(url, req.headers, records);
+  if (plan.action === "portfolio-path" || plan.action === "custom-portfolio") {
+    const result = await publicPortfolioHtml(plan.action === "portfolio-path" ? plan.publicId : plan.portfolioId, shellHtml(), environment, process.env);
     res.status(result.status);
     if (result.location) res.setHeader("location", result.location);
     res.setHeader("content-type", "text/html; charset=utf-8");
     res.setHeader("cache-control", "public, max-age=0, must-revalidate");
     res.end(result.html);
+    return;
+  }
+  if (plan.action === "unavailable") {
+    res.status(404);
+    res.setHeader("content-type", "text/plain; charset=utf-8");
+    res.setHeader("cache-control", "no-store");
+    res.end("This domain is not connected.");
     return;
   }
 

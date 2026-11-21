@@ -1,10 +1,19 @@
 import { readFileSync } from "node:fs";
-import type { Connect, Plugin } from "vite";
+import { loadEnv, type Connect, type Plugin } from "vite";
 import { publicPortfolioIdFromPath } from "../components/public/publicPortfolioPath";
 import { robotsTxt, sitemapXml } from "../lib/portfolioSeo";
 import { loadSitemapEntries, publicPortfolioHtml } from "./seoResponse";
 
-function attach(shellPath: string, transform?: (url: string, html: string) => Promise<string>): Connect.NextHandleFunction {
+function serverEnv(mode: string, envDir: string | false): NodeJS.ProcessEnv {
+  const dir = envDir === false ? process.cwd() : envDir;
+  return { ...process.env, ...loadEnv(mode, dir, "") };
+}
+
+function attach(
+  shellPath: string,
+  env: NodeJS.ProcessEnv,
+  transform?: (url: string, html: string) => Promise<string>,
+): Connect.NextHandleFunction {
   return async (req, res, next) => {
     const pathname = (req.url ?? "/").split("?")[0];
     if (pathname === "/robots.txt") {
@@ -15,10 +24,10 @@ function attach(shellPath: string, transform?: (url: string, html: string) => Pr
     }
     if (pathname === "/sitemap.xml") {
       try {
-        const entries = await loadSitemapEntries();
+        const entries = await loadSitemapEntries(env);
         res.statusCode = 200;
         res.setHeader("content-type", "application/xml; charset=utf-8");
-        res.setHeader("cache-control", "public, max-age=300");
+        res.setHeader("cache-control", "public, max-age=0, must-revalidate");
         res.end(sitemapXml(entries));
       } catch {
         res.statusCode = 503;
@@ -34,7 +43,7 @@ function attach(shellPath: string, transform?: (url: string, html: string) => Pr
     }
     const rawShell = readFileSync(shellPath, "utf8");
     const shell = transform ? await transform(req.url ?? "/", rawShell) : rawShell;
-    const result = await publicPortfolioHtml(publicId, shell, "development");
+    const result = await publicPortfolioHtml(publicId, shell, "development", env);
     res.statusCode = result.status;
     if (result.location) res.setHeader("location", result.location);
     res.setHeader("content-type", "text/html; charset=utf-8");
@@ -48,10 +57,12 @@ export function portfolioSeoPlugin(root: string): Plugin {
   return {
     name: "portfolio-seo",
     configureServer(server) {
-      server.middlewares.use(attach(`${root}/index.html`, (url, html) => server.transformIndexHtml(url, html)));
+      const env = serverEnv(server.config.mode, server.config.envDir);
+      server.middlewares.use(attach(`${root}/index.html`, env, (url, html) => server.transformIndexHtml(url, html)));
     },
     configurePreviewServer(server) {
-      server.middlewares.use(attach(`${root}/dist/index.html`));
+      const env = serverEnv(server.config.mode, server.config.envDir);
+      server.middlewares.use(attach(`${root}/dist/index.html`, env));
     },
   };
 }

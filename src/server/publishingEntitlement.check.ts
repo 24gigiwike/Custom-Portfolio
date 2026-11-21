@@ -9,10 +9,12 @@ import {
   isPublishingGateEnabled,
   isValidActiveEntitlement,
   planGrandfatherEntitlements,
+  planLegacyPortfolioBackfill,
   planPortfolioEntitlementCompatibility,
   type PublishingEntitlement,
 } from "../lib/publishingEntitlement";
 import {
+  applyLegacyPortfolioBackfill,
   applyReviewedGrandfatherGrants,
   grandfatherEntitlementPath,
   isEntitlementAlreadyPresentError,
@@ -224,6 +226,48 @@ assert.match(rules, /publishingGateEnabled\(\) && hasActivePortfolioPublishingEn
 assert.doesNotMatch(rules, /hasActivePublishingEntitlement\(request\.auth\.uid\)/);
 assert.doesNotMatch(rules, /accountLocksPortfolio/);
 assert.doesNotMatch(rules, /!publishingGateEnabled\(\)/);
+const legacyPlan = planLegacyPortfolioBackfill({
+  portfolios: [
+    { portfolioId: "published-port", ownerId: "grandfather-user", data: published },
+    { portfolioId: "draft-port", ownerId: "grandfather-user", data: draft },
+    { portfolioId: "paid-port", ownerId: "paid-user", data: published },
+  ],
+  existingByPortfolioId: new Map([
+    ["paid-port", { ...paymentEntitlement, portfolioId: "paid-port" }],
+  ]),
+  grantedAt,
+});
+assert.deepEqual(legacyPlan.creates.map((grant) => grant.portfolioId), ["published-port"]);
+assert.equal(legacyPlan.creates[0]?.source, "grandfathered");
+assert.equal(legacyPlan.creates[0]?.grantReason, "published-before-payment-gate");
+assert.equal(legacyPlan.creates[0]?.paymentId, null);
+assert.equal("expiresAt" in legacyPlan.creates[0], false);
+assert.equal(legacyPlan.skipped.some((skip) => skip.portfolioId === "draft-port" && skip.reason === "not-published"), true);
+assert.equal(legacyPlan.skipped.some((skip) => skip.portfolioId === "paid-port" && skip.reason === "already-entitled"), true);
+const storedLegacy = new Map<string, unknown>();
+const writer = {
+  async createPortfolioEntitlement(portfolioId: string, record: { portfolioId: string }) {
+    if (storedLegacy.has(portfolioId)) {
+      const error = new Error("already exists");
+      throw error;
+    }
+    storedLegacy.set(portfolioId, record);
+    return "created" as const;
+  },
+};
+const firstBackfill = await applyLegacyPortfolioBackfill(legacyPlan.creates, writer);
+assert.deepEqual(firstBackfill.created, ["published-port"]);
+const secondBackfill = await applyLegacyPortfolioBackfill(legacyPlan.creates, writer);
+assert.deepEqual(secondBackfill.created, []);
+assert.deepEqual(secondBackfill.leftInPlace, ["published-port"]);
+assert.equal((storedLegacy.get("published-port") as { source?: string }).source, "grandfathered");
+const repeatPlan = planLegacyPortfolioBackfill({
+  portfolios: [{ portfolioId: "published-port", ownerId: "grandfather-user", data: published }],
+  existingByPortfolioId: storedLegacy,
+  grantedAt,
+});
+assert.deepEqual(repeatPlan.creates, []);
+assert.equal(repeatPlan.skipped[0]?.reason, "already-entitled");
 assert.equal(isValidActiveEntitlement(paymentEntitlement, "paid-user"), true);
 assert.equal(isValidActiveEntitlement(paymentEntitlement, "other-user"), false);
 

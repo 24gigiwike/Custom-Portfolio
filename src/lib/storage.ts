@@ -10,7 +10,8 @@ import {
 } from "firebase/storage";
 import app, { auth } from "./firebase";
 import { ImageUploadCancelled } from "./imageAttempt";
-import { uploadOptimizedFileToImageKit } from "./imageKitStorage";
+import { deleteOwnedImageKitFile, ImageKitTransferError, uploadOptimizedFileToImageKit } from "./imageKitStorage";
+import { imageKitFileIdFromToken } from "./imageKitMedia";
 import { accountPhotoImageStorageProvider } from "./imageStorageProvider";
 import { optimizeImageForUpload, ImagePreparationError, throwIfUploadAborted, type ImageUse, type OptimizedImageResult } from "./imageOptimizer";
 import type { ImageUploadStatus } from "./imageAttempt";
@@ -348,6 +349,25 @@ export async function deleteStoredImage(storagePath: string): Promise<void> {
   const currentUser = auth.currentUser;
   if (!currentUser) {
     throw new Error("You must be signed in to remove images.");
+  }
+
+  const imageKitFileId = imageKitFileIdFromToken(storagePath);
+  const imageKitPath = storagePath.startsWith("/custom-portfolio/") && !storagePath.includes("..") ? storagePath : "";
+  if (imageKitFileId || imageKitPath) {
+    let idToken = "";
+    try {
+      idToken = await currentUser.getIdToken(false);
+    } catch (error) {
+      const code = storageCodeOf(error) || "unauthenticated";
+      throw new ImageTransferError("auth", code, messageForStorageFailure(code, "auth"));
+    }
+    try {
+      await deleteOwnedImageKitFile(imageKitFileId ? { idToken, fileId: imageKitFileId } : { idToken, filePath: imageKitPath });
+    } catch (error) {
+      if (error instanceof ImageKitTransferError) throw new Error(error.message);
+      throw new Error("We couldn't remove the stored image file.");
+    }
+    return;
   }
 
   const prefix = ownedStoragePrefix(currentUser.uid);

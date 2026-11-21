@@ -197,6 +197,18 @@ if (ready.kind === "review") {
 }
 assert.equal(reviewEntry({ status: "ready", portfolio: portfolio({ selectedTemplate: "future-template" }) }).kind, "unsupported");
 
+const creativeReview = reviewEntry({ status: "ready", portfolio: portfolio({ selectedTemplate: "the-creative" }) });
+assert.equal(creativeReview.kind, "review");
+if (creativeReview.kind === "review") {
+  assert.equal(creativeReview.previewPath, "/template-preview/the-creative");
+  assert.equal(creativeReview.assessment.palette, null);
+}
+const creativeSaved = savedPortfolioPresentation(portfolio({ selectedTemplate: "the-creative" }));
+assert.ok(creativeSaved);
+if (!creativeSaved) throw new Error("expected a creative presentation");
+assert.equal(creativeSaved.data.profile.brandName, "Ada Lovelace");
+assert.equal(creativeSaved.palette, "original");
+
 assert.equal(isPortfolioReviewPath(PORTFOLIO_REVIEW_PATH), true);
 assert.equal(isPortfolioReviewPath("/portfolio"), false);
 assert.equal(isPortfolioWorkspacePath(PORTFOLIO_REVIEW_PATH), false);

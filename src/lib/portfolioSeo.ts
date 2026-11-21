@@ -402,6 +402,9 @@ export function applyPublicBody(html: string, inner: string): string {
 export function platformTitle(path: string): string {
   const pathname = path.split("?")[0].split("#")[0];
   if (pathname === "/auth") return `Sign In — ${PRODUCT_NAME}`;
+  if (pathname === "/privacy") return `Privacy Policy — ${PRODUCT_NAME}`;
+  if (pathname === "/terms") return `Terms & Conditions — ${PRODUCT_NAME}`;
+  if (pathname === "/refund-policy") return `Refund Policy — ${PRODUCT_NAME}`;
   if (pathname === "/templates" || pathname === "/discover") return `Explore Templates — ${PRODUCT_NAME}`;
   if (pathname === "/portfolio") return `My Portfolio — ${PRODUCT_NAME}`;
   if (pathname === "/portfolio/edit") return `Edit Portfolio — ${PRODUCT_NAME}`;
