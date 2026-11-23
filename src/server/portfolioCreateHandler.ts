@@ -2,17 +2,17 @@ import {
   PORTFOLIO_CREATE_TRACE_HEADER,
   emitPortfolioCreateTrace,
   type PortfolioCreateTraceStage,
-} from "../lib/portfolioCreateTrace";
-import { FirebaseIdTokenError, firebaseProjectId, verifyFirebaseIdToken } from "./firebaseIdToken";
-import { FirebaseProjectIsolationError } from "../lib/firebaseEnvironment";
-import { firebaseAdminAuth, firebaseAdminFirestore } from "./firebaseAdmin";
+} from "../lib/portfolioCreateTrace.js";
+import { FirebaseIdTokenError, firebaseProjectId, verifyFirebaseIdToken } from "./firebaseIdToken.js";
+import { FirebaseProjectIsolationError } from "../lib/firebaseEnvironment.js";
+import { firebaseAdminAuth, firebaseAdminFirestore } from "./firebaseAdmin.js";
 import {
   accountSeedFromDocument,
   createPortfolioForAccount,
   parsePortfolioCreateBody,
   PortfolioCreateError,
-} from "./portfolioCreate";
-import { classifyAccountAge, readPolicyEffectiveAt } from "./portfolioPolicy";
+} from "./portfolioCreate.js";
+import { classifyAccountAge, readPolicyEffectiveAt } from "./portfolioPolicy.js";
 import type { Firestore } from "firebase-admin/firestore";
 
 type HeaderValue = string | string[] | undefined;

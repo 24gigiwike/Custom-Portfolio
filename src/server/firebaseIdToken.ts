@@ -8,7 +8,7 @@ import {
   PRODUCTION_FIREBASE_PROJECT_ID,
   SANDBOX_AUTH_EMULATOR_HOST,
   SANDBOX_EMULATOR_PROJECT_ID,
-} from "../lib/firebaseEnvironment";
+} from "../lib/firebaseEnvironment.js";
 
 const FIREBASE_CERTS_URL =
   "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com";

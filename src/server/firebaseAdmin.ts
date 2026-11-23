@@ -5,7 +5,7 @@ import {
   expectedFirebaseProjectId,
   FirebaseProjectIsolationError,
   firebaseRuntime,
-} from "../lib/firebaseEnvironment";
+} from "../lib/firebaseEnvironment.js";
 
 export const FIREBASE_ADMIN_ENV_KEYS = [
   "FIREBASE_ADMIN_PROJECT_ID",

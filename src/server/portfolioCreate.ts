@@ -1,11 +1,11 @@
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import type { UserProfile } from "../types/user";
 import type { PortfolioAvailability, PortfolioSocialLinks, PortfolioStylePreset } from "../types/portfolio";
-import { emptyDiscoverability } from "../lib/discoverability";
-import { generateSlug } from "../lib/portfolioSlugText";
-import { seedPortfolioFromAccount } from "../lib/portfolioSeed";
-import { templateForCreation } from "../lib/templateCatalog";
-import { DEFAULT_PORTFOLIO_DESIGN } from "../types/portfolioDesign";
+import { emptyDiscoverability } from "../lib/discoverability.js";
+import { generateSlug } from "../lib/portfolioSlugText.js";
+import { seedPortfolioFromAccount } from "../lib/portfolioSeed.js";
+import { templateForCreation } from "../lib/templateCatalog.js";
+import { DEFAULT_PORTFOLIO_DESIGN } from "../types/portfolioDesign.js";
 
 const REJECTED_FIELDS = [
   "ownerId",

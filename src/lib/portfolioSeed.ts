@@ -1,6 +1,6 @@
 import type { UserProfile } from "../types";
-import { emptyDiscoverability } from "./discoverability";
-import { DEFAULT_PORTFOLIO_DESIGN } from "../types/portfolioDesign";
+import { emptyDiscoverability } from "./discoverability.js";
+import { DEFAULT_PORTFOLIO_DESIGN } from "../types/portfolioDesign.js";
 import type { PortfolioPublishing, UserPortfolioContent } from "../types/userPortfolio";
 
 const EMPTY_PUBLISHING: PortfolioPublishing = { status: "draft" };

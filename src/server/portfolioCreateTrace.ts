@@ -1,7 +1,7 @@
 import {
   emitPortfolioCreateTrace,
   sanitizePortfolioCreateTrace,
-} from "../lib/portfolioCreateTrace";
+} from "../lib/portfolioCreateTrace.js";
 
 type HeaderValue = string | string[] | undefined;
 
