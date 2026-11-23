@@ -9,6 +9,12 @@ import { userFacingWriteError } from "../lib/accountLoad";
 import { allocateHistoryIndex, rememberHistoryIndex } from "../lib/unsavedChanges";
 import { templateChoiceError } from "../lib/templateAdoption";
 import {
+  beginPortfolioCreateTrace,
+  endPortfolioCreateTrace,
+  portfolioCreateErrorParts,
+  recordPortfolioCreateTrace,
+} from "../lib/portfolioCreateTrace";
+import {
   getPortfolioByOwner,
   useCatalogTemplate,
   type OwnedPortfolioLookup,
@@ -91,7 +97,7 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palet
   palette,
   framed,
 }) => {
-  const { user, userAccount, authPhase, accountError } = useAuth();
+  const { user, userAccount, authPhase, accountError, status } = useAuth();
   const template = catalogTemplateForPreviewPath(window.location.pathname);
   const [lookup, setLookup] = useState<OwnedPortfolioLookup | null>(null);
   const [portfolio, setPortfolio] = useState<UserPortfolio | null>(null);
@@ -123,7 +129,25 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palet
   }, [user, authPhase]);
 
   const useTemplate = () => {
+    const correlationId = beginPortfolioCreateTrace();
+    const authReady = status === "authenticated" || status === "unauthenticated" || status === "error";
+    recordPortfolioCreateTrace({
+      correlationId,
+      stage: "button",
+      templateId: template?.id ?? "",
+      authReady,
+      userPresent: Boolean(user),
+      lookup: lookup?.status ?? "",
+    });
     if (!template) {
+      recordPortfolioCreateTrace({
+        correlationId,
+        stage: "displayed-failure",
+        authReady,
+        userPresent: Boolean(user),
+        failureStage: "template-missing",
+      });
+      endPortfolioCreateTrace();
       setError("That template is not available.");
       return;
     }
@@ -132,9 +156,23 @@ const PersistedPortfolioPreview: React.FC<{ fixture: PortfolioData | null; palet
     void useCatalogTemplate(userAccount, template.id)
       .then(() => openAppPath(PORTFOLIO_WORKSPACE_PATH))
       .catch((createError) => {
+        const parts = portfolioCreateErrorParts(createError);
+        recordPortfolioCreateTrace({
+          correlationId,
+          stage: "displayed-failure",
+          templateId: template.id,
+          authReady,
+          userPresent: Boolean(user),
+          failureStage: "displayed-failure",
+          errorName: parts.errorName,
+          errorCode: parts.errorCode,
+        });
         setError(templateChoiceError(createError, "Your portfolio could not be created."));
       })
-      .finally(() => setIsCreating(false));
+      .finally(() => {
+        endPortfolioCreateTrace();
+        setIsCreating(false);
+      });
   };
 
   if (!fixture && (authPhase === "AUTH_LOADING" || authPhase === "ACCOUNT_LOADING")) {

@@ -170,6 +170,22 @@ export function imageKitDevPlugin(): Plugin {
           );
           return;
         }
+        if (pathname === "/api/portfolio-create-trace") {
+          const upload = await server.ssrLoadModule("/src/server/imageKitServerUpload.ts") as typeof import("./imageKitServerUpload");
+          const trace = await server.ssrLoadModule("/src/server/portfolioCreateTrace.ts") as typeof import("./portfolioCreateTrace");
+          const body = await upload.readBoundedRequestBody(req, 2_048);
+          if (body === "too-large") {
+            res.statusCode = 413;
+            res.setHeader("cache-control", "no-store");
+            res.end();
+            return;
+          }
+          await trace.handlePortfolioCreateTrace(
+            { method: req.method, body },
+            nodeResponse(res),
+          );
+          return;
+        }
         if (pathname === "/api/portfolio-create") {
           const upload = await server.ssrLoadModule("/src/server/imageKitServerUpload.ts") as typeof import("./imageKitServerUpload");
           const creation = await server.ssrLoadModule("/src/server/portfolioCreateHandler.ts") as typeof import("./portfolioCreateHandler");

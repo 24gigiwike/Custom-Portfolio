@@ -12,6 +12,11 @@ import {
 import type { UserProfile } from "../types";
 import type { UserPortfolio, UserPortfolioContent } from "../types/userPortfolio";
 import { auth, db } from "./firebase";
+import {
+  activePortfolioCreateTraceId,
+  portfolioCreateErrorParts,
+  recordPortfolioCreateTrace,
+} from "./portfolioCreateTrace";
 import { DEFAULT_ENABLED_SECTIONS, DEFAULT_PORTFOLIO_THEME, generateSlug } from "./portfolio";
 import { normalizeUserPortfolio } from "./normalizeUserPortfolio";
 import { findCatalogTemplate, templateForCreation } from "./templateCatalog";
@@ -97,8 +102,39 @@ export async function useCatalogTemplate(
   account: UserProfile | null,
   templateId: string
 ): Promise<UserPortfolio> {
-  const ownerId = requireUid();
-  const existing = await findOwnedDocument(ownerId);
+  const correlationId = activePortfolioCreateTraceId();
+  let ownerId = "";
+  try {
+    ownerId = requireUid();
+  } catch (error) {
+    const parts = portfolioCreateErrorParts(error);
+    recordPortfolioCreateTrace({
+      correlationId,
+      stage: "uid-missing",
+      templateId,
+      userPresent: Boolean(auth.currentUser),
+      failureStage: "uid-missing",
+      errorName: parts.errorName,
+      errorCode: parts.errorCode,
+    });
+    throw error;
+  }
+  let existing;
+  try {
+    existing = await findOwnedDocument(ownerId);
+  } catch (error) {
+    const parts = portfolioCreateErrorParts(error);
+    recordPortfolioCreateTrace({
+      correlationId,
+      stage: "ownership-query-failed",
+      templateId,
+      userPresent: true,
+      failureStage: "ownership-query-failed",
+      errorName: parts.errorName,
+      errorCode: parts.errorCode,
+    });
+    throw error;
+  }
   const plan = planTemplateUse({
     owned: existing ? { id: existing.id, data: existing.data() } : null,
     requestedTemplateId: templateId,
@@ -106,6 +142,14 @@ export async function useCatalogTemplate(
     resolveCatalogTemplate: catalogTemplateIdForUse,
   });
 
+  recordPortfolioCreateTrace({
+    correlationId,
+    stage: "plan",
+    templateId,
+    userPresent: true,
+    action: plan.action,
+    owned: Boolean(existing),
+  });
   if (plan.action === "reject") throw new Error(templateChoiceMessage(plan.reason));
   if (plan.action === "create") return createPortfolio(account, templateId);
   if (plan.action === "open") {

@@ -1,5 +1,12 @@
 import { policyFailureMessage, type AccountPolicyFailure } from "./accountPolicyMessage";
 import { auth } from "./firebase";
+import {
+  PORTFOLIO_CREATE_ENDPOINT,
+  PORTFOLIO_CREATE_TRACE_HEADER,
+  activePortfolioCreateTraceId,
+  portfolioCreateErrorParts,
+  recordPortfolioCreateTrace,
+} from "./portfolioCreateTrace";
 
 export type AccountPortfolioPolicy = "legacy" | "restricted";
 
@@ -53,17 +60,63 @@ type CreateResponse = {
  * Owner id and account age are not sent.
  */
 export async function requestPortfolioCreate(body: Record<string, unknown>): Promise<PortfolioCreateResult> {
+  const correlationId = activePortfolioCreateTraceId();
   const user = auth.currentUser;
-  if (!user) throw new Error("You need to be signed in to use your portfolio.");
+  if (!user) {
+    recordPortfolioCreateTrace({
+      correlationId,
+      stage: "uid-missing",
+      userPresent: false,
+      tokenObtained: false,
+      failureStage: "uid-missing",
+    });
+    throw new Error("You need to be signed in to use your portfolio.");
+  }
 
   const send = async (forceRefresh: boolean) => {
-    const token = await user.getIdToken(forceRefresh);
-    return fetch("/api/portfolio-create", {
+    recordPortfolioCreateTrace({
+      correlationId,
+      stage: "token-requested",
+      userPresent: true,
+      authReady: true,
+    });
+    let token = "";
+    try {
+      token = await user.getIdToken(forceRefresh);
+    } catch (error) {
+      const parts = portfolioCreateErrorParts(error);
+      recordPortfolioCreateTrace({
+        correlationId,
+        stage: "token-failed",
+        userPresent: true,
+        tokenObtained: false,
+        failureStage: "token-failed",
+        errorName: parts.errorName,
+        errorCode: parts.errorCode,
+      });
+      throw error;
+    }
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    };
+    if (correlationId) headers[PORTFOLIO_CREATE_TRACE_HEADER] = correlationId;
+    recordPortfolioCreateTrace({
+      correlationId,
+      stage: "token-obtained",
+      userPresent: true,
+      tokenObtained: token.length > 0,
+    });
+    recordPortfolioCreateTrace({
+      correlationId,
+      stage: "fetch-started",
+      endpoint: PORTFOLIO_CREATE_ENDPOINT,
+      userPresent: true,
+      tokenObtained: token.length > 0,
+    });
+    return fetch(PORTFOLIO_CREATE_ENDPOINT, {
       method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        "content-type": "application/json",
-      },
+      headers,
       body: JSON.stringify(body),
     });
   };
@@ -83,6 +136,16 @@ export async function requestPortfolioCreate(body: Record<string, unknown>): Pro
   }
 
   const portfolioId = typeof payload.portfolioId === "string" ? payload.portfolioId : "";
+  recordPortfolioCreateTrace({
+    correlationId,
+    stage: "response",
+    endpoint: PORTFOLIO_CREATE_ENDPOINT,
+    status: response.status,
+    userPresent: true,
+    tokenObtained: true,
+    errorCode: typeof payload.code === "string" ? payload.code : "",
+    failureStage: portfolioId ? "" : "response",
+  });
   if (portfolioId && (response.status === 200 || (response.status === 409 && payload.outcome === "existing"))) {
     return {
       portfolioId,

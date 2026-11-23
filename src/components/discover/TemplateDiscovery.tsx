@@ -3,6 +3,12 @@ import { brand } from "../../config/branding";
 import { userFacingWriteError } from "../../lib/accountLoad";
 import { useAuth } from "../../lib/authContext";
 import { templateChoiceError } from "../../lib/templateAdoption";
+import {
+  beginPortfolioCreateTrace,
+  endPortfolioCreateTrace,
+  portfolioCreateErrorParts,
+  recordPortfolioCreateTrace,
+} from "../../lib/portfolioCreateTrace";
 import { listCatalogTemplates, type CatalogTemplate } from "../../lib/templateCatalog";
 import { catalogSamplePreviewPath } from "../../preview/templatePreviewPath";
 import { getPortfolioByOwner, useCatalogTemplate, type OwnedPortfolioLookup } from "../../lib/userPortfolio";
@@ -40,7 +46,7 @@ type TemplateDiscoveryProps = {
 };
 
 export function TemplateDiscovery({ onOpenPath }: TemplateDiscoveryProps) {
-  const { user, userAccount, signOutUser } = useAuth();
+  const { user, userAccount, signOutUser, status } = useAuth();
   const templates = listCatalogTemplates();
   const [lookup, setLookup] = useState<OwnedPortfolioLookup | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -67,7 +73,27 @@ export function TemplateDiscovery({ onOpenPath }: TemplateDiscoveryProps) {
   }, []);
 
   const choose = (selected: CatalogTemplate) => {
+    const correlationId = beginPortfolioCreateTrace();
+    const authReady = status === "authenticated" || status === "unauthenticated" || status === "error";
+    const lookupStatus = lookup?.status ?? "";
+    recordPortfolioCreateTrace({
+      correlationId,
+      stage: "button",
+      templateId: selected.id,
+      authReady,
+      userPresent: Boolean(user),
+      lookup: lookupStatus,
+    });
     if (lookup?.status === "ready") {
+      recordPortfolioCreateTrace({
+        correlationId,
+        stage: "existing-portfolio",
+        templateId: selected.id,
+        authReady,
+        userPresent: Boolean(user),
+        lookup: "ready",
+      });
+      endPortfolioCreateTrace();
       onOpenPath(PORTFOLIO_WORKSPACE_PATH);
       return;
     }
@@ -76,9 +102,23 @@ export function TemplateDiscovery({ onOpenPath }: TemplateDiscoveryProps) {
     void useCatalogTemplate(userAccount, selected.id)
       .then(() => onOpenPath(PORTFOLIO_WORKSPACE_PATH))
       .catch((chooseError: unknown) => {
+        const parts = portfolioCreateErrorParts(chooseError);
+        recordPortfolioCreateTrace({
+          correlationId,
+          stage: "displayed-failure",
+          templateId: selected.id,
+          authReady,
+          userPresent: Boolean(user),
+          failureStage: "displayed-failure",
+          errorName: parts.errorName,
+          errorCode: parts.errorCode,
+        });
         setError(templateChoiceError(chooseError, "Your portfolio could not be created."));
       })
-      .finally(() => setIsChoosing(false));
+      .finally(() => {
+        endPortfolioCreateTrace();
+        setIsChoosing(false);
+      });
   };
 
   const name = userAccount?.accountPrivate?.firstName || user?.displayName;

@@ -1,3 +1,8 @@
+import {
+  PORTFOLIO_CREATE_TRACE_HEADER,
+  emitPortfolioCreateTrace,
+  type PortfolioCreateTraceStage,
+} from "../lib/portfolioCreateTrace";
 import { FirebaseIdTokenError, firebaseProjectId, verifyFirebaseIdToken } from "./firebaseIdToken";
 import { FirebaseProjectIsolationError } from "../lib/firebaseEnvironment";
 import { firebaseAdminAuth, firebaseAdminFirestore } from "./firebaseAdmin";
@@ -37,6 +42,25 @@ function headerValue(headers: Record<string, HeaderValue>, name: string): string
   return typeof value === "string" ? value : "";
 }
 
+function traceCreate(
+  headers: Record<string, HeaderValue>,
+  stage: PortfolioCreateTraceStage,
+  extra: { status?: number; failureStage?: string; errorName?: string; errorCode?: string } = {},
+): void {
+  try {
+    emitPortfolioCreateTrace({
+      correlationId: headerValue(headers, PORTFOLIO_CREATE_TRACE_HEADER).trim(),
+      stage,
+      status: extra.status,
+      failureStage: extra.failureStage,
+      errorName: extra.errorName,
+      errorCode: extra.errorCode,
+    }, "server");
+  } catch {
+    // A diagnostic failure must not change portfolio creation.
+  }
+}
+
 function bearerToken(headers: Record<string, HeaderValue>): string | null {
   const match = /^Bearer\s+(\S+)$/.exec(headerValue(headers, "authorization").trim());
   return match?.[1] ?? null;
@@ -68,12 +92,14 @@ export async function handlePortfolioCreate(
 ): Promise<void> {
   if ((req.method ?? "GET").toUpperCase() !== "POST") {
     res.setHeader("allow", "POST");
+    traceCreate(req.headers, "server-rejected", { status: 405, failureStage: "method", errorCode: "method" });
     send(res, 405, { error: "Use POST to create a portfolio.", code: "method" });
     return;
   }
 
   const token = bearerToken(req.headers);
   if (!token) {
+    traceCreate(req.headers, "server-unauthenticated", { status: 401, failureStage: "unauthenticated", errorCode: "unauthenticated" });
     send(res, 401, { error: "Sign in to create a portfolio.", code: "unauthenticated" });
     return;
   }
@@ -84,9 +110,11 @@ export async function handlePortfolioCreate(
     projectId = firebaseProjectId(env);
   } catch (error) {
     if (error instanceof FirebaseProjectIsolationError) {
+      traceCreate(req.headers, "server-unavailable", { status: 503, failureStage: "project", errorCode: "unavailable" });
       send(res, 503, { error: "Portfolio creation is unavailable right now.", code: "unavailable" });
       return;
     }
+    traceCreate(req.headers, "server-failed", { status: 500, failureStage: "project", errorName: error instanceof Error ? error.name : "Error" });
     throw error;
   }
 
@@ -96,12 +124,15 @@ export async function handlePortfolioCreate(
     uid = verified.uid;
   } catch (error) {
     if (error instanceof FirebaseIdTokenError || error instanceof PortfolioCreateError) {
+      traceCreate(req.headers, "server-unauthenticated", { status: 401, failureStage: "token", errorCode: "unauthenticated" });
       send(res, 401, { error: "Sign in to create a portfolio.", code: "unauthenticated" });
       return;
     }
+    traceCreate(req.headers, "server-failed", { status: 500, failureStage: "token", errorName: error instanceof Error ? error.name : "Error" });
     throw error;
   }
   if (!uid) {
+    traceCreate(req.headers, "server-unauthenticated", { status: 401, failureStage: "token", errorCode: "unauthenticated" });
     send(res, 401, { error: "Sign in to create a portfolio.", code: "unauthenticated" });
     return;
   }
@@ -111,15 +142,18 @@ export async function handlePortfolioCreate(
     parsedBody = parsePortfolioCreateBody(jsonBody(req.body));
   } catch (error) {
     if (error instanceof PortfolioCreateError) {
+      traceCreate(req.headers, "server-invalid", { status: error.status, failureStage: "body", errorCode: error.code });
       send(res, error.status, { error: error.message, code: error.code });
       return;
     }
+    traceCreate(req.headers, "server-invalid", { status: 400, failureStage: "body", errorCode: "invalid-request" });
     send(res, 400, { error: "The portfolio request is not valid.", code: "invalid-request" });
     return;
   }
 
   const db = options.firestore ?? firebaseAdminFirestore(env);
   if (!db) {
+    traceCreate(req.headers, "server-unavailable", { status: 503, failureStage: "firestore", errorCode: "unavailable" });
     send(res, 503, { error: "Portfolio creation is unavailable right now.", code: "unavailable" });
     return;
   }
@@ -138,9 +172,11 @@ export async function handlePortfolioCreate(
       account,
     });
     const status = result.outcome === "existing" ? 409 : 200;
+    traceCreate(req.headers, result.outcome === "existing" ? "server-existing" : "server-created", { status });
     send(res, status, { portfolioId: result.portfolioId, outcome: result.outcome, code: result.outcome });
   } catch (error) {
     if (error instanceof PortfolioCreateError) {
+      traceCreate(req.headers, "server-rejected", { status: error.status, failureStage: "create", errorCode: error.code });
       send(res, error.status, { error: error.message, code: error.code });
       return;
     }
@@ -148,6 +184,12 @@ export async function handlePortfolioCreate(
       ? String((error as { code?: unknown }).code ?? "")
       : "";
     console.error("portfolio-create failed", error instanceof Error ? error.name : "Error", code);
+    traceCreate(req.headers, "server-failed", {
+      status: 500,
+      failureStage: "create",
+      errorName: error instanceof Error ? error.name : "Error",
+      errorCode: code,
+    });
     send(res, 500, { error: "Your portfolio could not be created.", code: "create-failed" });
   }
 }
